@@ -179,10 +179,12 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.0.update_flow(|values| {
-            values.push(value);
-            UpdateOutcome::empty().without_events()
-        })
+        self.0
+            .update(|values| {
+                values.push(value);
+                UpdateOutcome::empty().without_events()
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -227,6 +229,7 @@ where
                     UpdateOutcome::new(true)
                         .with_next_event(take_leaving_room(values, values.len()))
                 })
+                .result()
                 .unwrap_or(false)
         },
         time_span,

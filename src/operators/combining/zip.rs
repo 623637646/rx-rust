@@ -127,21 +127,23 @@ macro_rules! impl_zip_observer {
             D: Disposable,
         {
             fn on_next(&mut self, value: $input_t) -> Flow {
-                self.0.update_flow(|model| {
-                    if let Some(other) = model.$other_field.0.pop_front() {
-                        if model.$other_field.1 && model.$other_field.0.is_empty() {
-                            UpdateOutcome::empty().with_next_and_termination_events(
-                                $make_pair(value, other),
-                                Termination::Completed,
-                            )
+                self.0
+                    .update(|model| {
+                        if let Some(other) = model.$other_field.0.pop_front() {
+                            if model.$other_field.1 && model.$other_field.0.is_empty() {
+                                UpdateOutcome::empty().with_next_and_termination_events(
+                                    $make_pair(value, other),
+                                    Termination::Completed,
+                                )
+                            } else {
+                                UpdateOutcome::empty().with_next_event($make_pair(value, other))
+                            }
                         } else {
-                            UpdateOutcome::empty().with_next_event($make_pair(value, other))
+                            model.$this_field.0.push_back(value);
+                            UpdateOutcome::empty().without_events()
                         }
-                    } else {
-                        model.$this_field.0.push_back(value);
-                        UpdateOutcome::empty().without_events()
-                    }
-                })
+                    })
+                    .flow()
             }
 
             fn on_termination(self, termination: Termination<E>) {

@@ -167,18 +167,22 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
-        let Ok(id) = self.0.update(|model| {
-            UpdateOutcome::new(model.inner_ids.next_id())
-                .with_drop_outside(model.slot.reserve_replacing())
-        }) else {
+        let Some(id) = self
+            .0
+            .update(|model| {
+                UpdateOutcome::new(model.inner_ids.next_id())
+                    .with_drop_outside(model.slot.reserve_replacing())
+            })
+            .result()
+        else {
             return Flow::Stop;
         };
         let subscription = value.subscribe(SwitchInnerObserver(self.0.clone(), id));
         // `fill` gives the subscription back when the slot was released while it was being built,
         // which means the operator already terminated.
-        self.0.update_flow(|model| {
-            UpdateOutcome::empty().with_drop_outside(model.slot.fill(subscription))
-        })
+        self.0
+            .update(|model| UpdateOutcome::empty().with_drop_outside(model.slot.fill(subscription)))
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -213,20 +217,23 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.0.update_flow(|model| {
-            if model.inner_ids.latest() != Some(self.1) {
-                // Superseded, so nothing it sends is wanted anymore, as if downstream had stopped:
-                // the disposal on its way does the same, but a source that is not done with this
-                // value yet stops here already. The value is dropped outside the lock: dropping it
-                // can run arbitrary code.
-                return UpdateOutcome::new(Flow::Stop)
-                    .with_drop_outside(value)
-                    .without_events();
-            }
-            UpdateOutcome::new(Flow::Continue)
-                .without_drop_outside()
-                .with_next_event(value)
-        })
+        self.0
+            .update(|model| {
+                if model.inner_ids.latest() != Some(self.1) {
+                    // Superseded, so nothing it sends is wanted anymore, as if downstream had
+                    // stopped: the disposal on its way does the same, but a source that is not done
+                    // with this value yet stops here already. The value is dropped outside the
+                    // lock: dropping it can run arbitrary code.
+                    return UpdateOutcome::empty()
+                        .with_drop_outside(value)
+                        .without_events()
+                        .answering_stop();
+                }
+                UpdateOutcome::empty()
+                    .without_drop_outside()
+                    .with_next_event(value)
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {

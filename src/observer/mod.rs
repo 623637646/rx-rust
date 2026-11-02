@@ -105,9 +105,7 @@ impl Flow {
 /// A callback bound as `FnMut(T) -> R` with `R: IntoFlow` may return `()`, which keeps the source
 /// going — so the common `|value| { ... }` needs no trailing [`Flow::Continue`] — or a [`Flow`],
 /// which lets it end its own stream. [`CallbackObserver`](callback_observer::CallbackObserver)
-/// relies on it, and so does
-/// [`SubscriptionContext::update_flow`](crate::utils::subscribe_with_context::SubscriptionContext::update_flow)
-/// for the result of its update.
+/// relies on it.
 ///
 /// A callback that only diverges, such as `|_| unreachable!()`, is inferred to return `!`, which
 /// no stable impl can cover: spell its return type out, as `|_| -> () { unreachable!() }`.

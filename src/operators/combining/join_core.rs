@@ -20,7 +20,7 @@ use crate::{
     utils::{
         id_generator::Id,
         reservation_map::{Released, ReservationMap},
-        serialized_delivery::UpdateOutcome,
+        serialized_delivery::{UpdateOutcome, Updated},
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
@@ -356,13 +356,16 @@ macro_rules! impl_source_observer {
         {
             fn on_next(&mut self, value: $input) -> Flow {
                 let duration = (self.duration_selector)(&value);
-                let mut id = None;
-                let flow = self.context.update_flow(|model| {
-                    id = model.$this.as_mut().map(ReservationMap::reserve);
-                    UpdateOutcome::empty().with_next_event(Action::$side(id, value))
+                let updated = self.context.update(|model| {
+                    let id = model.$this.as_mut().map(ReservationMap::reserve);
+                    UpdateOutcome::new(id).with_next_event(Action::$side(id, value))
                 });
-                let Some(id) = id.filter(|_| flow.is_continue()) else {
-                    return flow;
+                let Updated::Ran {
+                    result: Some(id),
+                    flow: Flow::Continue,
+                } = updated
+                else {
+                    return updated.flow();
                 };
                 let subscription = duration.subscribe(DurationObserver {
                     context: self.context.clone(),
@@ -372,16 +375,18 @@ macro_rules! impl_source_observer {
                 // A window closed during subscription gives the subscription back to drop
                 // outside the lock. Return this update's flow: the duration may have ended the
                 // stream, and a source still emitting from its own subscribe has no disposal yet.
-                self.context.update_flow(|model| {
-                    let closed = match &mut model.$this {
-                        Some(windows) => windows.fill(id, subscription),
-                        // Closed with the others, by the completion of the other source.
-                        None => Some(subscription),
-                    };
-                    UpdateOutcome::empty()
-                        .without_events()
-                        .with_drop_outside(closed)
-                })
+                self.context
+                    .update(|model| {
+                        let closed = match &mut model.$this {
+                            Some(windows) => windows.fill(id, subscription),
+                            // Closed with the others, by the completion of the other source.
+                            None => Some(subscription),
+                        };
+                        UpdateOutcome::empty()
+                            .without_events()
+                            .with_drop_outside(closed)
+                    })
+                    .flow()
             }
 
             fn on_termination(self, termination: Termination<E>) {

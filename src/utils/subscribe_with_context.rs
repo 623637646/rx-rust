@@ -84,15 +84,17 @@
 //! {
 //!     fn on_next(&mut self, value: i32) -> Flow {
 //!         // The model is read and written, and the events queued, under one lock.
-//!         self.context.update_flow(|total| {
-//!             *total += value;
-//!             if *total > self.limit {
-//!                 UpdateOutcome::empty()
-//!                     .with_next_and_termination_events(*total, Termination::Completed)
-//!             } else {
-//!                 UpdateOutcome::empty().with_next_event(*total)
-//!             }
-//!         })
+//!         self.context
+//!             .update(|total| {
+//!                 *total += value;
+//!                 if *total > self.limit {
+//!                     UpdateOutcome::empty()
+//!                         .with_next_and_termination_events(*total, Termination::Completed)
+//!                 } else {
+//!                     UpdateOutcome::empty().with_next_event(*total)
+//!                 }
+//!             })
+//!             .flow()
 //!     }
 //!     fn on_termination(self, termination: Termination<E>) {
 //!         // The first termination, from either source, ends the stream.
@@ -124,11 +126,9 @@ use crate::{
     disposable::{
         Disposable, DisposableExt, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
     },
-    observer::{EventBatch, Flow, IntoFlow, Observer, Termination},
+    observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::ThreadMode,
-    utils::serialized_delivery::{
-        DeliveryStop, DeliveryStopped, SerializedDelivery, UpdateOutcome,
-    },
+    utils::serialized_delivery::{DeliveryStop, SerializedDelivery, UpdateOutcome, Updated},
 };
 use educe::Educe;
 
@@ -296,8 +296,7 @@ type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, Conte
 /// The shared state of an operator: its model and its downstream observer, behind one lock.
 ///
 /// Handed to the builder of [`subscribe_with_context`], cloned into each of the operator's
-/// observers, and driven through [`update`](Self::update),
-/// [`update_flow`](Self::update_flow), [`send_next`](Self::send_next) and
+/// observers, and driven through [`update`](Self::update), [`send_next`](Self::send_next) and
 /// [`send_termination`](Self::send_termination). `M` is the thread mode, `MD` the model, and `D`
 /// the disposal of the source subscription the context owns. See the
 /// [module documentation](self) for an example.
@@ -362,36 +361,17 @@ where
     /// The callback must not call external APIs or drop values that can re-enter this context.
     /// Return such values through [`UpdateOutcome::with_drop_outside`] instead.
     ///
-    /// If the context's delivery has stopped, the callback is not invoked and [`DeliveryStopped`]
-    /// is returned.
+    /// Answers the result of the callback and the flow: [`Flow::Stop`] when the outcome
+    /// [answers a stop](UpdateOutcome::answering_stop), when delivering the events it queued
+    /// answered it, or when the stream is over, so an operator observer can return
+    /// [`Updated::flow`] directly. If the context has stopped, the callback is not invoked and
+    /// [`Updated::Stopped`] is answered.
     pub fn update<R, DO, const EVENTS_DECIDED: bool>(
         &self,
         callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
-    ) -> Result<R, DeliveryStopped> {
+    ) -> Updated<R> {
         self.delivery
             .update(|resources| callback(&mut resources.model))
-    }
-
-    /// [`Self::update`] for an operator's `on_next`, reporting the flow instead of a result.
-    ///
-    /// The flow is [`Flow::Stop`] when the result of the update says so, when delivering the events
-    /// the update produced answered it, or when the context has stopped, so an operator observer
-    /// can return it directly. The result is `()` when only downstream decides, or a [`Flow`] when
-    /// the model decides too: under the same lock that queued the events.
-    pub fn update_flow<R: IntoFlow, DO, const EVENTS_DECIDED: bool>(
-        &self,
-        callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
-    ) -> Flow {
-        match self
-            .delivery
-            .update_with_flow(|resources| callback(&mut resources.model))
-        {
-            Ok((result, flow)) => match result.into_flow() {
-                Flow::Continue => flow,
-                Flow::Stop => Flow::Stop,
-            },
-            Err(DeliveryStopped) => Flow::Stop,
-        }
     }
 
     /// Sends `value` downstream. Returns the flow of the delivery, as [`Self::send`] does.

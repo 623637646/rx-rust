@@ -9,7 +9,7 @@ use crate::{
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
     thread_mode::ThreadMode,
     utils::{
-        serialized_delivery::{DeliveryStopped, UpdateOutcome},
+        serialized_delivery::{UpdateOutcome, Updated},
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
@@ -215,6 +215,7 @@ where
             };
             UpdateOutcome::new(next).with_events(EventBatch::NextBatch(values))
         })
+        .result()
         .unwrap_or(Next::Finished)
 }
 
@@ -250,9 +251,10 @@ where
             // an event in range; the event is dropped here, outside its lock.
             return self
                 .context
-                .update_flow(|_| UpdateOutcome::empty().without_events());
+                .update(|_| UpdateOutcome::empty().without_events())
+                .flow();
         };
-        let wake = self.context.update(|model| {
+        let updated = self.context.update(|model| {
             // The timer waits for the earliest deadline, which a later event never moves: only an
             // event into an empty queue has a timer to wake.
             let wake = model.next_deadline().is_none();
@@ -262,14 +264,14 @@ where
             }
             UpdateOutcome::new(wake).without_events()
         });
-        match wake {
-            Ok(wake) => {
+        match updated {
+            Updated::Ran { result: wake, .. } => {
                 if wake {
                     self.waker.wake();
                 }
                 Flow::Continue
             }
-            Err(DeliveryStopped) => Flow::Stop,
+            Updated::Stopped => Flow::Stop,
         }
     }
 }

@@ -164,23 +164,25 @@ macro_rules! impl_observer {
             D: Disposable,
         {
             fn on_next(&mut self, value: $input_t) -> Flow {
-                self.0.update_flow(|model| {
-                    // The latest value this one replaces is handed back, so that the `Drop` of
-                    // the user's value runs outside the lock. Building the pair still clones
-                    // under it: whether there is a pair to build at all is only known here.
-                    if let Some(other) = &model.$other_field {
-                        let pair = $combine(value.clone(), other.clone());
-                        let replaced = model.$this_field.replace(value);
-                        UpdateOutcome::empty()
-                            .with_drop_outside(replaced)
-                            .with_next_event(pair)
-                    } else {
-                        let replaced = model.$this_field.replace(value);
-                        UpdateOutcome::empty()
-                            .with_drop_outside(replaced)
-                            .without_events()
-                    }
-                })
+                self.0
+                    .update(|model| {
+                        // The latest value this one replaces is handed back, so that the `Drop` of
+                        // the user's value runs outside the lock. Building the pair still clones
+                        // under it: whether there is a pair to build at all is only known here.
+                        if let Some(other) = &model.$other_field {
+                            let pair = $combine(value.clone(), other.clone());
+                            let replaced = model.$this_field.replace(value);
+                            UpdateOutcome::empty()
+                                .with_drop_outside(replaced)
+                                .with_next_event(pair)
+                        } else {
+                            let replaced = model.$this_field.replace(value);
+                            UpdateOutcome::empty()
+                                .with_drop_outside(replaced)
+                                .without_events()
+                        }
+                    })
+                    .flow()
             }
 
             fn on_termination(self, termination: Termination<E>) {

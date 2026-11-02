@@ -168,9 +168,10 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
-        let Ok(key) = self
+        let Some(key) = self
             .0
             .update(|model| UpdateOutcome::new(model.subscriptions.reserve()))
+            .result()
         else {
             return Flow::Stop;
         };
@@ -182,9 +183,12 @@ where
 
         // `fill` gives the subscription back when the inner observable completed while it was being
         // subscribed, and released its own entry.
-        self.0.update_flow(|model| {
-            UpdateOutcome::empty().with_drop_outside(model.subscriptions.fill(key, subscription))
-        })
+        self.0
+            .update(|model| {
+                UpdateOutcome::empty()
+                    .with_drop_outside(model.subscriptions.fill(key, subscription))
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {

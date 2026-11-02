@@ -148,10 +148,12 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.0.update_flow(|values| {
-            values.push(value);
-            UpdateOutcome::empty()
-        })
+        self.0
+            .update(|values| {
+                values.push(value);
+                UpdateOutcome::empty()
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -170,9 +172,12 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T1) -> Flow {
-        let flow = self.0.update_flow(|values| {
-            UpdateOutcome::empty().with_next_event(take_leaving_room(values, values.len()))
-        });
+        let flow = self
+            .0
+            .update(|values| {
+                UpdateOutcome::empty().with_next_event(take_leaving_room(values, values.len()))
+            })
+            .flow();
         // Only the arrival of a boundary matters, never its value, which is dropped here, after
         // the bundle it emitted and outside the lock, since dropping it can run arbitrary code.
         drop(value);

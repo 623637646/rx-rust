@@ -144,18 +144,18 @@ where
                 if terminated.is_some() {
                     // Replacing the value now would change what the later subscribers observe,
                     // after the completion already replayed the previous one.
-                    return UpdateOutcome::new(Flow::Stop)
+                    return UpdateOutcome::empty()
                         .with_drop_outside(Some(value))
                         .without_events();
                 }
                 // The replaced value is dropped outside the lock: dropping it can run arbitrary
                 // code.
                 let previous = last.replace(value);
-                UpdateOutcome::new(Flow::Continue)
+                UpdateOutcome::empty()
                     .with_drop_outside(previous)
                     .without_events()
             })
-            .unwrap_or(Flow::Stop)
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {

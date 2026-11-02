@@ -126,9 +126,11 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.0.update_flow(|model| {
-            UpdateOutcome::empty().with_drop_outside(model.last_value.replace(value))
-        })
+        self.0
+            .update(|model| {
+                UpdateOutcome::empty().with_drop_outside(model.last_value.replace(value))
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -147,13 +149,16 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T1) -> Flow {
-        let flow = self.0.update_flow(|model| {
-            if let Some(last_value) = model.last_value.take() {
-                UpdateOutcome::empty().with_next_event(last_value)
-            } else {
-                UpdateOutcome::empty().without_events()
-            }
-        });
+        let flow = self
+            .0
+            .update(|model| {
+                if let Some(last_value) = model.last_value.take() {
+                    UpdateOutcome::empty().with_next_event(last_value)
+                } else {
+                    UpdateOutcome::empty().without_events()
+                }
+            })
+            .flow();
         // Only the arrival of a sample matters, never its value, which is dropped here, after the
         // value it emitted and outside the lock, since dropping it can run arbitrary code.
         drop(value);

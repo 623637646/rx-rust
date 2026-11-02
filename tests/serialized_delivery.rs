@@ -17,7 +17,7 @@ use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     observer::{EventBatch, Flow, Observer, Termination},
-    utils::serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome},
+    utils::serialized_delivery::{SerializedDelivery, UpdateOutcome, Updated},
 };
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -584,7 +584,7 @@ fn events_sent_from_on_termination_are_rejected() {
             assert!(delivery.send(next(1)).is_stop());
             assert_eq!(
                 delivery.update(|_resources| UpdateOutcome::empty()),
-                Err(DeliveryStopped)
+                Updated::Stopped
             );
         })
         .build();
@@ -627,6 +627,7 @@ fn stop_drops_the_observer_and_the_resources_outside_the_lock() {
             resources.on_drop(note_and_reenter(&handle, &log, "resources dropped"));
             UpdateOutcome::empty()
         })
+        .result()
         .expect("the delivery is idle");
 
     delivery.stop();
@@ -788,7 +789,7 @@ fn a_delivery_stop_leaves_the_observer_to_the_next_update() {
     delivery.stop_handle().stop();
     assert_eq!(
         delivery.update(|resources| UpdateOutcome::new(resources.model)),
-        Err(DeliveryStopped)
+        Updated::Stopped
     );
     assert_eq!(
         records(&log),
@@ -886,7 +887,10 @@ fn a_handle_dropped_under_its_own_lock_takes_no_lock() {
             drop(clone);
             UpdateOutcome::empty()
         }),
-        Ok(())
+        Updated::Ran {
+            result: (),
+            flow: Flow::Continue
+        }
     );
     assert_eq!(records(&log), []);
 }
@@ -979,11 +983,17 @@ fn update_without_events_updates_the_model_and_returns_its_result() {
             resources.model += 10;
             UpdateOutcome::new(resources.model)
         }),
-        Ok(11)
+        Updated::Ran {
+            result: 11,
+            flow: Flow::Continue
+        }
     );
     assert_eq!(
         delivery.update(|resources| UpdateOutcome::new(resources.model)),
-        Ok(11)
+        Updated::Ran {
+            result: 11,
+            flow: Flow::Continue
+        }
     );
     assert_eq!(records(&log), [], "an update alone delivers nothing");
 }
@@ -998,7 +1008,10 @@ fn update_runs_while_a_delivery_is_running() {
                     resources.model += number;
                     UpdateOutcome::new(resources.model)
                 }),
-                Ok(number * (number + 1) / 2)
+                Updated::Ran {
+                    result: number * (number + 1) / 2,
+                    flow: Flow::Continue
+                }
             );
         })
         .build();
@@ -1006,7 +1019,10 @@ fn update_runs_while_a_delivery_is_running() {
     assert!(delivery.send(next_batch([1, 2, 3])).is_continue());
     assert_eq!(
         delivery.update(|resources| UpdateOutcome::new(resources.model)),
-        Ok(6)
+        Updated::Ran {
+            result: 6,
+            flow: Flow::Continue
+        }
     );
 }
 
@@ -1020,11 +1036,14 @@ fn update_without_events_behind_a_queued_termination_answers_stop() {
                 // The update still runs, since the resources live until the termination is
                 // delivered, but the stream it updates is over, which its flow says.
                 assert_eq!(
-                    delivery.update_with_flow(|resources| {
+                    delivery.update(|resources| {
                         resources.model += 10;
                         UpdateOutcome::new(resources.model)
                     }),
-                    Ok((10, Flow::Stop))
+                    Updated::Ran {
+                        result: 10,
+                        flow: Flow::Stop
+                    }
                 );
             }
         })
@@ -1050,7 +1069,7 @@ fn update_after_a_termination_returns_delivery_stopped() {
     assert!(delivery.send(completed()).is_stop());
     assert_eq!(
         delivery.update(|resources| UpdateOutcome::new(resources.model)),
-        Err(DeliveryStopped)
+        Updated::Stopped
     );
 }
 
@@ -1065,12 +1084,12 @@ fn a_stopped_update_does_not_run_and_is_dropped_outside_the_lock() {
         &log,
         "update dropped",
     ));
-    let result: Result<(), _> = delivery.update(move |_resources| -> TestOutcome<()> {
+    let result: Updated<()> = delivery.update(move |_resources| -> TestOutcome<()> {
         drop(probe); // Never runs: it is what makes the update own the probe.
         panic!("the update must not run once the delivery has stopped");
     });
 
-    assert_eq!(result, Err(DeliveryStopped));
+    assert_eq!(result, Updated::Stopped);
     assert_eq!(
         records(&log)[2..],
         [Record::Note("update dropped")],
@@ -1088,14 +1107,20 @@ fn update_delivers_the_events_of_its_outcome() {
             resources.model = 1;
             UpdateOutcome::new("first").with_next_event(Value::new(1))
         }),
-        Ok("first")
+        Updated::Ran {
+            result: "first",
+            flow: Flow::Continue
+        }
     );
     assert_eq!(
         delivery.update(|_resources| {
             UpdateOutcome::empty()
                 .with_events(EventBatch::NextBatch(vec![Value::new(2), Value::new(3)]))
         }),
-        Ok(())
+        Updated::Ran {
+            result: (),
+            flow: Flow::Continue
+        }
     );
     assert_eq!(values(&log), [1, 2, 3]);
 }
@@ -1112,7 +1137,13 @@ fn update_terminates_before_dropping_what_it_asked_to_drop_outside() {
             .with_next_and_termination_events(Value::new(1), Termination::Error(ERROR))
     });
 
-    assert_eq!(result, Ok(()));
+    assert_eq!(
+        result,
+        Updated::Ran {
+            result: (),
+            flow: Flow::Stop
+        }
+    );
     assert_eq!(
         records(&log),
         [
@@ -1142,7 +1173,13 @@ fn what_an_update_drops_outside_is_dropped_with_the_lock_released() {
             .with_next_event(Value::new(1))
     });
 
-    assert_eq!(result, Ok(()));
+    assert_eq!(
+        result,
+        Updated::Ran {
+            result: (),
+            flow: Flow::Continue
+        }
+    );
     assert_eq!(
         records(&log),
         [
@@ -1163,11 +1200,14 @@ fn update_with_a_termination_event_stops_the_delivery() {
         delivery.update(|_resources| {
             UpdateOutcome::empty().with_termination_event(Termination::Completed)
         }),
-        Ok(())
+        Updated::Ran {
+            result: (),
+            flow: Flow::Stop
+        }
     );
     assert_eq!(
         delivery.update(|_resources| UpdateOutcome::empty()),
-        Err(DeliveryStopped)
+        Updated::Stopped
     );
     assert!(delivery.send(next(1)).is_stop());
 }
@@ -1183,7 +1223,10 @@ fn update_from_on_next_queues_its_events_after_the_pending_ones() {
                         resources.model += 1;
                         UpdateOutcome::new(resources.model).with_next_event(Value::new(10))
                     }),
-                    Ok(1)
+                    Updated::Ran {
+                        result: 1,
+                        flow: Flow::Continue
+                    }
                 );
             }
         })
@@ -1204,14 +1247,17 @@ fn update_runs_and_returns_even_when_its_events_are_rejected() {
             }
             assert!(delivery.send(completed()).is_stop());
             // The update still runs against the resources, but the termination is already queued,
-            // so its events are dropped instead of being delivered.
+            // so its events are dropped instead of being delivered, and its flow says so.
             let dropped = Value::new(10).on_drop(note(&log_of_observer, "10 dropped"));
             assert_eq!(
                 delivery.update(move |resources| {
                     resources.model += 1;
                     UpdateOutcome::new(resources.model).with_next_event(dropped)
                 }),
-                Ok(1)
+                Updated::Ran {
+                    result: 1,
+                    flow: Flow::Stop
+                }
             );
         })
         .build();
@@ -1219,6 +1265,30 @@ fn update_runs_and_returns_even_when_its_events_are_rejected() {
     assert!(delivery.send(next_batch([1, 2])).is_stop());
     assert_eq!(values(&log), [1, 2]);
     assert!(records(&log).contains(&Record::Note("10 dropped")));
+}
+
+#[test]
+fn an_update_answering_a_stop_delivers_its_events_and_leaves_the_delivery_open() {
+    let log = new_log();
+    let delivery = builder(&log).build();
+
+    // The host stops this caller only: its value is still delivered, and the delivery goes on.
+    let updated = delivery.update(|resources| {
+        resources.model += 1;
+        UpdateOutcome::new(resources.model)
+            .with_next_event(Value::new(1))
+            .answering_stop()
+    });
+    assert_eq!(
+        updated,
+        Updated::Ran {
+            result: 1,
+            flow: Flow::Stop
+        }
+    );
+    assert_eq!(updated.result(), Some(1));
+    assert!(delivery.send(next(2)).is_continue());
+    assert_eq!(values(&log), [1, 2]);
 }
 
 #[test]
@@ -1242,8 +1312,20 @@ fn the_arms_of_one_update_share_the_type_of_their_outcome() {
         })
     };
 
-    assert_eq!(update(), Ok(1));
-    assert_eq!(update(), Ok(2));
+    assert_eq!(
+        update(),
+        Updated::Ran {
+            result: 1,
+            flow: Flow::Continue
+        }
+    );
+    assert_eq!(
+        update(),
+        Updated::Ran {
+            result: 2,
+            flow: Flow::Continue
+        }
+    );
     assert_eq!(
         records(&log),
         [Record::Next(1), Record::Note("dropped outside")]

@@ -15,14 +15,16 @@
 //! A host that must change its own data, and emit the resulting events atomically, does so through
 //! [`SerializedDelivery::update`], which runs its callback under the same lock that then queues
 //! the events. The callback describes its outcome with an [`UpdateOutcome`], the one way to hand
-//! this module events to queue and a value to drop after sending or queueing them.
+//! this module events to queue and a value to drop after sending or queueing them, and the update
+//! answers with an [`Updated`]: the callback's result, and whether the observer still accepts
+//! events.
 //!
 //! # Examples
 //! ```rust
 //! use rx_rust::{
 //!     observer::{callback_observer::CallbackObserver, EventBatch, Flow, Termination},
 //!     thread_mode::Local,
-//!     utils::serialized_delivery::{SerializedDelivery, UpdateOutcome},
+//!     utils::serialized_delivery::{SerializedDelivery, UpdateOutcome, Updated},
 //! };
 //!
 //! let mut seen = Vec::new();
@@ -35,7 +37,7 @@
 //!     *count += 1;
 //!     UpdateOutcome::new(*count).with_next_event(10)
 //! });
-//! assert_eq!(count, Ok(1));
+//! assert_eq!(count, Updated::Ran { result: 1, flow: Flow::Continue });
 //! assert_eq!(delivery.send(EventBatch::Termination(Termination::Completed)), Flow::Stop);
 //! drop(delivery);
 //! assert_eq!(seen, [1, 10]);
@@ -147,12 +149,52 @@ enum Step<T, E, OR, R> {
     Stopped(OR),
 }
 
-/// Returned when an update did not run because the delivery has stopped.
+/// What an update answers: the result its callback gave back, and whether the observer still
+/// accepts events — or that the callback did not run at all, because the delivery had stopped.
 ///
-/// Stopping is terminal: once a delivery has stopped, every later update returns this instead of
-/// running, and the update and everything it captured are dropped outside the lock.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DeliveryStopped;
+/// An `on_next` built on updates answers the [`flow`](Self::flow) of its last one; a step that only
+/// needs the result, a reservation say, takes it with [`result`](Self::result) and leaves the flow
+/// to the update that ends the work. A step that needs both matches on the variants.
+#[derive(Educe)]
+#[educe(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use = "an `on_next` answers the flow of its last update"]
+pub enum Updated<R> {
+    /// The callback ran and gave back `result`.
+    ///
+    /// `flow` is what delivering the events it queued answered or, when it queued none, whether
+    /// the delivery still accepts events: [`Flow::Stop`] once a termination is queued behind a
+    /// delivery running elsewhere. An outcome that [answers a stop](UpdateOutcome::answering_stop)
+    /// makes it [`Flow::Stop`] whatever the delivery answered.
+    Ran {
+        /// What the callback gave back with [`UpdateOutcome::new`].
+        result: R,
+        /// Whether the caller may go on sending.
+        flow: Flow,
+    },
+    /// The delivery had stopped, so the callback did not run: it was dropped, with everything it
+    /// captured, outside the lock.
+    ///
+    /// Stopping is terminal: once a delivery has stopped, every later update answers this.
+    Stopped,
+}
+
+impl<R> Updated<R> {
+    /// Whether the caller may go on sending: [`Flow::Stop`] for a delivery that had stopped.
+    pub fn flow(&self) -> Flow {
+        match self {
+            Self::Ran { flow, .. } => *flow,
+            Self::Stopped => Flow::Stop,
+        }
+    }
+
+    /// The result of the callback, whatever the flow, or [`None`] when it did not run.
+    pub fn result(self) -> Option<R> {
+        match self {
+            Self::Ran { result, .. } => Some(result),
+            Self::Stopped => None,
+        }
+    }
+}
 
 /// The marker of an [`UpdateOutcome`] that has not decided what to drop outside the lock yet.
 #[derive(Debug)]
@@ -164,7 +206,7 @@ pub struct DropUndecided;
 pub struct DropDecided<T>(Option<T>);
 
 /// What an update performed under the lock produced: the events to queue, a value to drop outside
-/// the lock, and the result to give back to the caller.
+/// the lock, the result to give back to the caller, and whether the caller must stop sending.
 ///
 /// The two type-state parameters make each effect settable at most once, and let the arms of a
 /// branching update share one type: an arm that sets no events next to one that does still has to
@@ -174,6 +216,8 @@ pub struct DropDecided<T>(Option<T>);
 pub struct UpdateOutcome<T, E, R = (), DO = DropUndecided, const EVENTS_DECIDED: bool = false> {
     events: Option<EventBatch<T, E>>,
     drop_outside: DO,
+    /// [`Flow::Stop`] once [`Self::answering_stop`] was called.
+    flow: Flow,
     result: R,
 }
 
@@ -184,6 +228,7 @@ impl<T, E, R> UpdateOutcome<T, E, R> {
         Self {
             events: None,
             drop_outside: DropUndecided,
+            flow: Flow::Continue,
             result,
         }
     }
@@ -197,14 +242,33 @@ impl<T, E> UpdateOutcome<T, E> {
 }
 
 impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED> {
-    /// Takes the outcome apart, for a host that queues the events somewhere else.
+    /// Translates the events, keeping every other effect and the type state as they are.
     ///
     /// This is how [`SerializedMulticast`](crate::utils::serialized_multicast::SerializedMulticast)
-    /// translates the outcome of its own host into the events of the delivery underneath it. The
-    /// events must still be queued, and the value still be dropped, under and outside the very
-    /// lock this outcome was produced under.
-    pub(crate) fn into_parts(self) -> (Option<EventBatch<T, E>>, DO, R) {
-        (self.events, self.drop_outside, self.result)
+    /// turns the outcome of its own host into one over the events of the delivery underneath it,
+    /// under the very lock the host's outcome was produced under.
+    pub(crate) fn map_events<T2>(
+        self,
+        map: impl FnOnce(EventBatch<T, E>) -> EventBatch<T2, E>,
+    ) -> UpdateOutcome<T2, E, R, DO, EVENTS_DECIDED> {
+        UpdateOutcome {
+            events: self.events.map(map),
+            drop_outside: self.drop_outside,
+            flow: self.flow,
+            result: self.result,
+        }
+    }
+
+    /// Makes the update answer [`Flow::Stop`], whatever delivering its events answers.
+    ///
+    /// This is the host deciding that the caller must send nothing more, while the delivery goes
+    /// on for the others: an inner source that has been superseded, say. It can only tighten the
+    /// flow: there is no way to answer [`Flow::Continue`] for a delivery that stopped.
+    pub fn answering_stop(self) -> Self {
+        Self {
+            flow: Flow::Stop,
+            ..self
+        }
     }
 }
 
@@ -219,6 +283,7 @@ impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, 
         UpdateOutcome {
             events: self.events,
             drop_outside: DropDecided(Some(drop_outside)),
+            flow: self.flow,
             result: self.result,
         }
     }
@@ -230,6 +295,7 @@ impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, 
         UpdateOutcome {
             events: self.events,
             drop_outside: DropDecided(None),
+            flow: self.flow,
             result: self.result,
         }
     }
@@ -263,6 +329,7 @@ impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
         UpdateOutcome {
             events: Some(events),
             drop_outside: self.drop_outside,
+            flow: self.flow,
             result: self.result,
         }
     }
@@ -272,6 +339,7 @@ impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
         UpdateOutcome {
             events: None,
             drop_outside: self.drop_outside,
+            flow: self.flow,
             result: self.result,
         }
     }
@@ -366,25 +434,13 @@ where
     /// drop anything that can re-enter this delivery** — it runs under the lock; hand such values
     /// to [`UpdateOutcome::with_drop_outside`] instead.
     ///
-    /// If the delivery has stopped, `update` does not run, [`DeliveryStopped`] is returned, and
-    /// `update` is dropped, with everything it captured, outside the lock.
+    /// Answers the result of `update` and the flow, as [`Updated::Ran`] describes them. If the
+    /// delivery has stopped, `update` does not run, [`Updated::Stopped`] is answered, and `update`
+    /// is dropped, with everything it captured, outside the lock.
     pub fn update<Out, DO, const EVENTS_DECIDED: bool>(
         &self,
         update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
-    ) -> Result<Out, DeliveryStopped> {
-        self.update_with_flow(update).map(|(result, _)| result)
-    }
-
-    /// [`update`](Self::update), also reporting whether the observer still accepts events.
-    ///
-    /// The flow is what delivering the queued events answered. An update that queued none answers
-    /// whether the delivery still accepts events, as [`is_active`](Self::is_active): [`Flow::Stop`]
-    /// once a termination is queued behind a delivery running elsewhere. A delivery that has already stopped answers [`DeliveryStopped`] instead
-    /// of a flow, which a host that only cares about the flow maps to [`Flow::Stop`].
-    pub fn update_with_flow<Out, DO, const EVENTS_DECIDED: bool>(
-        &self,
-        update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
-    ) -> Result<(Out, Flow), DeliveryStopped> {
+    ) -> Updated<Out> {
         // Keep `update` out of the closure so that, when the delivery has stopped, its captures
         // are dropped only after the lock is released.
         let mut update = Some(update);
@@ -397,6 +453,7 @@ where
             let UpdateOutcome {
                 events,
                 drop_outside,
+                flow,
                 result,
             } = update(resources);
             let action = match events {
@@ -404,19 +461,24 @@ where
                 None if core.is_active() => EnqueueAction::Queued(Flow::Continue),
                 None => EnqueueAction::Queued(Flow::Stop),
             };
-            Ok((action, drop_outside, result))
+            Ok((action, drop_outside, flow, result))
         });
-        let (action, drop_outside, result) = match outcome {
+        let (action, drop_outside, answered, result) = match outcome {
             Ok(outcome) => outcome,
             Err(parked) => {
                 drop(update); // Drop outside the lock
                 drop(parked);
-                return Err(DeliveryStopped);
+                return Updated::Stopped;
             }
         };
-        let flow = self.perform(action);
+        let delivered = self.perform(action);
         drop(drop_outside); // Drop after sending or queueing the events, outside the lock.
-        Ok((result, flow))
+        let flow = if answered.is_stop() {
+            Flow::Stop
+        } else {
+            delivered
+        };
+        Updated::Ran { result, flow }
     }
 
     /// Carries out, with the lock released, what `enqueue_batch` decided under it.

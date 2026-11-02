@@ -275,14 +275,17 @@ when they fail.
   drops it; `Continue` is only a hint ("no stop seen here"), so a source must still honor its
   disposal. An operator that forwards values returns what its own downstream returned, so that the
   answer reaches the source; an operator that ends its own stream returns `Stop`. A context-based
-  operator gets it from `SubscriptionContext::update_flow` / `send_next`; `send_termination` answers
-  nothing, since a termination is the last event anyway. An `on_next` that does more work after
-  its first update — subscribing an inner observable or a duration, as `merge_all`, `switch` and
-  `join` do — answers what its *last* context call says, an `update_flow` or a `send_next`, or
-  maps `Err(DeliveryStopped)` of an `update` to `Stop`: that work may have ended the stream, and a
-  source still emitting from inside its own `subscribe` has no disposal yet, so only the flow
-  stops it. An earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream
-  that is over. A termination queued behind a delivery running on another thread still lets the
+  operator gets it from the `Updated` an `update` answers (`.flow()`) or from `send_next`;
+  `send_termination` answers nothing, since a termination is the last event anyway. The model
+  stops its own caller with `UpdateOutcome::answering_stop` (a superseded `switch` inner), never
+  with a `Flow` in the update's result. An `on_next` that does more work after its first update —
+  subscribing an inner observable or a duration, as `merge_all`, `switch` and `join` do — takes
+  only the result of the earlier ones (`.result()`, or a match on `Updated::Ran { result, flow }` to
+  skip the work once the flow says `Stop`), and answers what its *last* context call says, the
+  `.flow()` of an `update` or a `send_next`: that work may have ended the stream, and a source still
+  emitting from inside its own `subscribe` has no disposal yet, so only the flow stops it. An
+  earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream that is over. A
+  termination queued behind a delivery running on another thread still lets the
   context's updates run, so such an `on_next` may still start that work — call the selector,
   subscribe the inner observable — for a value racing that termination; the flow of its last
   update then stops the source, and the context disposes what it stored once the stream has
@@ -291,7 +294,7 @@ when they fail.
   `#[must_use]` is what catches a
   forgotten forward — `let _ =` only where ignoring it is deliberate. User callbacks
   (`subscribe_with_callback`) return `()` or a `Flow`, via `observer::IntoFlow` (a
-  diverging `|_| unreachable!()` needs `-> ()`), and so may the result of an `update_flow`.
+  diverging `|_| unreachable!()` needs `-> ()`).
 
 ## Test conventions
 

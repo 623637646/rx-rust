@@ -56,7 +56,7 @@ use crate::{
     thread_mode::mutable::MutableBoolHelper,
     utils::{
         id_generator::{Id, IdGenerator},
-        serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome},
+        serialized_delivery::{SerializedDelivery, UpdateOutcome, Updated},
     },
 };
 use educe::Educe;
@@ -136,22 +136,23 @@ where
     ///
     /// A multicast killed by a panicking observer reports none: see the module documentation.
     pub(crate) fn termination(&self) -> Option<Termination<E>> {
-        self.read(|_, termination| termination.cloned())
-            .unwrap_or(None)
+        self.read(|_, termination| termination.cloned()).flatten()
     }
 
     /// Reads the host's state and the termination together, under the lock.
     ///
     /// `read` must not notify anyone and must not drop a value that can re-enter this multicast:
-    /// it runs under the lock. Returns [`DeliveryStopped`], without running `read`, once the
-    /// delivery has stopped.
+    /// it runs under the lock. Returns [`None`], without running `read`, once the delivery has
+    /// stopped.
     pub(crate) fn read<Out>(
         &self,
         read: impl FnOnce(&R, Option<&Termination<E>>) -> Out,
-    ) -> Result<Out, DeliveryStopped> {
-        self.0.update(|resources| {
-            UpdateOutcome::new(read(&resources.host, resources.termination.as_ref()))
-        })
+    ) -> Option<Out> {
+        self.0
+            .update(|resources| {
+                UpdateOutcome::new(read(&resources.host, resources.termination.as_ref()))
+            })
+            .result()
     }
 
     /// Updates the host's state and queues the events that update produced, under one lock.
@@ -164,53 +165,51 @@ where
     /// [`UpdateOutcome::with_drop_outside`].
     ///
     /// `update` must not notify anyone and must not drop a value that can re-enter this multicast:
-    /// it runs under the lock. Returns [`DeliveryStopped`], without running `update`, once the
+    /// it runs under the lock. Answers [`Updated::Stopped`], without running `update`, once the
     /// delivery has stopped.
+    ///
+    /// The flow is [`Flow::Stop`] only once the multicast has terminated — including by this very
+    /// update — or when the host's outcome
+    /// [answers a stop](UpdateOutcome::answering_stop): a multicast with no subscriber left is
+    /// still open, and a subscriber that stops takes only itself away.
     pub(crate) fn update<Out, DO, const EVENTS_DECIDED: bool>(
         &self,
         update: impl FnOnce(
             &mut R,
             Option<&Termination<E>>,
         ) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
-    ) -> Result<Out, DeliveryStopped> {
+    ) -> Updated<Out> {
         self.0.update(|resources| {
-            let (events, drop_outside, result) =
-                update(&mut resources.host, resources.termination.as_ref()).into_parts();
             // The host's decision is turned into actions under the same lock that recorded the
             // termination, so nothing can be queued between the two.
-            let outcome = UpdateOutcome::new(result).with_drop_outside(drop_outside);
-            match events {
-                Some(events) => {
-                    outcome.with_events(into_actions(events, &mut resources.termination))
-                }
-                None => outcome.without_events(),
+            let outcome = update(&mut resources.host, resources.termination.as_ref())
+                .map_events(|events| into_actions(events, &mut resources.termination));
+            // The delivery underneath never terminates, so its own flow does not say whether the
+            // multicast has: the termination recorded here does.
+            if resources.termination.is_some() {
+                outcome.answering_stop()
+            } else {
+                outcome
             }
         })
     }
 
     /// Queues `events` for every observer, dropping them outside the lock once terminated.
     ///
-    /// Returns whether the multicast still accepts events, which is [`Flow::Stop`] only once it
-    /// has terminated — including by `events` itself: a multicast with no subscriber left is
-    /// still open, and a subscriber that stops takes only itself away. This is [`Self::update`]
-    /// for a host that reads nothing and decides nothing.
+    /// Returns whether the multicast still accepts events, as [`Self::update`] answers it. This is
+    /// [`Self::update`] for a host that reads nothing and decides nothing.
     pub(crate) fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.update(|_, terminated| {
             if terminated.is_some() {
-                return UpdateOutcome::new(Flow::Stop)
+                return UpdateOutcome::empty()
                     .with_drop_outside(events)
                     .without_events();
             }
-            let flow = if events.ends_stream() {
-                Flow::Stop
-            } else {
-                Flow::Continue
-            };
-            UpdateOutcome::new(flow)
+            UpdateOutcome::empty()
                 .without_drop_outside()
                 .with_events(events)
         })
-        .unwrap_or(Flow::Stop)
+        .flow()
     }
 
     /// Subscribes `observer`, replaying nothing and terminating it at once when already terminated.
@@ -259,12 +258,18 @@ where
             }
         });
         match admitted {
-            Ok(Admitted::Added(id)) => Some(MulticastDisposal {
+            Updated::Ran {
+                result: Admitted::Added(id),
+                ..
+            } => Some(MulticastDisposal {
                 delivery: self.0,
                 disposed,
                 id,
             }),
-            Ok(Admitted::Terminated(values, termination)) => {
+            Updated::Ran {
+                result: Admitted::Terminated(values, termination),
+                ..
+            } => {
                 let mut observer = observer.take().expect("the update left the observer here");
                 // A replayed value can stop the newcomer, which is then dropped where it is
                 // instead of being terminated.
@@ -280,7 +285,7 @@ where
                 }
                 None
             }
-            Err(DeliveryStopped) => {
+            Updated::Stopped => {
                 // The delivery only stops once an observer panicked, which kills the multicast:
                 // the termination went with the resources, so this observer is dropped here
                 // instead, outside the lock. See the module documentation.

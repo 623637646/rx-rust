@@ -9,7 +9,7 @@ use crate::{
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
     thread_mode::ThreadMode,
     utils::{
-        serialized_delivery::{DeliveryStopped, UpdateOutcome},
+        serialized_delivery::{UpdateOutcome, Updated},
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
@@ -211,6 +211,7 @@ where
                 UpdateOutcome::new(idle).without_events()
             }
         })
+        .result()
         .unwrap_or(Next::Finished)
 }
 
@@ -234,7 +235,7 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         let deadline = self.clock.now().checked_add(self.time_span);
-        let wake = self.context.update(|model| match model {
+        let updated = self.context.update(|model| match model {
             // The timer waits for the source: wake it, unless the value never comes due.
             Model::Idle => {
                 *model = Model::Active { value, deadline };
@@ -251,14 +252,14 @@ where
                 UpdateOutcome::new(false).with_drop_outside(previous_value)
             }
         });
-        match wake {
-            Ok(wake) => {
+        match updated {
+            Updated::Ran { result: wake, .. } => {
                 if wake {
                     self.waker.wake();
                 }
                 Flow::Continue
             }
-            Err(DeliveryStopped) => Flow::Stop,
+            Updated::Stopped => Flow::Stop,
         }
     }
 

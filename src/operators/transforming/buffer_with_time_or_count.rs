@@ -210,17 +210,19 @@ where
     C: Clock,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.context.update_flow(|model| {
-            model.values.push(value);
-            if model.values.len() < model.count.get() {
-                return UpdateOutcome::empty().without_events();
-            }
-            // A full bundle restarts the timer: the next timed bundle comes `time_span` after it,
-            // which is never before the one already due, itself at most `time_span` after the
-            // last tick. Out of range means never, as it already did for the deadline due.
-            model.deadline = self.clock.now().checked_add(model.time_span);
-            UpdateOutcome::empty().with_next_event(model.take_bundle())
-        })
+        self.context
+            .update(|model| {
+                model.values.push(value);
+                if model.values.len() < model.count.get() {
+                    return UpdateOutcome::empty().without_events();
+                }
+                // A full bundle restarts the timer: the next timed bundle comes `time_span` after
+                // it, which is never before the one already due, itself at most `time_span` after
+                // the last tick. Out of range means never, as it already did for the deadline due.
+                model.deadline = self.clock.now().checked_add(model.time_span);
+                UpdateOutcome::empty().with_next_event(model.take_bundle())
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -260,10 +262,9 @@ where
     S: Scheduler<BufferWithTimeOrCountContext<M, T, E, OR, D>>,
 {
     // The source terminated synchronously while it was being subscribed: no bundle is left to cut.
-    let Ok(deadline) = context.update(|model| UpdateOutcome::new(model.deadline).without_events())
-    else {
-        return None;
-    };
+    let deadline = context
+        .update(|model| UpdateOutcome::new(model.deadline).without_events())
+        .result()?;
 
     // The context owns only the task's disposal, through its source subscription, never the task,
     // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
@@ -284,6 +285,7 @@ where
                 // A full bundle moved the deadline out of range: no timed bundle is left.
                 None => UpdateOutcome::new(Next::Finished).without_events(),
             })
+            .result()
             .unwrap_or(Next::Finished)
     });
     // Let the handler wait for the absolute deadline, rather than starting a relative delay

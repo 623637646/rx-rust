@@ -162,7 +162,7 @@ where
         self.0
             .update(|buffer, terminated| {
                 if terminated.is_some() {
-                    return UpdateOutcome::new(Flow::Stop)
+                    return UpdateOutcome::empty()
                         .with_drop_outside((Some(value), Some(kept)))
                         .without_events();
                 }
@@ -170,11 +170,11 @@ where
                 // is replayed always matches the values it then receives. The evicted value is
                 // dropped outside the lock: dropping it can run arbitrary code.
                 let evicted = buffer.push(kept);
-                UpdateOutcome::new(Flow::Continue)
+                UpdateOutcome::empty()
                     .with_drop_outside((None, evicted))
                     .with_next_event(value)
             })
-            .unwrap_or(Flow::Stop)
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {

@@ -11,7 +11,7 @@ use crate::{
     utils::{
         MarkerType,
         reservation_slot::ReservationSlot,
-        serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome},
+        serialized_delivery::{DropDecided, UpdateOutcome, Updated},
         subscribe_fn::SubscribeFn,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
     },
@@ -160,7 +160,7 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
-        let result = self.context.update(|model| {
+        let updated = self.context.update(|model| {
             if model.slot.reserve_if_idle() {
                 UpdateOutcome::new(Some(value))
             } else {
@@ -168,15 +168,13 @@ where
                 UpdateOutcome::new(None)
             }
         });
-        match result {
-            Ok(Some(observable)) => {
-                match subscribe_observables(&self.context, observable, self.subscribe_inner) {
-                    Ok(()) => Flow::Continue,
-                    Err(DeliveryStopped) => Flow::Stop,
-                }
-            }
-            Ok(None) => Flow::Continue,
-            Err(DeliveryStopped) => Flow::Stop,
+        match updated {
+            Updated::Ran {
+                result: Some(observable),
+                ..
+            } => subscribe_observables(&self.context, observable, self.subscribe_inner),
+            Updated::Ran { result: None, .. } => Flow::Continue,
+            Updated::Stopped => Flow::Stop,
         }
     }
 
@@ -229,7 +227,11 @@ where
                     let finished = model.slot.release();
                     next_step(model, finished)
                 });
-                if let Ok(Some(observable)) = next {
+                if let Updated::Ran {
+                    result: Some(observable),
+                    ..
+                } = next
+                {
                     let _ = subscribe_observables(&self.context, observable, self.subscribe_inner);
                 }
             }
@@ -271,11 +273,13 @@ where
 /// Subscribes to the already reserved observable, then loops over any successors that complete
 /// before their subscription is filled. An inner that stays active hands the continuation to its
 /// completion callback instead, so immediately completing chains never recurse.
+///
+/// Answers [`Flow::Stop`] once the context has stopped, and [`Flow::Continue`] otherwise.
 fn subscribe_observables<M: ThreadMode, T, E, OR, OE1, SD>(
     context: &SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
     mut observable: OE1,
     subscribe_inner: SubscribeFn<OE1, InnerObserver<M, T, E, OR, OE1, SD>>,
-) -> Result<(), DeliveryStopped>
+) -> Flow
 where
     OR: Observer<T, E>,
     OE1: ObservableTypes<Item = T, Error = E>,
@@ -289,13 +293,16 @@ where
                 subscribe_inner,
             },
         );
-        let next = context.update(|model| {
+        let updated = context.update(|model| {
             let finished = model.slot.fill(subscription);
             next_step(model, finished)
-        })?;
-        match next {
-            Some(next) => observable = next,
-            None => return Ok(()),
+        });
+        match updated {
+            Updated::Ran {
+                result: Some(next), ..
+            } => observable = next,
+            Updated::Ran { result: None, .. } => return Flow::Continue,
+            Updated::Stopped => return Flow::Stop,
         }
     }
 }

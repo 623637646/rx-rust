@@ -12,7 +12,7 @@ use crate::{
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
     utils::{
-        serialized_delivery::{DeliveryStopped, UpdateOutcome},
+        serialized_delivery::{UpdateOutcome, Updated},
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
@@ -188,10 +188,12 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         let deadline = self.clock.now().checked_add(self.duration);
-        self.context.update_flow(|model| {
-            model.deadline = deadline;
-            UpdateOutcome::empty().with_next_event(value)
-        })
+        self.context
+            .update(|model| {
+                model.deadline = deadline;
+                UpdateOutcome::empty().with_next_event(value)
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -218,12 +220,17 @@ where
 {
     let deadline = match context.update(|model| UpdateOutcome::new(model.deadline).without_events())
     {
-        Ok(Some(deadline)) => deadline,
+        Updated::Ran {
+            result: Some(deadline),
+            ..
+        } => deadline,
         // The timeout never fires, so there is no timer to install — but the source stays
         // subscribed, so this step is not the one to end the assembly.
-        Ok(None) => return Some(DisposeOnDrop::new(OptionDisposal::none())),
+        Updated::Ran { result: None, .. } => {
+            return Some(DisposeOnDrop::new(OptionDisposal::none()));
+        }
         // The source terminated synchronously while it was being subscribed.
-        Err(DeliveryStopped) => return None,
+        Updated::Stopped => return None,
     };
 
     // The context owns only the task's disposal, never the task, which its runtime owns: holding
@@ -240,6 +247,7 @@ where
                 // A value moved the deadline out of range: the timeout never fires anymore.
                 None => UpdateOutcome::new(Next::Finished).without_events(),
             })
+            .result()
             .unwrap_or(Next::Finished)
     });
     Some(

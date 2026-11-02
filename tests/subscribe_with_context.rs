@@ -5,7 +5,7 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
+use rx_rust::utils::serialized_delivery::{UpdateOutcome, Updated};
 use rx_rust::{
     disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
@@ -194,7 +194,7 @@ fn stopped_update_drops_callback_outside_lock() {
         UpdateOutcome::empty()
     });
 
-    assert_eq!(result, Err(DeliveryStopped));
+    assert_eq!(result, Updated::Stopped);
     assert!(callback_dropped.read());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Dropped);
@@ -291,7 +291,8 @@ fn a_first_step_that_subscribes_nothing_skips_the_second() {
 }
 
 // `is_active` is false as soon as the stream is over, even while the delivery that ends it is
-// still running — the case an empty `update` cannot tell apart from a live stream.
+// still running. An empty `update` still runs then, since the resources live until the
+// termination is delivered, and only its flow says the stream is over.
 #[test]
 fn is_active_sees_a_termination_queued_during_a_delivery() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
@@ -315,9 +316,7 @@ fn is_active_sees_a_termination_queued_during_a_delivery() {
         context.send_termination(Termination::Completed);
         seen_in_hook.replace_value(Some((
             context.is_active(),
-            context
-                .update(|_: &mut ()| UpdateOutcome::new(()).without_events())
-                .is_ok(),
+            context.update(|_: &mut ()| UpdateOutcome::new(()).without_events()),
         )));
         Flow::Continue
     })
@@ -327,9 +326,17 @@ fn is_active_sees_a_termination_queued_during_a_delivery() {
 
     let _ = context.send_next(1);
 
-    // Inactive, while an `update` is still accepted: asking the state answers what probing with
-    // an empty update does not.
-    assert_eq!(seen.clone_value(), Some((false, true)));
+    // Inactive, while an `update` is still accepted: it runs, and answers the stop with its flow.
+    assert_eq!(
+        seen.clone_value(),
+        Some((
+            false,
+            Updated::Ran {
+                result: (),
+                flow: Flow::Stop
+            }
+        ))
+    );
     assert!(!context.is_active());
     assert_eq!(checker.state(), State::Completed);
 }

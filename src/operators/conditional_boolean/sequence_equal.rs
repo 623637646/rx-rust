@@ -159,40 +159,42 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.context.update_flow(|model| {
-            let (mine, other) = if self.is_first {
-                (&mut model.first, &mut model.second)
-            } else {
-                (&mut model.second, &mut model.first)
-            };
+        self.context
+            .update(|model| {
+                let (mine, other) = if self.is_first {
+                    (&mut model.first, &mut model.second)
+                } else {
+                    (&mut model.second, &mut model.first)
+                };
 
-            match (other.queue.pop_front(), other.completed) {
-                // The other sequence is over, so this value has no counterpart left to be
-                // compared with: it is handed back to be dropped outside the lock.
-                (None, true) => UpdateOutcome::empty()
-                    .with_drop_outside((Some(value), None))
-                    .with_next_and_termination_events(false, Termination::Completed),
-                (None, false) => {
-                    mine.queue.push_back(value);
-                    UpdateOutcome::empty()
-                        .without_drop_outside()
-                        .without_events()
-                }
-                (Some(next), _) => {
-                    // `PartialEq::eq` is user code and runs under the lock, because the pair to
-                    // compare is only decided by the queue the lock guards. Both values are
-                    // handed back, so at least their `Drop` runs outside it.
-                    let is_equal = value == next;
-                    let outcome =
-                        UpdateOutcome::empty().with_drop_outside((Some(value), Some(next)));
-                    if is_equal {
-                        outcome.without_events()
-                    } else {
-                        outcome.with_next_and_termination_events(false, Termination::Completed)
+                match (other.queue.pop_front(), other.completed) {
+                    // The other sequence is over, so this value has no counterpart left to be
+                    // compared with: it is handed back to be dropped outside the lock.
+                    (None, true) => UpdateOutcome::empty()
+                        .with_drop_outside((Some(value), None))
+                        .with_next_and_termination_events(false, Termination::Completed),
+                    (None, false) => {
+                        mine.queue.push_back(value);
+                        UpdateOutcome::empty()
+                            .without_drop_outside()
+                            .without_events()
+                    }
+                    (Some(next), _) => {
+                        // `PartialEq::eq` is user code and runs under the lock, because the pair to
+                        // compare is only decided by the queue the lock guards. Both values are
+                        // handed back, so at least their `Drop` runs outside it.
+                        let is_equal = value == next;
+                        let outcome =
+                            UpdateOutcome::empty().with_drop_outside((Some(value), Some(next)));
+                        if is_equal {
+                            outcome.without_events()
+                        } else {
+                            outcome.with_next_and_termination_events(false, Termination::Completed)
+                        }
                     }
                 }
-            }
-        })
+            })
+            .flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {
