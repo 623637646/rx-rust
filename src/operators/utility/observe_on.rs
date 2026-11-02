@@ -10,10 +10,10 @@ use crate::{
     observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Event, Flow, Observer, Termination},
     scheduler::{Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
-    thread_mode::{ThreadMode, mutable::MutableHelper},
-    utils::take_leaving_room,
+    thread_mode::ThreadMode,
 };
 use educe::Educe;
+use inbox::{BeforeValue, InboxHandle, Pushed};
 
 /// Specifies the `Scheduler` on which an observer will observe this observable: every event is
 /// delivered from a task of that scheduler, in order.
@@ -93,121 +93,136 @@ impl<OE, S> ObserveOn<OE, S> {
     }
 }
 
-/// What the source's observer, the task and the disposal share: the events not delivered yet, and
-/// whether the delivery has stopped. It holds no observer, so it is `Send` as soon as the events
-/// are.
-struct Inbox<T, E> {
-    values: Vec<T>,
-    termination: Option<Termination<E>>,
-    /// The delivery stopped: disposed, or ended by downstream or by a termination. The source's
-    /// observer then answers [`Flow::Stop`], and nothing more is queued.
-    stopped: bool,
-}
+mod inbox {
+    use crate::{
+        disposable::Disposable,
+        observer::{Event, Termination},
+        thread_mode::{ThreadMode, mutable::MutableHelper},
+        utils::take_leaving_room,
+    };
+    use educe::Educe;
 
-/// What [`InboxHandle::push`] did with an event.
-enum Pushed {
-    /// Queued in an empty inbox: the task must be woken.
-    Wake,
-    /// Queued behind events that a task already woken has not taken yet, and takes this one too.
-    Behind,
-    /// The delivery has stopped: the event was dropped, outside the lock.
-    Stopped,
-}
-
-/// What [`InboxHandle::take_preempting_error`] tells the task before each value it delivers.
-enum BeforeValue<E> {
-    /// Nothing preempts the value: deliver it.
-    Deliver,
-    /// An error queued since the step took its values, taken: it is delivered instead of them.
-    Preempted(Termination<E>),
-    /// The delivery has stopped.
-    Stopped,
-}
-
-/// A handle on an [`Inbox`], the only place its lock is taken. Disposing it stops the delivery, so
-/// that nothing is delivered once the subscription is disposed, even while the task is running.
-#[derive(Educe)]
-#[educe(Clone(bound()))]
-struct InboxHandle<M: ThreadMode, T, E>(M::Ptr<Inbox<T, E>>);
-
-impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
-    fn new() -> Self {
-        Self(M::ptr(Inbox {
-            values: Vec::new(),
-            termination: None,
-            stopped: false,
-        }))
+    /// What the source's observer, the task and the disposal share: the events not delivered yet,
+    /// and whether the delivery has stopped. It holds no observer, so it is `Send` as soon as the
+    /// events are.
+    struct Inbox<T, E> {
+        values: Vec<T>,
+        termination: Option<Termination<E>>,
+        /// The delivery stopped: disposed, or ended by downstream or by a termination. The source's
+        /// observer then answers [`Flow::Stop`](crate::observer::Flow::Stop), and nothing more is
+        /// queued.
+        stopped: bool,
     }
 
-    /// Queues `event`, unless the delivery has stopped: `event` is then dropped, outside the lock.
-    fn push(&self, event: Event<T, E>) -> Pushed {
-        self.0
-            .with_mut(|inbox| {
+    /// What [`InboxHandle::push`] did with an event.
+    pub(super) enum Pushed {
+        /// Queued in an empty inbox: the task must be woken.
+        Wake,
+        /// Queued behind events that a task already woken has not taken yet, and takes this one
+        /// too.
+        Behind,
+        /// The delivery has stopped: the event was dropped, outside the lock.
+        Stopped,
+    }
+
+    /// What [`InboxHandle::take_preempting_error`] tells the task before each value it delivers.
+    pub(super) enum BeforeValue<E> {
+        /// Nothing preempts the value: deliver it.
+        Deliver,
+        /// An error queued since the step took its values, taken: it is delivered instead of them.
+        Preempted(Termination<E>),
+        /// The delivery has stopped.
+        Stopped,
+    }
+
+    /// A handle on an [`Inbox`], the only place its lock is taken. Disposing it stops the delivery,
+    /// so that nothing is delivered once the subscription is disposed, even while the task is
+    /// running. Its own module keeps the inbox out of reach of the rest of the operator, so that
+    /// nothing else can take that lock.
+    #[derive(Educe)]
+    #[educe(Clone(bound()))]
+    pub(super) struct InboxHandle<M: ThreadMode, T, E>(M::Ptr<Inbox<T, E>>);
+
+    impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
+        pub(super) fn new() -> Self {
+            Self(M::ptr(Inbox {
+                values: Vec::new(),
+                termination: None,
+                stopped: false,
+            }))
+        }
+
+        /// Queues `event`, unless the delivery has stopped: `event` is then dropped, outside the
+        /// lock.
+        pub(super) fn push(&self, event: Event<T, E>) -> Pushed {
+            self.0
+                .with_mut(|inbox| {
+                    if inbox.stopped {
+                        return Err(event);
+                    }
+                    let pushed = if inbox.values.is_empty() && inbox.termination.is_none() {
+                        Pushed::Wake
+                    } else {
+                        Pushed::Behind
+                    };
+                    match event {
+                        Event::Next(value) => inbox.values.push(value),
+                        Event::Termination(termination) => inbox.termination = Some(termination),
+                    }
+                    Ok(pushed)
+                })
+                .unwrap_or(Pushed::Stopped)
+        }
+
+        /// Takes everything queued, or `None` once the delivery has stopped. The inbox is left with
+        /// room for as many values, so that those queued meanwhile do not grow a new `Vec` from
+        /// nothing.
+        pub(super) fn take(&self) -> Option<(Vec<T>, Option<Termination<E>>)> {
+            self.0.with_mut(|inbox| {
+                (!inbox.stopped).then(|| {
+                    let room = inbox.values.len();
+                    (
+                        take_leaving_room(&mut inbox.values, room),
+                        inbox.termination.take(),
+                    )
+                })
+            })
+        }
+
+        pub(super) fn is_stopped(&self) -> bool {
+            self.0.with_ref(|inbox| inbox.stopped)
+        }
+
+        /// What the task checks before each value it delivers. An error queued is taken, since it
+        /// preempts the values not delivered yet; a completion does not, so it is left queued.
+        pub(super) fn take_preempting_error(&self) -> BeforeValue<E> {
+            self.0.with_mut(|inbox| {
                 if inbox.stopped {
-                    return Err(event);
-                }
-                let pushed = if inbox.values.is_empty() && inbox.termination.is_none() {
-                    Pushed::Wake
+                    BeforeValue::Stopped
+                } else if let Some(error) = inbox
+                    .termination
+                    .take_if(|termination| matches!(termination, Termination::Error(_)))
+                {
+                    BeforeValue::Preempted(error)
                 } else {
-                    Pushed::Behind
-                };
-                match event {
-                    Event::Next(value) => inbox.values.push(value),
-                    Event::Termination(termination) => inbox.termination = Some(termination),
+                    BeforeValue::Deliver
                 }
-                Ok(pushed)
             })
-            .unwrap_or(Pushed::Stopped)
+        }
+
+        /// Marks the delivery stopped, and drops what is still queued, outside the lock.
+        pub(super) fn stop(&self) {
+            drop(self.0.with_mut(|inbox| {
+                inbox.stopped = true;
+                (std::mem::take(&mut inbox.values), inbox.termination.take())
+            }));
+        }
     }
 
-    /// Takes everything queued, or `None` once the delivery has stopped. The inbox is left with
-    /// room for as many values, so that those queued meanwhile do not grow a new `Vec` from
-    /// nothing.
-    fn take(&self) -> Option<(Vec<T>, Option<Termination<E>>)> {
-        self.0.with_mut(|inbox| {
-            (!inbox.stopped).then(|| {
-                let room = inbox.values.len();
-                (
-                    take_leaving_room(&mut inbox.values, room),
-                    inbox.termination.take(),
-                )
-            })
-        })
-    }
-
-    fn is_stopped(&self) -> bool {
-        self.0.with_ref(|inbox| inbox.stopped)
-    }
-
-    /// What the task checks before each value it delivers. An error queued is taken, since it
-    /// preempts the values not delivered yet; a completion does not, so it is left queued.
-    fn take_preempting_error(&self) -> BeforeValue<E> {
-        self.0.with_mut(|inbox| {
-            if inbox.stopped {
-                BeforeValue::Stopped
-            } else if let Some(error) = inbox
-                .termination
-                .take_if(|termination| matches!(termination, Termination::Error(_)))
-            {
-                BeforeValue::Preempted(error)
-            } else {
-                BeforeValue::Deliver
-            }
-        })
-    }
-
-    /// Marks the delivery stopped, and drops what is still queued, outside the lock.
-    fn stop(&self) {
-        drop(self.0.with_mut(|inbox| {
-            inbox.stopped = true;
-            (std::mem::take(&mut inbox.values), inbox.termination.take())
-        }));
-    }
-}
-
-impl<M: ThreadMode, T, E> Disposable for InboxHandle<M, T, E> {
-    fn dispose(self) {
-        self.stop();
+    impl<M: ThreadMode, T, E> Disposable for InboxHandle<M, T, E> {
+        fn dispose(self) {
+            self.stop();
+        }
     }
 }
 
