@@ -6,19 +6,18 @@
 //!   around a model and the downstream observer, with events delivered outside it.
 //! - [`subscribe_with_auto_dispose_on_termination`]: the helper for an operator that ends the
 //!   stream early, disposing its source when it does.
-//! - [`serialized_delivery`]: the serialized delivery to one observer that the first helper is
-//!   made of. It takes its events as an [`EventBatch`](crate::observer::EventBatch).
 //!
 //! The locks, and the only sanctioned way to reach through them, live with the
 //! [thread mode](crate::thread_mode) that picks them, in
 //! [`thread_mode::mutable`](crate::thread_mode::mutable).
 //!
-//! The other modules are private to the crate: the serialized delivery to many observers that the
-//! subjects are made of, the subscribe function of an observer that subscribes an observable with an
-//! observer of its own type (as `retry` and `concat_all` do), the queue behind a running delivery,
-//! the reservation slot and its keyed form, the id generator, the panic guard and the lazy
-//! subscription of the future and stream adapters. They serve the crate's own operators and appear
-//! in no public signature.
+//! The other modules are private to the crate: the serialized delivery to one observer that the
+//! context is made of, the one to many observers that the subjects are made of, the subscribe
+//! function of an observer that subscribes an observable with an observer of its own type (as
+//! `retry` and `concat_all` do), the queue behind a running delivery, the reservation slot and its
+//! keyed form, the id generator, the panic guard and the lazy subscription of the future and stream
+//! adapters. They serve the crate's own operators. The few of their types that a public signature
+//! names — what a context's update answers — are re-exported by the public module naming them.
 //!
 //! Nothing here is needed to *use* the operators; see the module documentation of each part for
 //! the rules it enforces.
@@ -29,7 +28,7 @@ pub(crate) mod on_panic;
 pub(crate) mod pending_events;
 pub(crate) mod reservation_map;
 pub(crate) mod reservation_slot;
-pub mod serialized_delivery;
+pub(crate) mod serialized_delivery;
 pub(crate) mod serialized_multicast;
 pub(crate) mod subscribe_fn;
 pub mod subscribe_with_auto_dispose_on_termination;

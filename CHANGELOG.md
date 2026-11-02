@@ -41,8 +41,8 @@ All notable changes to this project are documented here. The format follows
   `TwoStepsDisposal`: subscribes an operator's two sources — or its source and its scheduler
   task — in order, skips the second one once the stream is already over, and disposes them in the
   opposite order. Public like `subscribe_with_context`, for operators written outside the crate.
-- `SubscriptionContext::is_active` and `SerializedDelivery::is_active` answer whether the stream is
-  still running — not stopped, and no termination queued. An operator assembling its subscription
+- `SubscriptionContext::is_active` answers whether the stream is still running — not stopped, and
+  no termination queued. An operator assembling its subscription
   in more steps than two, or in an order of its own, asks before a step whose side effects a
   stream that is already over has no use for.
 - `examples/large_file.rs`: a file read chunk by chunk, each chunk uploaded before the next is
@@ -59,6 +59,11 @@ All notable changes to this project are documented here. The format follows
   gone, so naming an operator's types no longer asks a caller that reads `OE::Item` alone to
   prove them. The `Observable` impls and the fluent methods still check them, where a mismatch is
   now reported: on subscription rather than on the type.
+- **Breaking:** `utils::serialized_delivery` is no longer public: `SerializedDelivery` and
+  `DeliveryStop` are the machinery `subscribe_with_context` and the subjects are made of, and an
+  operator written outside the crate gets the same serialized delivery from a
+  `SubscriptionContext`. What a context's update answers — `UpdateOutcome`, `DeliveryStopped`,
+  `DropUndecided` and `DropDecided` — moved to `utils::subscribe_with_context`.
 
 ## [2.0.1] - 2026-10-28
 

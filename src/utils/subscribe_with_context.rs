@@ -1,11 +1,10 @@
 //! The helper most stateful operators are written with.
 //!
 //! A [`SubscriptionContext`] holds the downstream observer and the operator's own model behind one
-//! lock (a [`SerializedDelivery`]). The
-//! operator's observers update the model and queue events in one step, and the events are
-//! delivered outside the lock, in order, whichever thread produced them. That is what makes an
-//! operator with several sources, a notifier or a scheduler task correct without any locking of
-//! its own.
+//! lock. The operator's observers update the model and queue events in one step, described by an
+//! [`UpdateOutcome`], and the events are delivered outside the lock, in order, whichever thread
+//! produced them. That is what makes an operator with several sources, a notifier or a scheduler
+//! task correct without any locking of its own.
 //!
 //! The context owns the source subscription, so that it disposes the source as soon as it stops,
 //! whatever stopped it: a disposal, a termination — from the source, a notifier, a scheduler task
@@ -26,9 +25,8 @@
 //!     observer::{Flow, Observer, Termination},
 //!     subject::publish_subject::PublishSubject,
 //!     thread_mode::ThreadMode,
-//!     utils::{
-//!         serialized_delivery::UpdateOutcome,
-//!         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+//!     utils::subscribe_with_context::{
+//!         self, SubscriptionContext, UpdateOutcome, subscribe_with_context,
 //!     },
 //! };
 //! use std::convert::Infallible;
@@ -126,11 +124,13 @@ use crate::{
     },
     observer::{EventBatch, Flow, IntoFlow, Observer, Termination},
     thread_mode::ThreadMode,
-    utils::serialized_delivery::{
-        DeliveryStop, DeliveryStopped, SerializedDelivery, UpdateOutcome,
-    },
+    utils::serialized_delivery::{DeliveryStop, SerializedDelivery},
 };
 use educe::Educe;
+
+pub use crate::utils::serialized_delivery::{
+    DeliveryStopped, DropDecided, DropUndecided, UpdateOutcome,
+};
 
 /// Stops a context: its model and the source subscription it owns are dropped, outside the lock,
 /// and every later event is rejected.
@@ -142,8 +142,9 @@ use educe::Educe;
 /// observer — the disposal of an observable must not depend on its observer (see
 /// [`ObservableTypes`](crate::observable::ObservableTypes)). So it cannot release the observer
 /// itself: the first clone of the context dropped after the stop does — typically the source's,
-/// as the source subscription is disposed, even while a scheduler task still holds another. See
-/// [`DeliveryStop`].
+/// as the source subscription is disposed, even while a scheduler task still holds another — or
+/// the next event or update that reaches the stopped context, which it rejects, if that comes
+/// first.
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct Disposal<M: ThreadMode, T, E, MD, D: Disposable>(
