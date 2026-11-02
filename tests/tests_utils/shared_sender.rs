@@ -1,5 +1,11 @@
-//! A shared handle to the sending end of a stream that the test cannot own directly, because the
-//! observer it sends through only exists once the code under test subscribes.
+//! A lenient source for the tests: a shared handle to the observer a `Create` was subscribed with,
+//! which keeps sending through it whatever the subscription says.
+//!
+//! [`test_channel`](super::test_channel::test_channel) panics on a value sent after its
+//! subscription was disposed; this one delivers it. It is what a test uses to check how an
+//! operator copes with a source that does not honor its disposal: an inner source of `switch_map`
+//! that terminates after it was switched away from, or a source that terminates after the
+//! subscription to it was disposed.
 //!
 //! The observer is parked in a [`ParkedObserver`], so a test never notifies it while holding this
 //! handle's lock: a notification that re-enters the handle — a resubscription that fills it
@@ -34,12 +40,6 @@ impl<T, E, OR> SharedSender<T, E, OR>
 where
     OR: Observer<T, E>,
 {
-    /// Starts with `observer` already parked here, for a stream whose observer the test owns
-    /// before the code under test runs.
-    pub(crate) fn new(observer: OR) -> Self {
-        Self(Arc::new(Mutex::new(Some(ParkedObserver::new(observer)))))
-    }
-
     /// Parks `observer` here, returning whether nothing was parked before.
     pub(crate) fn set(&self, observer: OR) -> bool {
         self.0
@@ -63,21 +63,6 @@ where
                 // What the observer answers is the caller's business, not this handle's: this
                 // reports only whether there was one to notify.
                 let _ = sender.send(EventBatch::Next(value));
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// Drops the parked observer without notifying it, and empties this handle, returning whether
-    /// one was parked.
-    ///
-    /// A delivery that is running stops as soon as it looks for its next event, so this also ends
-    /// a stream from inside the delivery it is re-entering.
-    pub(crate) fn stop(&self) -> bool {
-        match self.0.take_value() {
-            Some(parked) => {
-                parked.stop();
                 true
             }
             None => false,
