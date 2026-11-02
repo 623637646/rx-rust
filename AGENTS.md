@@ -276,7 +276,19 @@ when they fail.
   disposal. An operator that forwards values returns what its own downstream returned, so that the
   answer reaches the source; an operator that ends its own stream returns `Stop`. A context-based
   operator gets it from `SubscriptionContext::update_flow` / `send_next`; `send_termination` answers
-  nothing, since a termination is the last event anyway. The `#[must_use]` is what catches a
+  nothing, since a termination is the last event anyway. An `on_next` that does more work after
+  its first update — subscribing an inner observable, as `merge_all` and `switch` do — answers
+  what its *last* context call says, an `update_flow` or a `send_next`, or
+  maps `Err(DeliveryStopped)` of an `update` to `Stop`: that work may have ended the stream, and a
+  source still emitting from inside its own `subscribe` has no disposal yet, so only the flow
+  stops it. An earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream
+  that is over. A termination queued behind a delivery running on another thread still lets the
+  context's updates run, so such an `on_next` may still start that work — call the selector,
+  subscribe the inner observable — for a value racing that termination; the flow of its last
+  update then stops the source, and the context disposes what it stored once the stream has
+  ended. No `is_active` check in front of that work: it costs a second lock on every value, and
+  narrows a window it cannot close, since the work runs outside the lock anyway. The
+  `#[must_use]` is what catches a
   forgotten forward — `let _ =` only where ignoring it is deliberate. User callbacks
   (`subscribe_with_callback`) return `()` or a `Flow`, via `observer::IntoFlow` (a
   diverging `|_| unreachable!()` needs `-> ()`), and so may the result of an `update_flow`.

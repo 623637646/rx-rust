@@ -119,7 +119,8 @@ enum EnqueueAction<T, E, OR> {
     /// Start a delivery loop with the observer taken out of its cell.
     Start { observer: OR, first_next: Option<T> },
     /// The batch was queued for a running delivery, or needed no work, and answers this flow:
-    /// [`Flow::Stop`] exactly when it queued the termination.
+    /// [`Flow::Stop`] exactly when it queued the termination, or, for an update that queued
+    /// nothing, when one was queued already.
     Queued(Flow),
     /// The delivery was already stopped or a termination was already queued. `observer` is the one
     /// a [`DeliveryStop`] left parked, taken out to be dropped too.
@@ -334,11 +335,7 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
     /// a stream that is already over has no use for, never as a guarantee that the work it then
     /// starts outlives the check.
     pub fn is_active(&self) -> bool {
-        self.core.with_mut(|core| match core {
-            Core::Idle { .. } => true,
-            Core::Delivering { pending, .. } => !pending.is_terminated(),
-            Core::Stopped => false,
-        })
+        self.core.with_mut(|core| core.is_active())
     }
 }
 
@@ -380,8 +377,9 @@ where
 
     /// [`update`](Self::update), also reporting whether the observer still accepts events.
     ///
-    /// The flow is what delivering the queued events answered, and [`Flow::Continue`] when the
-    /// update queued none. A delivery that has already stopped answers [`DeliveryStopped`] instead
+    /// The flow is what delivering the queued events answered. An update that queued none answers
+    /// whether the delivery still accepts events, as [`is_active`](Self::is_active): [`Flow::Stop`]
+    /// once a termination is queued behind a delivery running elsewhere. A delivery that has already stopped answers [`DeliveryStopped`] instead
     /// of a flow, which a host that only cares about the flow maps to [`Flow::Stop`].
     pub fn update_with_flow<Out, DO, const EVENTS_DECIDED: bool>(
         &self,
@@ -403,7 +401,8 @@ where
             } = update(resources);
             let action = match events {
                 Some(events) => core.enqueue_batch(events, &self.observer),
-                None => EnqueueAction::Queued(Flow::Continue),
+                None if core.is_active() => EnqueueAction::Queued(Flow::Continue),
+                None => EnqueueAction::Queued(Flow::Stop),
             };
             Ok((action, drop_outside, result))
         });
@@ -527,6 +526,16 @@ impl<M: ThreadMode, T, E, OR, R> Drop for SerializedDelivery<M, T, E, OR, R> {
 }
 
 impl<T, E, R> Core<T, E, R> {
+    /// Whether events are still accepted: the delivery has not stopped, and no termination is
+    /// queued behind a delivery running elsewhere.
+    fn is_active(&self) -> bool {
+        match self {
+            Self::Idle { .. } => true,
+            Self::Delivering { pending, .. } => !pending.is_terminated(),
+            Self::Stopped => false,
+        }
+    }
+
     fn resources_mut(&mut self) -> Option<&mut R> {
         match self {
             Self::Idle { resources } | Self::Delivering { resources, .. } => Some(resources),

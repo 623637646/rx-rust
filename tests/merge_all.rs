@@ -13,6 +13,7 @@ use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -22,6 +23,9 @@ use rx_rust::{
     },
 };
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
+use std::time::Duration;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -1677,4 +1681,47 @@ fn test_abandon_after_next() {
     inner_channels.on_termination(0, Termination::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
+}
+
+/// An inner observable that arrives once the stream is over — its error queued behind a delivery
+/// running on another thread, which has not delivered it yet — tells its source to stop. It is
+/// still subscribed to, like one racing the termination, and disposed once the stream has ended.
+#[test]
+fn test_next_while_terminating() {
+    const TIMEOUT: Duration = Duration::from_secs(5);
+    let (mut sender, observable, _) = test_channel();
+    let (mut sender_1, observable_1, _) = test_channel();
+    let (sender_2, observable_2, channel_checker_2) = test_channel();
+    let (_, observable_3, channel_checker_3) = test_channel();
+    let (checker, observer) = Checker::new();
+    let (delivering_sender, delivering) = mpsc::channel();
+    let (resume_sender, resume) = mpsc::channel();
+    let blocked = Arc::new(Mutex::new(Some((delivering_sender, resume))));
+
+    let observable = observable.merge_all().hook_on_next(move |observer, value| {
+        let flow = observer.on_next(value);
+        if let Some((delivering, resume)) = blocked.take_value() {
+            delivering.send(()).unwrap();
+            resume.recv_timeout(TIMEOUT).unwrap();
+        }
+        flow
+    });
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(observable_1).is_continue());
+    let deliverer = thread::spawn(move || sender_1.on_next(111).is_stop());
+    delivering.recv_timeout(TIMEOUT).unwrap();
+    assert!(sender.on_next(observable_2).is_continue());
+    // Queued behind the delivery of 111, which is still running on the other thread.
+    sender_2.on_termination(Termination::Error("error"));
+    assert!(sender.on_next(observable_3).is_stop());
+    assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    resume_sender.send(()).unwrap();
+    assert!(deliverer.join().unwrap());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
 }

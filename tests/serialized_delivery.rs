@@ -1011,6 +1011,38 @@ fn update_runs_while_a_delivery_is_running() {
 }
 
 #[test]
+fn update_without_events_behind_a_queued_termination_answers_stop() {
+    let log = new_log();
+    let delivery = builder(&log)
+        .on_next(|delivery, number| {
+            if number == 1 {
+                assert!(delivery.send(completed()).is_stop());
+                // The update still runs, since the resources live until the termination is
+                // delivered, but the stream it updates is over, which its flow says.
+                assert_eq!(
+                    delivery.update_with_flow(|resources| {
+                        resources.model += 10;
+                        UpdateOutcome::new(resources.model)
+                    }),
+                    Ok((10, Flow::Stop))
+                );
+            }
+        })
+        .build();
+
+    assert!(delivery.send(next(1)).is_stop());
+    assert_eq!(
+        records(&log),
+        [
+            Record::Next(1),
+            Record::Termination(Termination::Completed),
+            Record::ObserverDropped,
+            Record::ResourcesDropped,
+        ]
+    );
+}
+
+#[test]
 fn update_after_a_termination_returns_delivery_stopped() {
     let log = new_log();
     let delivery = builder(&log).build();
