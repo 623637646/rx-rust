@@ -64,6 +64,12 @@ All notable changes to this project are documented here. The format follows
   operator written outside the crate gets the same serialized delivery from a
   `SubscriptionContext`. What a context's update takes and answers — `UpdateOutcome`, `Updated`,
   `DropUndecided` and `DropDecided` — moved to `utils::subscribe_with_context`.
+- **Breaking:** `SubscriptionContext::update` answers an `Updated<R>` — `Ran { result, flow }`, or
+  `Stopped` when the context had stopped — instead of `Result<R, DeliveryStopped>`, and
+  `update_flow` is gone: `.flow()` is what an `on_next` answers, `.result()` the result of the
+  callback, as an `Option`. A model that stops its caller, an inner observable that has been
+  superseded say, calls `UpdateOutcome::answering_stop` instead of returning a `Flow` as its
+  result. `DeliveryStopped` is removed.
 
 ## [2.0.1] - 2026-10-28
 
