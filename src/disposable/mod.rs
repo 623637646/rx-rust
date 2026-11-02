@@ -35,7 +35,6 @@ pub mod chain_disposal;
 mod delegate_disposal;
 pub mod dispose_on_drop;
 pub mod either_disposal;
-mod empty_disposal;
 pub mod option_disposal;
 pub mod replaceable_disposal;
 
@@ -55,6 +54,13 @@ use crate::disposable::{
 pub trait Disposable {
     /// Releases the resource.
     fn dispose(self);
+}
+
+/// `()` is the disposal of a subscription that holds nothing to release: synchronous sources such
+/// as [`Just`](crate::operators::creating::just::Just) have delivered everything before
+/// `subscribe` returns, so their subscription has nothing to dispose of.
+impl Disposable for () {
+    fn dispose(self) {}
 }
 
 /// Combinators available on every [`Disposable`]. See the [module documentation](self).
