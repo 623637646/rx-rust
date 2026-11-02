@@ -1,76 +1,25 @@
-use std::{
-    any::{Any, TypeId, type_name},
-    cell::RefCell,
-    panic::{self, AssertUnwindSafe},
-    sync::Once,
-};
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 struct PanicOnDropPayload;
 
+/// A value whose drop unwinds, which is how a test panics from inside the code under test.
+///
+/// It unwinds with [`resume_unwind`], which does not run the panic hook, so an expected panic
+/// prints nothing; `std::thread::panicking` is still `true` throughout the unwind.
 pub(crate) struct PanicOnDrop(());
 
 impl Drop for PanicOnDrop {
     fn drop(&mut self) {
-        panic::panic_any(PanicOnDropPayload);
+        resume_unwind(Box::new(PanicOnDropPayload));
     }
 }
 
-thread_local! {
-    static SUPPRESSED_PANIC_TYPES: RefCell<Vec<TypeId>> = const { RefCell::new(Vec::new()) };
-}
-
-static INSTALL_HOOK: Once = Once::new();
-
-fn install_hook() {
-    INSTALL_HOOK.call_once(|| {
-        let previous_hook = panic::take_hook();
-        panic::set_hook(Box::new(move |info| {
-            let payload_type = info.payload().type_id();
-            let suppress = SUPPRESSED_PANIC_TYPES
-                .try_with(|types| types.borrow().contains(&payload_type))
-                .unwrap_or(false);
-            if !suppress {
-                previous_hook(info);
-            }
-        }));
-    });
-}
-
-struct SuppressionGuard(TypeId);
-
-impl SuppressionGuard {
-    fn new<P: Any>() -> Self {
-        let panic_type = TypeId::of::<P>();
-        SUPPRESSED_PANIC_TYPES.with(|types| types.borrow_mut().push(panic_type));
-        Self(panic_type)
-    }
-}
-
-impl Drop for SuppressionGuard {
-    fn drop(&mut self) {
-        SUPPRESSED_PANIC_TYPES.with(|types| {
-            let panic_type = types.borrow_mut().pop();
-            debug_assert_eq!(panic_type, Some(self.0));
-        });
-    }
-}
-
-pub(crate) fn expect_panic<P, R>(callback: impl FnOnce() -> R)
-where
-    P: Any + Send,
-{
-    install_hook();
-    let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        let _guard = SuppressionGuard::new::<P>();
-        callback()
-    }));
-    match result {
-        Err(payload) if payload.is::<P>() => {}
-        Err(payload) => panic::resume_unwind(payload),
-        Ok(_) => panic!("expected panic payload `{}`", type_name::<P>()),
-    }
-}
-
+/// Runs `callback` with a [`PanicOnDrop`], and expects the unwind of its drop to come out of it.
+/// Any other panic is resumed, and returning without one fails the test.
 pub(crate) fn expect_panic_on_drop<R>(callback: impl FnOnce(PanicOnDrop) -> R) {
-    expect_panic::<PanicOnDropPayload, _>(|| callback(PanicOnDrop(())));
+    match catch_unwind(AssertUnwindSafe(|| callback(PanicOnDrop(())))) {
+        Err(payload) if payload.is::<PanicOnDropPayload>() => {}
+        Err(payload) => resume_unwind(payload),
+        Ok(_) => panic!("expected the PanicOnDrop to be dropped"),
+    }
 }
