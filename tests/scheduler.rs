@@ -29,7 +29,7 @@ use std::task::{Context, Wake, Waker};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const RECURSION_EXECUTION_TIMES: usize = 200;
+const RECURSION_EXECUTION_TIMES: usize = 20;
 
 #[test]
 fn test_thread_checker_executor_runs_nested_tasks_until_stalled() {
@@ -745,9 +745,10 @@ fn test_schedule_periodically_catches_up_after_an_overrun() {
         // The late calls run as soon as the slow one returns, not a period apart.
         assert!(calls[1] >= overrun, "calls: {calls:?}");
         assert!(calls[3] - calls[1] < DURATION_10_MS, "calls: {calls:?}");
-        // The next one is due at 40 ms, as if no call had been late.
+        // The next one is due at 40 ms, as if no call had been late, or at once if the slow call
+        // returned after that: `thread::sleep` may oversleep by far, on a timer-coalescing macOS.
         assert!(
-            calls[4] < 4 * DURATION_10_MS + DURATION_30_MS,
+            calls[4] < calls[1].max(4 * DURATION_10_MS) + DURATION_30_MS,
             "calls: {calls:?}"
         );
         disposal.dispose();

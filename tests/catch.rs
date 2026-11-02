@@ -807,7 +807,7 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    let (_, observable, _) = test_channel::<'_, Just<i32>, Infallible>();
+    let (_, observable, _) = test_channel::<'_, Just<i32>, String>();
     let observable = observable.catch(move |value| Throw::new(value).with_item_type());
 
     observable.filter(|_| true);
