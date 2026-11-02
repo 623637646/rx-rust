@@ -3,10 +3,11 @@
 //! The keyed form of [`ReservationSlot`](crate::utils::reservation_slot::ReservationSlot), for an
 //! operator that holds any number of values built with the lock released:
 //! [`MergeAll`](crate::operators::combining::merge_all::MergeAll) holds the subscription of every
-//! inner observable. Each value is built in the same three steps: **reserve** an entry under the
-//! lock, subscribe with it released, **fill** the entry under the lock again. Between the two
-//! steps the entry can be **released** — the inner observable completed — and the fill then hands
-//! its value back instead of storing it.
+//! inner observable, [`Join`](crate::operators::combining::join::Join) the duration subscription
+//! of every open window, one map per source. Each value is built in the same three steps:
+//! **reserve** an entry under the lock, subscribe with it released, **fill** the entry under the
+//! lock again. Between the two steps the entry can be **released** — the inner observable
+//! completed, the window closed — and the fill then hands its value back instead of storing it.
 //!
 //! An entry is absent, reserved or filled. A slot needs a fourth state for a release that comes
 //! before the fill, since the slot is reused afterwards; an entry is not: a release removes it,
@@ -16,7 +17,8 @@
 //! The keys are unique within one map only: another map hands out the same ones, and so does a
 //! fresh map put in place of this one. A key must therefore go back to the map that handed it
 //! out, and a map with a fill still in flight must not be replaced by a new one; a map closed for
-//! good is dropped instead, so that the late fill finds no map at all.
+//! good is dropped instead, as [`Join`](crate::operators::combining::join::Join) does, so that the
+//! late fill finds no map at all.
 //!
 //! Like the slot, the map carries no lock of its own — it lives inside a model guarded by a
 //! [`SubscriptionContext`](crate::utils::subscribe_with_context::SubscriptionContext) — and it
@@ -60,6 +62,11 @@ impl<D> ReservationMap<D> {
     /// Whether no entry is reserved or filled.
     pub(crate) fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// Whether the entry `id` is reserved or filled: it has not been released.
+    pub(crate) fn contains(&self, id: Id) -> bool {
+        self.entries.contains_key(&id)
     }
 
     /// Reserves an entry for a value that is about to be built, and returns its key.
@@ -136,11 +143,13 @@ mod tests {
         let drops = DropCount::new();
         let mut map = ReservationMap::default();
         let id = map.reserve(); // Step 1, under the lock.
+        assert!(map.contains(id));
         assert!(map.fill(id, drops.probe()).is_none()); // Step 3, under the lock: stored.
         assert_eq!(drops.get(), 0);
 
         let released = map.release(id);
         assert!(matches!(released, Released::Filled(_)));
+        assert!(!map.contains(id));
         assert!(map.is_empty());
         assert_eq!(drops.get(), 0); // Handed back, to be dropped outside the lock.
         drop(released);

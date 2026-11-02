@@ -277,8 +277,8 @@ when they fail.
   answer reaches the source; an operator that ends its own stream returns `Stop`. A context-based
   operator gets it from `SubscriptionContext::update_flow` / `send_next`; `send_termination` answers
   nothing, since a termination is the last event anyway. An `on_next` that does more work after
-  its first update — subscribing an inner observable, as `merge_all` and `switch` do — answers
-  what its *last* context call says, an `update_flow` or a `send_next`, or
+  its first update — subscribing an inner observable or a duration, as `merge_all`, `switch` and
+  `join` do — answers what its *last* context call says, an `update_flow` or a `send_next`, or
   maps `Err(DeliveryStopped)` of an `update` to `Stop`: that work may have ended the stream, and a
   source still emitting from inside its own `subscribe` has no disposal yet, so only the flow
   stops it. An earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream

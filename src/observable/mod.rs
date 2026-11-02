@@ -56,8 +56,9 @@ use crate::{
     },
     operators::{
         combining::{
-            combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
-            merge_all::MergeAll, start_with::StartWith, switch::Switch, zip::Zip,
+            combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll,
+            group_join::GroupJoin, join::Join, merge::Merge, merge_all::MergeAll,
+            start_with::StartWith, switch::Switch, zip::Zip,
         },
         conditional_boolean::{
             all::All, amb::Amb, contains::Contains, default_if_empty::DefaultIfEmpty,
@@ -510,6 +511,24 @@ pub trait ObservableExt: ObservableTypes + Sized {
         GroupBy::new(self, key_selector)
     }
 
+    /// Pairs every item with a window of the items of `right` that overlap it, each item being
+    /// open until the observable its duration selector returns for it emits or completes.
+    fn group_join<'a, OE2, FL, FR, DL, DR>(
+        self,
+        right: OE2,
+        left_duration_selector: FL,
+        right_duration_selector: FR,
+    ) -> GroupJoin<'a, Self, OE2, FL, FR, DL, DR>
+    where
+        OE2: ObservableTypes<Error = Self::Error>,
+        FL: FnMut(&Self::Item) -> DL,
+        FR: FnMut(&OE2::Item) -> DR,
+        DL: ObservableTypes<Error = Self::Error>,
+        DR: ObservableTypes<Error = Self::Error>,
+    {
+        GroupJoin::new(self, right, left_duration_selector, right_duration_selector)
+    }
+
     /// Holds `resource` for as long as the subscription lasts, and drops it when the subscription
     /// ends; see [`Hold`].
     fn hold<R>(self, resource: R) -> Hold<Self, R> {
@@ -900,6 +919,33 @@ pub trait ObservableExt: ObservableTypes + Sized {
         B: StreamBuffer<Self::Item>,
     {
         ObservableTryStream::with_buffer(self, buffer)
+    }
+
+    /// Combines every two items, of this observable and of `right`, that are open at the same
+    /// time, each item being open until the observable its duration selector returns for it emits
+    /// or completes.
+    fn join<OE2, FL, FR, F, DL, DR, T>(
+        self,
+        right: OE2,
+        left_duration_selector: FL,
+        right_duration_selector: FR,
+        result_selector: F,
+    ) -> Join<Self, OE2, FL, FR, F, DL, DR, T>
+    where
+        OE2: ObservableTypes<Error = Self::Error>,
+        FL: FnMut(&Self::Item) -> DL,
+        FR: FnMut(&OE2::Item) -> DR,
+        DL: ObservableTypes<Error = Self::Error>,
+        DR: ObservableTypes<Error = Self::Error>,
+        F: FnMut(&Self::Item, &OE2::Item) -> T,
+    {
+        Join::new(
+            self,
+            right,
+            left_duration_selector,
+            right_duration_selector,
+            result_selector,
+        )
     }
 
     /// Emits only the last item of the source, on completion; nothing if there was none.

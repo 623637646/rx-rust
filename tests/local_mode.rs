@@ -22,10 +22,13 @@ use rx_rust::{
         emitter::Emitter,
     },
     operators::{
-        combining::{combine_latest::CombineLatest, merge::Merge},
+        combining::{
+            combine_latest::CombineLatest, group_join::GroupJoin, join::Join, merge::Merge,
+        },
         connectable::ref_count::RefCount,
         creating::{
             create::Create,
+            empty::Empty,
             from_iter::FromIter,
             from_stream_acked::{FromStreamAcked, StreamAck},
         },
@@ -291,6 +294,53 @@ fn test_combine_latest() {
     subject_1.on_termination(Termination::Completed);
     subject_2.on_termination(Termination::Completed);
     assert_eq!(record.values(), [12, 32]);
+    assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+#[test]
+fn test_join() {
+    let mut lefts: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut rights: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut close_lefts: PublishSubject<'_, (), Infallible, Local> = PublishSubject::local();
+    let factor = Rc::new(10);
+    let close = close_lefts.clone();
+    let (record, _subscription) = record(Join::new(
+        lefts.clone(),
+        rights.clone(),
+        move |_| close.clone(),
+        |_| Empty,
+        move |left, right| **left * *factor + **right,
+    ));
+    assert!(lefts.on_next(Rc::new(1)).is_continue());
+    assert!(rights.on_next(Rc::new(2)).is_continue());
+    assert!(close_lefts.on_next(()).is_continue());
+    assert!(rights.on_next(Rc::new(3)).is_continue());
+    lefts.on_termination(Termination::Completed);
+    assert_eq!(record.values(), [12]);
+    assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+#[test]
+fn test_group_join() {
+    let mut lefts: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut rights: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut close_lefts: PublishSubject<'_, (), Infallible, Local> = PublishSubject::local();
+    let close = close_lefts.clone();
+    let (record, _subscription) = record(
+        GroupJoin::new(
+            lefts.clone(),
+            rights.clone(),
+            move |_| close.clone(),
+            |_| Empty,
+        )
+        .flat_map(|(left, window)| window.map(move |right| *left * 10 + *right)),
+    );
+    assert!(lefts.on_next(Rc::new(1)).is_continue());
+    assert!(rights.on_next(Rc::new(2)).is_continue());
+    assert!(close_lefts.on_next(()).is_continue());
+    assert!(rights.on_next(Rc::new(3)).is_continue());
+    lefts.on_termination(Termination::Completed);
+    assert_eq!(record.values(), [12]);
     assert_eq!(record.termination(), Some(Termination::Completed));
 }
 
