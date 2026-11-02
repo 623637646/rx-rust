@@ -28,11 +28,13 @@ use crate::{
     observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::{
         ThreadMode,
-        mutable::{MutableBoolHelper, MutableExt, MutableHelper},
+        mutable::{MutableExt, MutableHelper},
     },
     utils::{on_panic::on_panic, pending_events::PendingEvents},
 };
 use educe::Educe;
+use locked_core::LockedCore;
+use std::convert::identity;
 
 /// A shared, serialized delivery of events to one observer.
 ///
@@ -41,7 +43,7 @@ use educe::Educe;
 /// delivery stops by terminating. Otherwise the observer is released without a notification, and
 /// only after `R` is dropped, so that its release tells downstream that its sources are gone. The
 /// exceptions are the stops that cannot reach the observer: a [`DeliveryStop`] leaves it parked
-/// for the next event or the next handle dropped — typically the handle of a source, as `R`
+/// for the next event, update or handle dropped — typically the handle of a source, as `R`
 /// disposes it — and a stop that finds it held by a delivery loop on another thread leaves that
 /// loop to release it, which it may do while `R` is still being dropped.
 ///
@@ -50,16 +52,11 @@ use educe::Educe;
 #[educe(Debug, Clone(bound()))]
 pub(crate) struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
     #[educe(Debug(ignore))]
-    core: M::Ptr<Core<T, E, R>>,
+    core: LockedCore<M, T, E, R>,
     // Declared after the core so that, when the last handle goes, the observer is released after
     // the resources, as a stop releases them.
     #[educe(Debug(ignore))]
     observer: M::Ptr<Option<OR>>,
-    /// Set by a [`DeliveryStop`], the one stop that cannot reach the observer and may leave it
-    /// parked: only then does the `Drop` of a handle have something to release, so the drop of a
-    /// handle takes no lock before it.
-    #[educe(Debug(ignore))]
-    stopped_by_handle: M::Flag,
 }
 
 /// Stops a [`SerializedDelivery`] without naming its observer's type: what a disposal holds.
@@ -73,9 +70,7 @@ pub(crate) struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
 #[educe(Debug, Clone(bound()))]
 pub(crate) struct DeliveryStop<M: ThreadMode, T, E, R> {
     #[educe(Debug(ignore))]
-    core: M::Ptr<Core<T, E, R>>,
-    #[educe(Debug(ignore))]
-    stopped_by_handle: M::Flag,
+    core: LockedCore<M, T, E, R>,
 }
 
 /// Everything a delivery holds except its observer.
@@ -95,6 +90,77 @@ enum Core<T, E, R> {
     /// finds this state under the lock next takes it out — an event, an update, or a handle being
     /// dropped.
     Stopped,
+}
+
+mod locked_core {
+    use super::Core;
+    use crate::thread_mode::{
+        ThreadMode,
+        mutable::{MutableBoolHelper, MutableHelper},
+    };
+    use educe::Educe;
+
+    /// The lock around a delivery's [`Core`], shared by every handle of the delivery and by its
+    /// [`DeliveryStop`](super::DeliveryStop)s, together with a flag saying, without the lock,
+    /// whether a [`stop_with`](Self::stop_with) has stopped it.
+    ///
+    /// Until a stop has run, nothing can be parked in a stopped core, so the `Drop` of a handle has
+    /// nothing to release and, through [`after_stop`](Self::after_stop), takes no lock. The flag
+    /// is raised under the lock, together with the stop, so a handle that reads it raised and then
+    /// locks finds the state stopped. Its own module keeps the flag out of reach of the rest of the
+    /// delivery, so that nothing else can raise it.
+    #[derive(Educe)]
+    #[educe(Clone(bound()))]
+    pub(super) struct LockedCore<M: ThreadMode, T, E, R> {
+        core: M::Ptr<Core<T, E, R>>,
+        stopped: M::Flag,
+    }
+
+    impl<M: ThreadMode, T, E, R> LockedCore<M, T, E, R> {
+        pub(super) fn new(core: Core<T, E, R>) -> Self {
+            Self {
+                core: M::ptr(core),
+                stopped: M::Flag::default(),
+            }
+        }
+
+        /// Runs `callback` on the core, under the lock.
+        pub(super) fn with_mut<Out>(
+            &self,
+            callback: impl FnOnce(&mut Core<T, E, R>) -> Out,
+        ) -> Out {
+            self.core.with_mut(callback)
+        }
+
+        /// Stops the core and runs `callback` under the same lock: returns what the core held and
+        /// what `callback` returned, to be dropped outside the lock, in that order.
+        ///
+        /// Every stop goes through here, whether or not it can reach the observer: a
+        /// `DeliveryStop` passes a callback that does nothing, the delivery one that takes the
+        /// observer out of its cell. Only a delivery that terminates ends elsewhere, in its loop,
+        /// which consumes the observer.
+        pub(super) fn stop_with<Out>(
+            &self,
+            callback: impl FnOnce() -> Out,
+        ) -> (Core<T, E, R>, Out) {
+            self.core.with_mut(|core| {
+                self.stopped.write(true);
+                (std::mem::replace(core, Core::Stopped), callback())
+            })
+        }
+
+        /// Runs `callback` under the lock once a [`stop_with`](Self::stop_with) has run, and takes
+        /// no lock before: [`None`] until then. The core is then stopped for good.
+        pub(super) fn after_stop<Out>(&self, callback: impl FnOnce() -> Out) -> Option<Out> {
+            if !self.stopped.read() {
+                return None;
+            }
+            Some(self.core.with_mut(|core| {
+                debug_assert!(matches!(core, Core::Stopped), "a stop is final");
+                callback()
+            }))
+        }
+    }
 }
 
 /// The action to perform after releasing the lock used to call `enqueue_batch`.
@@ -223,6 +289,21 @@ impl<T, E> UpdateOutcome<T, E> {
 }
 
 impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED> {
+    /// Rebuilds the outcome from its two effects, mapped, keeping its flow and result: what moves
+    /// it from one type state to another.
+    fn map_effects<T2, DO2, const EVENTS_DECIDED2: bool>(
+        self,
+        events: impl FnOnce(Option<EventBatch<T, E>>) -> Option<EventBatch<T2, E>>,
+        drop_outside: impl FnOnce(DO) -> DO2,
+    ) -> UpdateOutcome<T2, E, R, DO2, EVENTS_DECIDED2> {
+        UpdateOutcome {
+            events: events(self.events),
+            drop_outside: drop_outside(self.drop_outside),
+            flow: self.flow,
+            result: self.result,
+        }
+    }
+
     /// Translates the events, keeping every other effect and the type state as they are.
     ///
     /// This is how [`SerializedMulticast`](crate::utils::serialized_multicast::SerializedMulticast)
@@ -232,12 +313,7 @@ impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_
         self,
         map: impl FnOnce(EventBatch<T, E>) -> EventBatch<T2, E>,
     ) -> UpdateOutcome<T2, E, R, DO, EVENTS_DECIDED> {
-        UpdateOutcome {
-            events: self.events.map(map),
-            drop_outside: self.drop_outside,
-            flow: self.flow,
-            result: self.result,
-        }
+        self.map_effects(|events| events.map(map), identity)
     }
 
     /// Makes the update answer [`Flow::Stop`], whatever delivering its events answers.
@@ -261,24 +337,14 @@ impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, 
         self,
         drop_outside: DO,
     ) -> UpdateOutcome<T, E, R, DropDecided<DO>, EVENTS_DECIDED> {
-        UpdateOutcome {
-            events: self.events,
-            drop_outside: DropDecided(Some(drop_outside)),
-            flow: self.flow,
-            result: self.result,
-        }
+        self.map_effects(identity, |DropUndecided| DropDecided(Some(drop_outside)))
     }
 
     /// States that nothing needs to be dropped outside the lock.
     pub fn without_drop_outside<DO>(
         self,
     ) -> UpdateOutcome<T, E, R, DropDecided<DO>, EVENTS_DECIDED> {
-        UpdateOutcome {
-            events: self.events,
-            drop_outside: DropDecided(None),
-            flow: self.flow,
-            result: self.result,
-        }
+        self.map_effects(identity, |DropUndecided| DropDecided(None))
     }
 }
 
@@ -307,36 +373,23 @@ impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
 
     /// Queues `events` as one unit.
     pub fn with_events(self, events: EventBatch<T, E>) -> UpdateOutcome<T, E, R, DO, true> {
-        UpdateOutcome {
-            events: Some(events),
-            drop_outside: self.drop_outside,
-            flow: self.flow,
-            result: self.result,
-        }
+        // Events can be set only while undecided, so the ones replaced here are always `None`.
+        self.map_effects(|_| Some(events), identity)
     }
 
     /// States that the update queues nothing.
     pub fn without_events(self) -> UpdateOutcome<T, E, R, DO, true> {
-        UpdateOutcome {
-            events: None,
-            drop_outside: self.drop_outside,
-            flow: self.flow,
-            result: self.result,
-        }
+        self.map_effects(|_| None, identity)
     }
 }
 
 impl<M: ThreadMode, T, E, R> DeliveryStop<M, T, E, R> {
     /// Stops the delivery. Stopping again is a no-op.
     pub(crate) fn stop(&self) {
-        // `Stopped` is the only variant that owns nothing, so replacing the state with it takes
-        // the queued events and the resources out. Binding them here drops them outside the lock.
-        // The flag is set under the lock, so a handle that reads it and then locks finds the state
-        // stopped.
-        let _deferred_drop = self.core.with_mut(|core| {
-            self.stopped_by_handle.write(true);
-            std::mem::replace(core, Core::Stopped)
-        });
+        // What the state held, the queued events and the resources, is bound here and so dropped
+        // outside the lock. The observer's type is not known here, so an observer parked in its
+        // cell stays there for whoever finds the stop next.
+        let (_deferred_drop, ()) = self.core.stop_with(|| ());
     }
 }
 
@@ -345,24 +398,18 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
     pub(crate) fn idle(observer: OR, resources: R) -> Self {
         Self {
             observer: M::ptr(Some(observer)),
-            core: M::ptr(Core::Idle { resources }),
-            stopped_by_handle: M::Flag::default(),
+            core: LockedCore::new(Core::Idle { resources }),
         }
     }
 
     /// Stops the delivery, dropping the observer without notifying it. Stopping again is a no-op.
-    pub(crate) fn stop(&self) {
+    fn stop(&self) {
         // The observer parked in its cell is taken under the same lock that stops the state, so it
         // is this call that drops it, after what the state held: the sources are released before
         // downstream is, and anything either drop emits is rejected. A loop running elsewhere
         // holds the observer instead, leaving the cell empty, and drops it itself when it sees
         // the stop.
-        let (parked, deferred_drop) = self.core.with_mut(|core| {
-            (
-                self.observer.take_value(),
-                std::mem::replace(core, Core::Stopped),
-            )
-        });
+        let (deferred_drop, parked) = self.core.stop_with(|| self.observer.take_value());
         // Outside the lock to avoid potential deadlock. Should the first drop unwind, the
         // observer is still released, after it, by the unwind.
         drop(deferred_drop);
@@ -373,7 +420,6 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
     pub(crate) fn stop_handle(&self) -> DeliveryStop<M, T, E, R> {
         DeliveryStop {
             core: self.core.clone(),
-            stopped_by_handle: self.stopped_by_handle.clone(),
         }
     }
 
@@ -504,11 +550,10 @@ where
                 drop(guard);
                 if flow.is_stop() {
                     // It has ended its own stream or been disposed, so it is released like a
-                    // disposed observer instead of being terminated. The loop holds it, so its
-                    // cell is empty; it is dropped as `stop` drops it, after the state is stopped
-                    // and after what the state held.
-                    let deferred_drop = self.core.replace_value(Core::Stopped);
-                    drop(deferred_drop); // Drop outside the lock to avoid potential deadlock
+                    // disposed observer instead of being terminated. The loop holds it, so `stop`
+                    // finds its cell empty and drops only what the state held; the observer is
+                    // dropped right after, in the order `stop` drops a parked one.
+                    self.stop();
                     drop(observer);
                     return Flow::Stop;
                 }
@@ -551,19 +596,15 @@ impl<M: ThreadMode, T, E, OR, R> Drop for SerializedDelivery<M, T, E, OR, R> {
     /// handle of the source, as the source is disposed, so the observer is released before
     /// `dispose` returns rather than when the runtime gets round to dropping the cancelled task.
     ///
-    /// Only a [`DeliveryStop`] leaves the observer parked in a stopped delivery, so until one has
-    /// stopped it, which its flag says without a lock, there is nothing to release and no lock is
-    /// taken. A handle can therefore be dropped anywhere, even under the delivery's own lock, as
-    /// before this release existed: after the stop, nothing runs under that lock that could drop
-    /// one.
+    /// Only a [`DeliveryStop`] leaves the observer parked in a stopped delivery, so until a stop
+    /// has run, which a flag of the [`LockedCore`] says without a lock, there is nothing to release
+    /// and no lock is taken. A handle can therefore be dropped anywhere, even under the delivery's
+    /// own lock: after the stop, nothing runs under that lock that could drop one.
     fn drop(&mut self) {
-        if !self.stopped_by_handle.read() {
-            return;
-        }
-        let parked = self.core.with_mut(|core| match core {
-            Core::Stopped => self.observer.take_value(),
-            Core::Idle { .. } | Core::Delivering { .. } => None,
-        });
+        let parked = self
+            .core
+            .after_stop(|| self.observer.take_value())
+            .flatten();
         drop(parked); // Drop outside the lock to avoid potential deadlock
     }
 }
@@ -1613,8 +1654,8 @@ mod tests {
         let clone = delivery.clone();
 
         // The update runs under the delivery's lock. Debug builds panic when a thread takes a lock
-        // it already holds, so this passes only if dropping a handle of a delivery that no
-        // `DeliveryStop` has stopped takes no lock.
+        // it already holds, so this passes only if dropping a handle of a delivery that has not
+        // stopped takes no lock.
         assert_eq!(
             delivery.update(move |_| {
                 drop(clone);
