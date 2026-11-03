@@ -13,50 +13,35 @@
 //! observer to user code, which may not hold a value of a private type.
 
 use crate::{
+    delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{EventBatch, Flow, Observer, Termination},
-    thread_mode::{Joined, ThreadMode, mutable::MutableBoolHelper},
+    thread_mode::{Joined, ThreadMode},
     utils::{
         id_generator::Id,
         reservation_map::{Released, ReservationMap},
-        serialized_delivery::{UpdateOutcome, Updated},
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
+        serialized_delivery::{StopView, UpdateOutcome, Updated},
+        subscribe_with_context::{
+            self, SubscriptionContext, subscribe_with_context_two_steps_with_stop_view,
+        },
     },
 };
-use educe::Educe;
 
 /// The thread mode of a join of `OE` and `OE2` whose windows last as long as `DL` and `DR`:
 /// `Shared` as soon as one of them is, since the durations are subscribed with the operator's
 /// context too.
 pub type ModeOf<OE, OE2, DL, DR> = Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>;
 
-/// The disposal of a [`Join`](super::join::Join) or [`GroupJoin`](super::group_join::GroupJoin)
-/// subscription: it
-/// tells the observer that emits the pairs or windows to stop, then disposes the sources and the
-/// durations.
-#[derive(Educe)]
-#[educe(Debug(bound()))]
-pub struct Disposal<M: ThreadMode, L, R, E, SD: Disposable, DLD: Disposable, DRD: Disposable> {
-    context_disposal: subscribe_with_context::Disposal<M, Action<L, R>, E, Model<DLD, DRD>, SD>,
-    #[educe(Debug(ignore))]
-    stopped: StopSignal<M>,
-}
-
-impl<M, L, R, E, SD, DLD, DRD> Disposable for Disposal<M, L, R, E, SD, DLD, DRD>
-where
-    M: ThreadMode,
-    SD: Disposable,
-    DLD: Disposable,
-    DRD: Disposable,
-{
-    fn dispose(self) {
-        // Raised first, so that a delegate emitting on another thread, or a user callback that
-        // the disposals below run, sees it before any of them returns.
-        self.stopped.stop();
-        self.context_disposal.dispose();
-    }
-}
+delegate_disposal!(
+    /// The disposal of a [`Join`](super::join::Join) or
+    /// [`GroupJoin`](super::group_join::GroupJoin) subscription: it stops the context, which tells
+    /// the observer that emits the pairs or windows to stop, then disposes the sources and the
+    /// durations.
+    Disposal<M, L, R, E, SD, DLD, DRD>,
+    subscribe_with_context::Disposal<M, Action<L, R>, E, Model<DLD, DRD>, SD>,
+    where M: ThreadMode, SD: Disposable, DLD: Disposable, DRD: Disposable
+);
 
 /// The [`Disposal`] of a join of `OE` and `OE2` whose windows last as long as `DL` and `DR`.
 pub type DisposalOf<OE, OE2, DL, DR> = Disposal<
@@ -109,12 +94,13 @@ pub(super) type DurationObserverOf<OE, OE2, DL, DR, D> = DurationObserver<
 >;
 
 /// Subscribes both sources with observers sharing one context, ended as `ending_source` says,
-/// whose observer is the delegate that `delegate` builds around the [`StopSignal`] of the disposal.
+/// whose observer is the delegate that `delegate_builder` builds around the [`StopView`] of the
+/// context.
 pub(super) fn subscribe<L, R, E, OR, OE, OE2, FL, FR, DL, DR>(
     (left, right): (OE, OE2),
     (left_duration_selector, right_duration_selector): (FL, FR),
     ending_source: EndingSource,
-    delegate: impl FnOnce(StopSignal<ModeOf<OE, OE2, DL, DR>>) -> OR,
+    delegate_builder: impl FnOnce(StopView<ModeOf<OE, OE2, DL, DR>>) -> OR,
 ) -> DisposeOnDrop<DisposalOf<OE, OE2, DL, DR>>
 where
     OR: Observer<Action<L, R>, E>,
@@ -125,9 +111,8 @@ where
     DL: Observable<DurationObserverOf<OE, OE2, DL, DR, OR>, Error = E>,
     DR: Observable<DurationObserverOf<OE, OE2, DL, DR, OR>, Error = E>,
 {
-    let stopped = StopSignal::default();
-    subscribe_with_context_two_steps(
-        delegate(stopped.clone()),
+    subscribe_with_context_two_steps_with_stop_view(
+        delegate_builder,
         Model::new(ending_source),
         |context| {
             Some(left.subscribe(LeftObserver {
@@ -142,10 +127,7 @@ where
             }))
         },
     )
-    .map_inner(|context_disposal| Disposal {
-        context_disposal,
-        stopped,
-    })
+    .map_inner_into()
 }
 
 /// What the observers of a join ask the delegate to do, in the order they decided it under the
@@ -173,77 +155,62 @@ struct Model<DLD: Disposable, DRD: Disposable> {
     ending_source: EndingSource,
 }
 
-/// Tells a delegate that its subscription has been disposed. The delivery checks for a stop
-/// between two actions only, so a delegate that emits several events for one action, or runs user
-/// code before an emission, checks this before each emission, with [`StopSignal::send`] or
-/// [`StopSignal::terminate`]: a disposal from inside one of those emissions or that user code, or
-/// from another thread meanwhile, reaches the rest of them only through it.
-#[derive(Educe)]
-#[educe(Default, Clone(bound()))]
-pub(super) struct StopSignal<M: ThreadMode>(M::Flag);
+// A delegate emits several events for one action, or runs user code before an emission, while the
+// delivery checks for a stop between two actions only. So it checks the `StopView` of its context
+// before each emission, through these: a disposal from inside one of those emissions or that user
+// code, or from another thread meanwhile, reaches the rest of them only through it.
 
-impl<M: ThreadMode> StopSignal<M> {
-    /// Raises the signal, for good.
-    fn stop(&self) {
-        self.0.write(true);
+/// Sends `observer` the value that `value` makes, unless the subscription is disposed before
+/// `value` runs or while it runs — user code, a selector or a `Clone`, which may dispose it.
+/// [`Flow::Stop`] when it is disposed, and the value is then not made, or dropped unsent, or when
+/// `observer` answered it.
+pub(super) fn send<M: ThreadMode, T, E>(
+    stop_view: &StopView<M>,
+    observer: &mut impl Observer<T, E>,
+    value: impl FnOnce() -> T,
+) -> Flow {
+    if stop_view.is_stopped() {
+        return Flow::Stop;
     }
-
-    fn is_stopped(&self) -> bool {
-        self.0.read()
+    let value = value();
+    if stop_view.is_stopped() {
+        return Flow::Stop;
     }
+    observer.on_next(value)
+}
 
-    /// Sends `observer` the value that `value` makes, unless the subscription is disposed before
-    /// `value` runs or while it runs — user code, a selector or a `Clone`, which may dispose it.
-    /// [`Flow::Stop`] when it is disposed, and the value is then not made, or dropped unsent, or
-    /// when `observer` answered it.
-    pub(super) fn send<T, E>(
-        &self,
-        observer: &mut impl Observer<T, E>,
-        value: impl FnOnce() -> T,
-    ) -> Flow {
-        if self.is_stopped() {
+/// Sends the value that `value` makes for each of `items`, until the subscription is disposed or
+/// `observer` answers [`Flow::Stop`]. Each value is made inside [`send`], so a disposal before it
+/// is needed skips the user's code too.
+pub(super) fn send_each<M: ThreadMode, T, E, V>(
+    stop_view: &StopView<M>,
+    observer: &mut impl Observer<T, E>,
+    items: impl IntoIterator<Item = V>,
+    mut value: impl FnMut(V) -> T,
+) -> Flow {
+    for item in items {
+        if send(stop_view, observer, || value(item)).is_stop() {
             return Flow::Stop;
         }
-        let value = value();
-        if self.is_stopped() {
-            return Flow::Stop;
-        }
-        observer.on_next(value)
     }
+    Flow::Continue
+}
 
-    /// Sends the value that `value` makes for each of `items`, until the subscription is disposed
-    /// or `observer` answers [`Flow::Stop`]. Each value is made inside [`Self::send`], so a
-    /// disposal before it is needed skips the user's code too.
-    pub(super) fn send_each<T, E, V>(
-        &self,
-        observer: &mut impl Observer<T, E>,
-        items: impl IntoIterator<Item = V>,
-        mut value: impl FnMut(V) -> T,
-    ) -> Flow {
-        for item in items {
-            if self.send(observer, || value(item)).is_stop() {
-                return Flow::Stop;
-            }
-        }
-        Flow::Continue
+/// [`send`] for the termination that `termination` makes: `observer` is dropped unterminated when
+/// the subscription is disposed before or while `termination` runs.
+pub(super) fn terminate<M: ThreadMode, T, E>(
+    stop_view: &StopView<M>,
+    observer: impl Observer<T, E>,
+    termination: impl FnOnce() -> Termination<E>,
+) {
+    if stop_view.is_stopped() {
+        return;
     }
-
-    /// [`Self::send`] for the termination that `termination` makes: `observer` is dropped
-    /// unterminated when the subscription is disposed before or while `termination` runs.
-    pub(super) fn terminate<T, E>(
-        &self,
-        observer: impl Observer<T, E>,
-        termination: impl FnOnce() -> Termination<E>,
-    ) {
-        if self.is_stopped() {
-            return;
-        }
-        let termination = termination();
-        if self.is_stopped() {
-            return;
-        }
-        observer.on_termination(termination);
+    let termination = termination();
+    if stop_view.is_stopped() {
+        return;
     }
+    observer.on_termination(termination);
 }
 
 /// Which source ends the stream once it has completed and the windows of its values have closed:

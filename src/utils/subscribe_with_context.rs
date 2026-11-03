@@ -126,7 +126,7 @@ use crate::{
     },
     observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::ThreadMode,
-    utils::serialized_delivery::{DeliveryStop, SerializedDelivery},
+    utils::serialized_delivery::{DeliveryStop, SerializedDelivery, StopView},
 };
 use educe::Educe;
 
@@ -178,7 +178,11 @@ where
     D: Disposable,
     F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> DisposeOnDrop<D>,
 {
-    subscribe_with_context_opt(observer, model, |context| Some(builder(context.clone())))
+    subscribe_with_context_opt(
+        |_| observer,
+        model,
+        |context| Some(builder(context.clone())),
+    )
 }
 
 /// The context handed to each step of [`subscribe_with_context_two_steps`]: it owns both steps'
@@ -229,7 +233,33 @@ where
     F1: FnOnce(&TwoStepsContext<M, T, E, OR, MD, D1, D2>) -> Option<DisposeOnDrop<D1>>,
     F2: FnOnce(&TwoStepsContext<M, T, E, OR, MD, D1, D2>) -> Option<DisposeOnDrop<D2>>,
 {
-    subscribe_with_context_opt(observer, model, |context| {
+    subscribe_with_context_two_steps_with_stop_view(|_| observer, model, builder_1, builder_2)
+}
+
+/// [`subscribe_with_context_two_steps`] with the observer that `observer_builder` builds around the
+/// [`StopView`] of the context: an observer that emits several events for one tells from it,
+/// before each of them, that the subscription has been disposed meanwhile, as `join` does.
+///
+/// The context checks for a stop between two of its events only, which is all an observer that
+/// emits one event for each of them needs. One that would emit several splits them into several
+/// events where it can, as `window` does with the rotation of its windows; this is for one that
+/// cannot, such as `join`, whose delegate holds the values it pairs, so that the selector runs
+/// outside the lock.
+pub(crate) fn subscribe_with_context_two_steps_with_stop_view<M, T, E, OR, D1, D2, MD, F1, F2>(
+    observer_builder: impl FnOnce(StopView<M>) -> OR,
+    model: MD,
+    builder_1: F1,
+    builder_2: F2,
+) -> DisposeOnDrop<TwoStepsDisposal<M, T, E, MD, D1, D2>>
+where
+    M: ThreadMode,
+    OR: Observer<T, E>,
+    D1: Disposable,
+    D2: Disposable,
+    F1: FnOnce(&TwoStepsContext<M, T, E, OR, MD, D1, D2>) -> Option<DisposeOnDrop<D1>>,
+    F2: FnOnce(&TwoStepsContext<M, T, E, OR, MD, D1, D2>) -> Option<DisposeOnDrop<D2>>,
+{
+    subscribe_with_context_opt(observer_builder, model, |context| {
         // The first step needs no check of its own: nothing can have stopped a context that was
         // only just created, whose disposal is still held here alone and whose observer has not
         // been handed a single event.
@@ -245,7 +275,7 @@ where
 /// [`subscribe_with_context`] whose builder may leave the context owning no source subscription,
 /// which is what every step of it being skipped comes down to.
 fn subscribe_with_context_opt<M, T, E, OR, D, MD, F>(
-    observer: OR,
+    observer_builder: impl FnOnce(StopView<M>) -> OR,
     model: MD,
     builder: F,
 ) -> DisposeOnDrop<Disposal<M, T, E, MD, D>>
@@ -263,7 +293,7 @@ where
         "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. \
          subscribe_with_context handles \"auto dispose on termination\" itself."
     );
-    let context = SubscriptionContext::new(observer, model);
+    let context = SubscriptionContext::new(observer_builder, model);
     let disposal = context.disposal();
     if let Some(subscription) = builder(&context) {
         // The context owns the source subscription from here on. The field is private and set only
@@ -316,11 +346,12 @@ pub struct SubscriptionContext<M: ThreadMode, T, E, OR, MD, D: Disposable> {
 }
 
 impl<M: ThreadMode, T, E, OR, MD, D: Disposable> SubscriptionContext<M, T, E, OR, MD, D> {
-    /// Creates a context holding `observer` and `model`, owning no source subscription yet.
-    fn new(observer: OR, model: MD) -> Self {
+    /// Creates a context holding `model` and the observer that `observer_builder` builds around its
+    /// [`StopView`], owning no source subscription yet.
+    fn new(observer_builder: impl FnOnce(StopView<M>) -> OR, model: MD) -> Self {
         Self {
             delivery: SerializedDelivery::idle(
-                observer,
+                observer_builder,
                 ContextResources {
                     model,
                     source_subscription: None,

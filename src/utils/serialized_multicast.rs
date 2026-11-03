@@ -115,7 +115,8 @@ impl<'or, T, E, M: ObserverMode, R> SerializedMulticast<'or, T, E, M, R> {
     /// Starts with no observer, no termination, and the host's state parked in the resources.
     pub(crate) fn idle(host: R) -> Self {
         Self(SerializedDelivery::idle(
-            Subscribers {
+            // Each entry has a flag of its own, which its disposal raises.
+            |_| Subscribers {
                 entries: Vec::new(),
             },
             Resources {

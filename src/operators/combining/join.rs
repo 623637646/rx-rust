@@ -2,7 +2,6 @@
 
 use super::join_core::{
     self, Action, DurationObserverOf, EndingSource, LeftObserverOf, RightObserverOf, Side,
-    StopSignal,
 };
 pub use super::join_core::{
     Disposal, DisposalOf, DurationObserver, LeftObserver, ModeOf, RightObserver,
@@ -12,7 +11,7 @@ use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
-    utils::{MarkerType, id_generator::Id},
+    utils::{MarkerType, id_generator::Id, serialized_delivery::StopView},
 };
 use educe::Educe;
 use std::{collections::BTreeMap, marker::PhantomData};
@@ -163,10 +162,10 @@ where
             (self.left, self.right),
             (self.left_duration_selector, self.right_duration_selector),
             EndingSource::Either,
-            |stopped| JoinDelegate {
+            |stop_view| JoinDelegate {
                 observer,
                 result_selector: self.result_selector,
-                stopped,
+                stop_view,
                 lefts: BTreeMap::new(),
                 rights: BTreeMap::new(),
             },
@@ -180,7 +179,7 @@ where
 pub struct JoinDelegate<M: ThreadMode, OR, F, L, R> {
     observer: OR,
     result_selector: F,
-    stopped: StopSignal<M>,
+    stop_view: StopView<M>,
     /// The left values whose windows are open, in the order they arrived: the order they are
     /// paired in.
     lefts: BTreeMap<Id, L>,
@@ -199,10 +198,7 @@ where
             Action::Left(id, value) => {
                 let pair = |right: &R| (self.result_selector)(&value, right);
                 let others = self.rights.values();
-                if self
-                    .stopped
-                    .send_each(&mut self.observer, others, pair)
-                    .is_stop()
+                if join_core::send_each(&self.stop_view, &mut self.observer, others, pair).is_stop()
                 {
                     return Flow::Stop;
                 }
@@ -213,10 +209,7 @@ where
             Action::Right(id, value) => {
                 let pair = |left: &L| (self.result_selector)(left, &value);
                 let others = self.lefts.values();
-                if self
-                    .stopped
-                    .send_each(&mut self.observer, others, pair)
-                    .is_stop()
+                if join_core::send_each(&self.stop_view, &mut self.observer, others, pair).is_stop()
                 {
                     return Flow::Stop;
                 }

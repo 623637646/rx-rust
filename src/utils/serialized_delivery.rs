@@ -39,6 +39,7 @@ use locked_core::LockedCore;
 mod locked_core;
 mod update_outcome;
 
+pub(crate) use locked_core::StopView;
 pub use update_outcome::{DropDecided, DropUndecided, UpdateOutcome, Updated};
 
 /// A shared, serialized delivery of events to one observer.
@@ -141,11 +142,14 @@ impl<M: ThreadMode, T, E, R> DeliveryStop<M, T, E, R> {
 }
 
 impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
-    /// Starts with the observer attached and parked, waiting for the first event.
-    pub(crate) fn idle(observer: OR, resources: R) -> Self {
+    /// Starts idle, waiting for the first event, with the observer that `observer_builder` builds
+    /// around the [`StopView`] of the delivery parked in its cell. An observer with no use for the
+    /// view ignores it.
+    pub(crate) fn idle(observer_builder: impl FnOnce(StopView<M>) -> OR, resources: R) -> Self {
+        let core = LockedCore::new(Core::Idle { resources });
         Self {
-            observer: M::ptr(Some(observer)),
-            core: LockedCore::new(Core::Idle { resources }),
+            observer: M::ptr(Some(observer_builder(core.stop_view()))),
+            core,
         }
     }
 
@@ -485,7 +489,7 @@ mod tests {
     // under the lock would deadlock, or fail the re-entry check of debug builds, instead of
     // recording its note.
 
-    use super::{SerializedDelivery, UpdateOutcome, Updated};
+    use super::{SerializedDelivery, StopView, UpdateOutcome, Updated};
     use crate::{
         observer::{EventBatch, Flow, Observer, Termination, boxed_observer::SendBoxedObserver},
         thread_mode::{
@@ -700,6 +704,21 @@ mod tests {
         }
     }
 
+    /// The [`StopView`] of a delivery to be built, for a callback that has to be made before it,
+    /// filled in as it is built.
+    #[derive(Clone)]
+    struct StopViewHandle(Arc<Mutex<Option<StopView<Shared>>>>);
+
+    impl StopViewHandle {
+        fn is_stopped(&self) -> bool {
+            self.0.with_ref(|view| {
+                view.as_ref()
+                    .expect("the view is installed before anything can read it")
+                    .is_stopped()
+            })
+        }
+    }
+
     // MARK: - The observer and how a test builds one
 
     /// An observer that records every event and every drop, and runs the hooks of its test.
@@ -759,6 +778,7 @@ mod tests {
         Builder {
             log: log.clone(),
             handle: DeliveryHandle::new(),
+            stop_view: StopViewHandle(Arc::new(Mutex::new(None))),
             reaches_delivery: false,
             model: 0,
             on_next: |_delivery, _number| {},
@@ -771,6 +791,7 @@ mod tests {
     struct Builder<FN, FT> {
         log: Log,
         handle: DeliveryHandle,
+        stop_view: StopViewHandle,
         /// Whether the observer gets the handle: only when a hook, or a callback made from
         /// [`Self::handle`], has to reach the delivery.
         reaches_delivery: bool,
@@ -788,6 +809,11 @@ mod tests {
             self.handle.clone()
         }
 
+        /// The stop view of the delivery to be built.
+        fn stop_view(&self) -> StopViewHandle {
+            self.stop_view.clone()
+        }
+
         fn model(mut self, model: i32) -> Self {
             self.model = model;
             self
@@ -800,6 +826,7 @@ mod tests {
             Builder {
                 log: self.log,
                 handle: self.handle,
+                stop_view: self.stop_view,
                 reaches_delivery: true,
                 model: self.model,
                 on_next,
@@ -822,6 +849,7 @@ mod tests {
             Builder {
                 log: self.log,
                 handle: self.handle,
+                stop_view: self.stop_view,
                 reaches_delivery: true,
                 model: self.model,
                 on_next: self.on_next,
@@ -857,7 +885,13 @@ mod tests {
                 received: 0,
             });
             let resources = Resources::new(self.model, &self.log);
-            let delivery = SerializedDelivery::idle(observer, resources);
+            let delivery = SerializedDelivery::idle(
+                |view| {
+                    self.stop_view.0.replace_value(Some(view));
+                    observer
+                },
+                resources,
+            );
             if self.reaches_delivery {
                 handle.install(&delivery);
             }
@@ -1436,6 +1470,124 @@ mod tests {
 
         assert!(delivery.send(next(3)).is_stop());
         assert_eq!(records(&log).len(), 3, "the observer is released only once");
+    }
+
+    // MARK: - The stop view
+
+    #[test]
+    fn test_a_delivery_stop_raises_the_stop_view_before_the_resources_are_dropped() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let delivery = builder.build();
+        let stop_view_of_resources = stop_view.clone();
+        let log_of_resources = log.clone();
+        delivery
+            .update(move |resources| {
+                resources.on_drop(Box::new(move || {
+                    if stop_view_of_resources.is_stopped() {
+                        record(&log_of_resources, Record::Note("raised"));
+                    }
+                }));
+                UpdateOutcome::empty()
+            })
+            .result()
+            .expect("the delivery is idle");
+        assert!(!stop_view.is_stopped());
+
+        delivery.stop_handle().stop();
+
+        assert!(stop_view.is_stopped());
+        assert_eq!(
+            records(&log),
+            [Record::ResourcesDropped, Record::Note("raised")],
+            "the view must be raised before the resources are dropped"
+        );
+    }
+
+    #[test]
+    fn test_a_delivery_stop_from_on_next_raises_the_stop_view_at_once() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let stop_view_of_observer = stop_view.clone();
+        let log_of_observer = log.clone();
+        let delivery = builder
+            .on_next(move |delivery, number| {
+                if number == 1 {
+                    delivery.stop_handle().stop();
+                    if stop_view_of_observer.is_stopped() {
+                        record(&log_of_observer, Record::Note("raised"));
+                    }
+                }
+            })
+            .build();
+
+        assert!(delivery.send(next(1)).is_stop());
+        assert_eq!(
+            records(&log)[..3],
+            [
+                Record::Next(1),
+                Record::ResourcesDropped,
+                Record::Note("raised"),
+            ],
+            "the observer must see the view raised while it still runs"
+        );
+        assert!(stop_view.is_stopped());
+    }
+
+    #[test]
+    fn test_a_termination_leaves_the_stop_view_down() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let delivery = builder.build();
+
+        assert!(delivery.send(completed()).is_stop());
+
+        assert_eq!(
+            records(&log),
+            [
+                Record::Termination(Termination::Completed),
+                Record::ObserverDropped,
+                Record::ResourcesDropped,
+            ]
+        );
+        assert!(!stop_view.is_stopped());
+    }
+
+    #[test]
+    fn test_a_delivery_stop_from_on_termination_raises_the_stop_view() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let stop_view_of_observer = stop_view.clone();
+        let log_of_observer = log.clone();
+        let delivery = builder
+            .on_termination(move |delivery, _termination| {
+                assert!(
+                    !stop_view_of_observer.is_stopped(),
+                    "the termination itself must not raise the view"
+                );
+                // The termination has already stopped the delivery: the stop raises the view
+                // all the same.
+                delivery.stop_handle().stop();
+                if stop_view_of_observer.is_stopped() {
+                    record(&log_of_observer, Record::Note("raised"));
+                }
+            })
+            .build();
+
+        assert!(delivery.send(completed()).is_stop());
+
+        assert_eq!(
+            records(&log)[..2],
+            [
+                Record::Termination(Termination::Completed),
+                Record::Note("raised"),
+            ]
+        );
+        assert!(stop_view.is_stopped());
     }
 
     // MARK: - Re-entrant sends

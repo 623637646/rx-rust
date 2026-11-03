@@ -1,5 +1,6 @@
 //! The lock around the state of a [`SerializedDelivery`](super::SerializedDelivery), in a module of
-//! its own so that nothing but a stop can raise the flag that goes with it.
+//! its own so that nothing but a stop can raise the flag that goes with it, which the rest of the
+//! crate reads through a [`StopView`].
 
 use super::Core;
 use crate::thread_mode::{
@@ -61,5 +62,32 @@ impl<M: ThreadMode, T, E, R> LockedCore<M, T, E, R> {
             debug_assert!(matches!(core, Core::Stopped), "a stop is final");
             callback()
         }))
+    }
+
+    /// Creates a view of the flag, which tells without the lock whether a stop has run.
+    pub(super) fn stop_view(&self) -> StopView<M> {
+        StopView(self.stopped.clone())
+    }
+}
+
+/// Tells, without a lock, whether a delivery has been stopped other than by its termination: by a
+/// [`DeliveryStop`](super::DeliveryStop), or by its own loop, as its observer answers
+/// [`Flow::Stop`](crate::observer::Flow::Stop) or panics.
+///
+/// While the observer runs, only the first can happen, so the observer learns from it that its
+/// subscription has been disposed — from inside one of its own notifications, or from another
+/// thread meanwhile — which the delivery itself checks between two events only. An observer that
+/// emits several events for one, or runs user code before an emission, checks it before each of
+/// them. A disposal during the termination raises it too: a stop raises it whatever state it finds
+/// the core in, a termination that has already stopped it included.
+///
+/// It is raised under the lock, before the stop drops what the core held, so code that runs as the
+/// resources are dropped — the disposal of a source, and a user callback it runs — sees it raised.
+pub(crate) struct StopView<M: ThreadMode>(M::Flag);
+
+impl<M: ThreadMode> StopView<M> {
+    /// Whether the delivery has been stopped, for good, other than by its termination.
+    pub(crate) fn is_stopped(&self) -> bool {
+        self.0.read()
     }
 }
