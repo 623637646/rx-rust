@@ -19,14 +19,13 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::subject::publish_subject::PublishSubject;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::transforming::buffer_with_time::BufferWithTime,
 };
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -924,7 +923,7 @@ fn test_sync_completion_disposes_chain_while_subscription_is_retained() {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::<Infallible>::Completed);
         DisposeOnDrop::new(CallbackDisposal::new(move || {
-            source_disposed_from_callback.write(true);
+            source_disposed_from_callback.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
@@ -935,7 +934,7 @@ fn test_sync_completion_disposes_chain_while_subscription_is_retained() {
 
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(source_disposed.read());
+    assert!(source_disposed.load(Ordering::SeqCst));
     drop(retained_subscription);
 }
 
@@ -947,7 +946,7 @@ fn test_async_completion_disposes_chain_while_subscription_is_retained() {
     let source_disposed = Arc::new(AtomicBool::new(false));
     let source_disposed_from_callback = source_disposed.clone();
     let source = subject.clone().do_after_disposal(move || {
-        source_disposed_from_callback.write(true);
+        source_disposed_from_callback.store(true, Ordering::SeqCst);
     });
     let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
 
@@ -955,14 +954,14 @@ fn test_async_completion_disposes_chain_while_subscription_is_retained() {
         .buffer_with_time(DURATION_100_MS, scheduler.clone())
         .subscribe(observer);
 
-    assert!(!source_disposed.read());
+    assert!(!source_disposed.load(Ordering::SeqCst));
 
     assert!(subject.on_next(111).is_continue());
     subject.on_termination(Termination::Completed);
 
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(source_disposed.read());
+    assert!(source_disposed.load(Ordering::SeqCst));
     drop(retained_subscription);
 }
 

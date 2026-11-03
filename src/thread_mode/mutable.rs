@@ -1,7 +1,9 @@
 //! The locks — `RefCell` for a [`Local`](crate::thread_mode::Local) state, `Mutex` for a
 //! [`Shared`](crate::thread_mode::Shared) one, each behind the pointer
 //! [`ThreadMode::Ptr`](crate::thread_mode::ThreadMode::Ptr) picks — and the only sanctioned way to
-//! reach through them: a callback that gets a reference and returns.
+//! reach through them: a callback that gets a reference and returns. Next to them, the flag a mode
+//! picks, [`LocalFlag`] or [`SharedFlag`], read without a lock and only ever raised
+//! ([`RaiseOnlyFlag`]).
 //!
 //! # Rule 1: the guard must not outlive the operation
 //!
@@ -134,21 +136,33 @@ pub trait MutableExt: MutableHelper {
 
 impl<M: MutableHelper + ?Sized> MutableExt for M {}
 
-/// A lock-free flag: a `Cell<bool>` for a [`Local`](crate::thread_mode::Local) state and an
-/// `AtomicBool` for a [`Shared`](crate::thread_mode::Shared) one, and the `Rc` / `Arc` pointing to
-/// them that [`ThreadMode::Flag`](crate::thread_mode::ThreadMode::Flag) picks.
-pub trait MutableBoolHelper {
-    /// The current value.
-    fn read(&self) -> bool;
-    /// Sets the value.
-    fn write(&self, value: bool);
-    /// Sets the value to `value` and returns whether that changed it, as one atomic step for the
-    /// `AtomicBool`: of two threads setting the same value, exactly one sees `true`.
-    ///
-    /// Not `swap` / `replace`: `AtomicBool::swap` and `Cell::replace` are inherent methods, which
-    /// would win method resolution over this one.
-    fn set_if_changed(&self, value: bool) -> bool;
+/// A flag that starts lowered and, once raised, stays raised: the one
+/// [`ThreadMode::Flag`](crate::thread_mode::ThreadMode::Flag) picks, a [`LocalFlag`] or a
+/// [`SharedFlag`]. Clones share the flag, and it is read without a lock.
+///
+/// Nothing lowers it, nor sets it to a given value, so a reader that sees it raised — a
+/// subscription disposed, a pipe closed, a delivery stopped — knows it stays raised, and can act on
+/// that without a lock. A bool that goes back and forth has to agree with the state it describes,
+/// which takes the lock that state is behind: a field of the
+/// [`ThreadMode::Ptr`](crate::thread_mode::ThreadMode::Ptr), not a flag.
+///
+/// The [`SharedFlag`] raises and reads with [`Ordering::SeqCst`]: what a thread wrote before it
+/// raised the flag is visible to a thread that reads it raised.
+pub trait RaiseOnlyFlag {
+    /// Raises the flag, for good. Raising a raised flag does nothing.
+    fn raise(&self);
+    /// Whether the flag has been raised.
+    fn is_raised(&self) -> bool;
 }
+
+/// The [`RaiseOnlyFlag`] of a [`Local`](crate::thread_mode::Local) state: an `Rc<Cell<bool>>`.
+#[derive(Debug, Clone, Default)]
+pub struct LocalFlag(Rc<Cell<bool>>);
+
+/// The [`RaiseOnlyFlag`] of a [`Shared`](crate::thread_mode::Shared) state: an
+/// `Arc<AtomicBool>`.
+#[derive(Debug, Clone, Default)]
+pub struct SharedFlag(Arc<AtomicBool>);
 
 impl<T> MutableHelper for RefCell<T> {
     type Value = T;
@@ -206,55 +220,20 @@ impl<T> MutableHelper for Arc<Mutex<T>> {
     }
 }
 
-impl MutableBoolHelper for Cell<bool> {
-    fn read(&self) -> bool {
-        self.get()
+impl RaiseOnlyFlag for LocalFlag {
+    fn raise(&self) {
+        self.0.set(true)
     }
-    fn write(&self, value: bool) {
-        self.set(value)
-    }
-    fn set_if_changed(&self, value: bool) -> bool {
-        self.replace(value) != value
+    fn is_raised(&self) -> bool {
+        self.0.get()
     }
 }
 
-impl MutableBoolHelper for AtomicBool {
-    fn read(&self) -> bool {
-        self.load(Ordering::SeqCst)
+impl RaiseOnlyFlag for SharedFlag {
+    fn raise(&self) {
+        self.0.store(true, Ordering::SeqCst)
     }
-    fn write(&self, value: bool) {
-        self.store(value, Ordering::SeqCst)
-    }
-    fn set_if_changed(&self, value: bool) -> bool {
-        self.compare_exchange(!value, value, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-    }
-}
-
-/// The `Rc` a [`Local`](crate::thread_mode::Local) flag is shared through reads and writes the
-/// `Cell` it points to.
-impl MutableBoolHelper for Rc<Cell<bool>> {
-    fn read(&self) -> bool {
-        (**self).read()
-    }
-    fn write(&self, value: bool) {
-        (**self).write(value)
-    }
-    fn set_if_changed(&self, value: bool) -> bool {
-        (**self).set_if_changed(value)
-    }
-}
-
-/// The `Arc` a [`Shared`](crate::thread_mode::Shared) flag is shared through reads and writes the
-/// `AtomicBool` it points to.
-impl MutableBoolHelper for Arc<AtomicBool> {
-    fn read(&self) -> bool {
-        (**self).read()
-    }
-    fn write(&self, value: bool) {
-        (**self).write(value)
-    }
-    fn set_if_changed(&self, value: bool) -> bool {
-        (**self).set_if_changed(value)
+    fn is_raised(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
     }
 }

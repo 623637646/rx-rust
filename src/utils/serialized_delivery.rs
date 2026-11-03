@@ -494,12 +494,15 @@ mod tests {
         observer::{EventBatch, Flow, Observer, Termination, boxed_observer::SendBoxedObserver},
         thread_mode::{
             Shared,
-            mutable::{MutableBoolHelper, MutableExt, MutableHelper},
+            mutable::{MutableExt, MutableHelper},
         },
     };
     #[cfg(panic = "unwind")]
     use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
-    use std::sync::{Arc, Mutex, atomic::AtomicBool};
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    };
 
     type TestError = &'static str;
     const ERROR: TestError = "boom";
@@ -2099,11 +2102,11 @@ mod tests {
         let delivery = builder(&log)
             .on_next(move |_delivery, _value| {
                 assert!(
-                    delivering_of_observer.set_if_changed(true),
+                    !delivering_of_observer.swap(true, Ordering::SeqCst),
                     "two values must never be delivered at the same time"
                 );
                 std::thread::yield_now();
-                assert!(delivering_of_observer.set_if_changed(false));
+                assert!(delivering_of_observer.swap(false, Ordering::SeqCst));
             })
             .build();
 

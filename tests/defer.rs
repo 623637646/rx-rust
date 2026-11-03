@@ -9,7 +9,6 @@ use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -17,7 +16,7 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -344,7 +343,7 @@ fn test_boxed_observable() {
     let switch = Arc::new(AtomicBool::new(false));
     let observable = Defer::new(|| {
         let observable = Just::new(111);
-        if switch.read() {
+        if switch.load(Ordering::SeqCst) {
             observable.into_send_boxed()
         } else {
             observable.map(|value| value * 2).into_send_boxed()
@@ -355,7 +354,7 @@ fn test_boxed_observable() {
     assert_eq!(checker.values(), [222]);
     assert_eq!(checker.state(), State::Completed);
 
-    switch.write(true);
+    switch.store(true, Ordering::SeqCst);
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);

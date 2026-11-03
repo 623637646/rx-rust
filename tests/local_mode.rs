@@ -441,6 +441,9 @@ assert_send!(Shared);
 assert_not_send!(<Local as ThreadMode>::Ptr<i32>);
 assert_send!(<Shared as ThreadMode>::Ptr<i32>);
 
+assert_not_send!(<Local as ThreadMode>::Flag);
+assert_send!(<Shared as ThreadMode>::Flag);
+
 assert_not_send!(<Local as ObserverMode>::BoxedObserver<'static, i32, ()>);
 assert_send!(<Shared as ObserverMode>::BoxedObserver<'static, i32, ()>);
 

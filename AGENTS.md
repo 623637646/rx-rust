@@ -71,7 +71,8 @@ their executor; using one from another thread panics. The `Local` mode is covere
 
 Single- versus multi-threaded is not a feature but a type: every observable has a
 `Mode: ThreadMode` (`thread_mode::Local` or `thread_mode::Shared`). Shared state goes through the
-mode — `M::Ptr<T>` (`Rc<RefCell<T>>` / `Arc<Mutex<T>>`), `M::Flag`, and `M::BoxedObserver` of
+mode — `M::Ptr<T>` (`Rc<RefCell<T>>` / `Arc<Mutex<T>>`), `M::Flag` (a `RaiseOnlyFlag`: once
+raised it stays raised; a bool that goes back is a field under the lock), and `M::BoxedObserver` of
 `ObserverMode` — never
 `Rc`/`Arc` directly, and `Send` is required only where a value really crosses threads (the
 scheduler impls, the `SendBoxed*` erasures). The test suite runs in the `Shared` mode;
@@ -333,8 +334,9 @@ constructors: `Create::shared_boxed`, `PublishSubject::shared()` and the other s
 `shared`, `unicast_subject::shared`; erase with `into_send_boxed` / `SendBoxedObserver`. A source
 of another mode that must sit among erased `Shared` observables of one type gets `.into_shared()`.
 Name the mode (`Shared`, from `rx_rust::thread_mode`) only where inference cannot reach it, and
-write `_` in `let` annotations. Keep test state in plain `Arc<Mutex<_>>` / `AtomicBool`, reached
-through `MutableHelper` / `MutableBoolHelper`, and bound closures with `Send`. Tests that need real
+write `_` in `let` annotations. Keep test state in plain `Arc<Mutex<_>>`, reached through
+`MutableHelper`, or in atomics (`AtomicBool`, `AtomicUsize`) with their own `load` / `store` and
+`Ordering::SeqCst`, and bound closures with `Send`. Tests that need real
 threads need no gate. A
 test that needs the `Local` mode itself goes in `tests/local_mode.rs`.
 

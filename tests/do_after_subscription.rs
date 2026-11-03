@@ -9,7 +9,6 @@ use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -17,7 +16,7 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -176,14 +175,14 @@ fn test_async() {
         let called_cloned = called.clone();
         let channel_checker_cloned = channel_checker.clone();
         let observable = observable.do_after_subscription(move || {
-            called_cloned.write(true);
+            called_cloned.store(true, Ordering::SeqCst);
             assert_eq!(channel_checker_cloned.state(), ChannelState::Subscribed);
         });
 
         let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
             .await;
-        assert!(called.read());
+        assert!(called.load(Ordering::SeqCst));
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);

@@ -14,14 +14,13 @@ use rx_rust::operators::creating::never::Never;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::subject::publish_subject::PublishSubject;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     observable::{ObservableExt, future::ObservableTryFuture},
     observer::{Observer, Termination},
 };
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tests_utils::test_struct::TestStruct;
 
 #[test]
@@ -52,17 +51,17 @@ fn test_completed_lazy_subscription() {
     let subscribed = Arc::new(AtomicBool::new(false));
     let subscribed_cloned = subscribed.clone();
     let observable = Create::shared_boxed(move |mut observer: SendBoxedObserver<'_, _, &str>| {
-        subscribed_cloned.write(true);
+        subscribed_cloned.store(true, Ordering::SeqCst);
         assert!(observer.on_next(111).is_stop());
         DisposeOnDrop::default()
     });
 
     let mut future = observable.into_try_future();
-    assert!(!subscribed.read());
+    assert!(!subscribed.load(Ordering::SeqCst));
 
     // The first poll is what subscribes, and the first value completes the future at once.
     assert_eq!((&mut future).now_or_never(), Some(Ok(Some(111))));
-    assert!(subscribed.read());
+    assert!(subscribed.load(Ordering::SeqCst));
 }
 
 #[test]

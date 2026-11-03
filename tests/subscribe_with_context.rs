@@ -3,7 +3,6 @@ mod tests_utils;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
     disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
@@ -14,7 +13,7 @@ use rx_rust::{
     },
 };
 use std::convert::Infallible;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tests_utils::{
     checker::{Checker, State},
@@ -185,7 +184,7 @@ fn stopped_update_drops_callback_outside_lock() {
     let callback_dropped_on_drop = callback_dropped.clone();
     let reentrant_context = context.clone();
     let probe = DropProbe::new().on_drop(Box::new(move || {
-        callback_dropped_on_drop.write(true);
+        callback_dropped_on_drop.store(true, Ordering::SeqCst);
         // This would deadlock if the callback were dropped while the context was locked.
         let _ = reentrant_context.send_next(1);
     }));
@@ -196,7 +195,7 @@ fn stopped_update_drops_callback_outside_lock() {
     });
 
     assert_eq!(result, Updated::Stopped);
-    assert!(callback_dropped.read());
+    assert!(callback_dropped.load(Ordering::SeqCst));
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Dropped);
 }
@@ -258,8 +257,9 @@ fn termination_in_the_first_step_skips_the_second_and_releases_the_first() {
         observer,
         (),
         |context| {
-            let subscription =
-                DisposeOnDrop::new(CallbackDisposal::new(move || disposed_first.write(true)));
+            let subscription = DisposeOnDrop::new(CallbackDisposal::new(move || {
+                disposed_first.store(true, Ordering::SeqCst)
+            }));
             context.send_termination(Termination::Completed);
             Some(subscription)
         },
@@ -268,7 +268,7 @@ fn termination_in_the_first_step_skips_the_second_and_releases_the_first() {
         },
     );
 
-    assert!(disposed.read());
+    assert!(disposed.load(Ordering::SeqCst));
     assert_eq!(checker.state(), State::Completed);
 }
 

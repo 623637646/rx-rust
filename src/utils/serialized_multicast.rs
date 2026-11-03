@@ -53,7 +53,7 @@ use crate::{
         EventBatch, Flow, Observer, Termination,
         boxed_observer::{IntoBoxedObserver, ObserverMode},
     },
-    thread_mode::mutable::MutableBoolHelper,
+    thread_mode::mutable::RaiseOnlyFlag,
     utils::{
         id_generator::{Id, IdGenerator},
         serialized_delivery::{SerializedDelivery, UpdateOutcome, Updated},
@@ -398,7 +398,7 @@ where
         // An entry whose observer stops is released right here, like a disposed one: it accepts
         // nothing more, and must not be terminated either.
         self.entries.retain_mut(|entry| {
-            if entry.is_disposed.read() {
+            if entry.is_disposed.is_raised() {
                 // Unsubscribed, possibly during this very dispatch: its own `Action::Prune` is
                 // what removes it, so it is kept here.
                 return true;
@@ -411,14 +411,14 @@ where
         // The replay is delivered here, where it is serialized with everything else: the values
         // the host snapshotted are exactly the ones queued before this action.
         for value in replay {
-            if entry.is_disposed.read() {
+            if entry.is_disposed.is_raised() {
                 return; // Unsubscribed, possibly during this very replay.
             }
             if entry.observer.on_next(value).is_stop() {
                 return; // Stopped by the replay itself, so it never joins.
             }
         }
-        if entry.is_disposed.read() {
+        if entry.is_disposed.is_raised() {
             return; // Unsubscribed before it was ever added.
         }
         debug_assert!(
@@ -438,7 +438,7 @@ where
         // Nothing but `Action::Prune`s can be queued behind the termination, and those find no
         // entry left, so emptying the entries here is final.
         for entry in std::mem::take(&mut self.entries) {
-            if entry.is_disposed.read() {
+            if entry.is_disposed.is_raised() {
                 continue; // Unsubscribed, possibly during this very dispatch.
             }
             entry.observer.on_termination(termination.clone());
@@ -464,7 +464,7 @@ where
 {
     fn dispose(self) {
         // The flag is what stops the events; the action only releases the observer afterwards.
-        self.disposed.write(true);
+        self.disposed.raise();
         let _ = self.delivery.send(EventBatch::Next(Action::Prune(self.id)));
     }
 }

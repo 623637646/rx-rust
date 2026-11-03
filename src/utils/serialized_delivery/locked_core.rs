@@ -5,7 +5,7 @@
 use super::Core;
 use crate::thread_mode::{
     ThreadMode,
-    mutable::{MutableBoolHelper, MutableHelper},
+    mutable::{MutableHelper, RaiseOnlyFlag},
 };
 use educe::Educe;
 
@@ -47,7 +47,7 @@ impl<M: ThreadMode, T, E, R> LockedCore<M, T, E, R> {
     /// which consumes the observer.
     pub(super) fn stop_with<Out>(&self, callback: impl FnOnce() -> Out) -> (Core<T, E, R>, Out) {
         self.core.with_mut(|core| {
-            self.stopped.write(true);
+            self.stopped.raise();
             (std::mem::replace(core, Core::Stopped), callback())
         })
     }
@@ -55,7 +55,7 @@ impl<M: ThreadMode, T, E, R> LockedCore<M, T, E, R> {
     /// Runs `callback` under the lock once a [`stop_with`](Self::stop_with) has run, and takes
     /// no lock before: [`None`] until then. The core is then stopped for good.
     pub(super) fn after_stop<Out>(&self, callback: impl FnOnce() -> Out) -> Option<Out> {
-        if !self.stopped.read() {
+        if !self.stopped.is_raised() {
             return None;
         }
         Some(self.core.with_mut(|core| {
@@ -88,6 +88,6 @@ pub(crate) struct StopView<M: ThreadMode>(M::Flag);
 impl<M: ThreadMode> StopView<M> {
     /// Whether the delivery has been stopped, for good, other than by its termination.
     pub(crate) fn is_stopped(&self) -> bool {
-        self.0.read()
+        self.0.is_raised()
     }
 }

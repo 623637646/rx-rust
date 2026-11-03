@@ -19,14 +19,14 @@ use rx_rust::operators::creating::timer::Timer;
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::subject::unicast_subject::{self, BoxedUnicastObservable};
 use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Flow, Observer, Termination},
     operators::combining::group_join::GroupJoin,
 };
 use std::convert::Infallible;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -814,13 +814,15 @@ fn test_stop_on_next_of_window_drops_it() {
     // The window of 1 is stopped, and no other is open: 2 is not cloned.
     let cloned = Arc::new(AtomicBool::new(false));
     let cloned_cloned = cloned.clone();
-    let probe = CloneProbe::new(2).on_clone(Box::new(move || cloned_cloned.write(true)));
+    let probe = CloneProbe::new(2).on_clone(Box::new(move || {
+        cloned_cloned.store(true, Ordering::SeqCst)
+    }));
     assert!(right.on_next(probe).is_continue());
-    assert!(!cloned.read());
+    assert!(!cloned.load(Ordering::SeqCst));
 
     // The right values are still open for a new window.
     assert!(left.on_next(3).is_continue());
-    assert!(cloned.read());
+    assert!(cloned.load(Ordering::SeqCst));
     assert_eq!(checker.values(), [(1, 1), (3, 1)]);
     assert_eq!(checker.state(), State::Active);
 }

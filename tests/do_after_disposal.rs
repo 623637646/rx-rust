@@ -10,7 +10,6 @@ use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -18,7 +17,7 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -30,36 +29,36 @@ fn test_completed() {
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::new();
 
     let called_cloned = called.clone();
     let observable = observable.do_after_disposal(|| {
-        assert!(disposed.read());
-        called_cloned.write(true);
+        assert!(disposed.load(Ordering::SeqCst));
+        called_cloned.store(true, Ordering::SeqCst);
     });
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     assert!(boxed_observer.as_mut().unwrap().on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     boxed_observer
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -71,36 +70,36 @@ fn test_error() {
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::new();
 
     let called_cloned = called.clone();
     let observable = observable.do_after_disposal(|| {
-        assert!(disposed.read());
-        called_cloned.write(true);
+        assert!(disposed.load(Ordering::SeqCst));
+        called_cloned.store(true, Ordering::SeqCst);
     });
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     assert!(boxed_observer.as_mut().unwrap().on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     boxed_observer
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -112,42 +111,42 @@ fn test_unsubscribe() {
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::new();
 
     let called_cloned = called.clone();
     let observable = observable.do_after_disposal(|| {
-        assert!(disposed.read());
-        called_cloned.write(true);
+        assert!(disposed.load(Ordering::SeqCst));
+        called_cloned.store(true, Ordering::SeqCst);
     });
 
     let subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     assert!(boxed_observer.as_mut().unwrap().on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 
     boxed_observer
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -162,22 +161,22 @@ fn test_ref() {
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::new();
 
     let called_cloned = called.clone();
     let observable = observable.do_after_disposal(|| {
-        assert!(disposed.read());
-        called_cloned.write(true);
+        assert!(disposed.load(Ordering::SeqCst));
+        called_cloned.store(true, Ordering::SeqCst);
     });
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     assert!(
         boxed_observer
@@ -188,22 +187,22 @@ fn test_ref() {
     );
     assert_eq!(checker.values(), [&value]);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [&value]);
     assert_eq!(checker.state(), State::Active);
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 
     boxed_observer
         .unwrap()
         .on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value]);
     assert_eq!(checker.state(), State::Error(&error));
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -218,14 +217,14 @@ fn test_mut_ref() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, &mut i32, &mut i32>| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
 
     let called_cloned = called.clone();
     let observable = observable.do_after_disposal(|| {
-        assert!(disposed.read());
-        called_cloned.write(true);
+        assert!(disposed.load(Ordering::SeqCst));
+        called_cloned.store(true, Ordering::SeqCst);
     });
 
     let subscription = observable.subscribe_with_callback(
@@ -235,8 +234,8 @@ fn test_mut_ref() {
             Termination::Error(error) => *error *= 2,
         },
     );
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     assert!(
         boxed_observer
@@ -245,18 +244,18 @@ fn test_mut_ref() {
             .on_next(&mut value)
             .is_continue()
     );
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     subscription.dispose();
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 
     boxed_observer
         .unwrap()
         .on_termination(Termination::Error(&mut error));
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 
     assert_eq!(value, 222);
     assert_eq!(error, 444);
@@ -274,7 +273,7 @@ fn test_async() {
         let observable = Create::shared_boxed(move |observer| {
             boxed_observer_cloned.set(observer);
             DisposeOnDrop::new(CallbackDisposal::new(move || {
-                disposed_cloned.write(true);
+                disposed_cloned.store(true, Ordering::SeqCst);
             }))
         });
         let (checker, observer) = Checker::new();
@@ -282,8 +281,8 @@ fn test_async() {
         let disposed_cloned = disposed.clone();
         let called_cloned = called.clone();
         let observable = observable.do_after_disposal(move || {
-            assert!(disposed_cloned.read());
-            called_cloned.write(true);
+            assert!(disposed_cloned.load(Ordering::SeqCst));
+            called_cloned.store(true, Ordering::SeqCst);
         });
 
         let subscription = scheduler
@@ -291,8 +290,8 @@ fn test_async() {
             .await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
-        assert!(!disposed.read());
-        assert!(!called.read());
+        assert!(!disposed.load(Ordering::SeqCst));
+        assert!(!called.load(Ordering::SeqCst));
 
         let boxed_observer = scheduler
             .spawn(async move {
@@ -302,15 +301,15 @@ fn test_async() {
             .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
-        assert!(!disposed.read());
-        assert!(!called.read());
+        assert!(!disposed.load(Ordering::SeqCst));
+        assert!(!called.load(Ordering::SeqCst));
 
         scheduler.spawn(async move { subscription.dispose() }).await;
         scheduler.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
-        assert!(disposed.read());
-        assert!(called.read());
+        assert!(disposed.load(Ordering::SeqCst));
+        assert!(called.load(Ordering::SeqCst));
 
         scheduler
             .spawn(async move {
@@ -319,8 +318,8 @@ fn test_async() {
             .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
-        assert!(disposed.read());
-        assert!(called.read());
+        assert!(disposed.load(Ordering::SeqCst));
+        assert!(called.load(Ordering::SeqCst));
     });
 }
 
@@ -342,7 +341,7 @@ fn test_subscribe_by_different_observer() {
             disposed_2.clone()
         };
         DisposeOnDrop::new(CallbackDisposal::new(move || {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker_1, observer_1) = Checker::new();
@@ -352,15 +351,15 @@ fn test_subscribe_by_different_observer() {
     let called_2_cloned = called_2.clone();
     let first_call = Arc::new(AtomicBool::new(true));
     let observable = observable.do_after_disposal(|| {
-        if first_call.read() {
-            first_call.write(false);
-            assert!(disposed_1.read());
-            assert!(!disposed_2.read());
-            called_1_cloned.write(true);
+        if first_call.load(Ordering::SeqCst) {
+            first_call.store(false, Ordering::SeqCst);
+            assert!(disposed_1.load(Ordering::SeqCst));
+            assert!(!disposed_2.load(Ordering::SeqCst));
+            called_1_cloned.store(true, Ordering::SeqCst);
         } else {
-            assert!(disposed_1.read());
-            assert!(disposed_2.read());
-            called_2_cloned.write(true);
+            assert!(disposed_1.load(Ordering::SeqCst));
+            assert!(disposed_2.load(Ordering::SeqCst));
+            called_2_cloned.store(true, Ordering::SeqCst);
         }
     });
     let observable_1 = observable;
@@ -373,10 +372,10 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(!disposed_1.read());
-    assert!(!disposed_2.read());
-    assert!(!called_1.read());
-    assert!(!called_2.read());
+    assert!(!disposed_1.load(Ordering::SeqCst));
+    assert!(!disposed_2.load(Ordering::SeqCst));
+    assert!(!called_1.load(Ordering::SeqCst));
+    assert!(!called_2.load(Ordering::SeqCst));
 
     assert!(boxed_observer_1.on_next(111));
     assert!(boxed_observer_2.on_next(111));
@@ -384,10 +383,10 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(!disposed_1.read());
-    assert!(!disposed_2.read());
-    assert!(!called_1.read());
-    assert!(!called_2.read());
+    assert!(!disposed_1.load(Ordering::SeqCst));
+    assert!(!disposed_2.load(Ordering::SeqCst));
+    assert!(!called_1.load(Ordering::SeqCst));
+    assert!(!called_2.load(Ordering::SeqCst));
 
     subscription_1.dispose();
     subscription_2.dispose();
@@ -395,10 +394,10 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(disposed_1.read());
-    assert!(disposed_2.read());
-    assert!(called_1.read());
-    assert!(called_2.read());
+    assert!(disposed_1.load(Ordering::SeqCst));
+    assert!(disposed_2.load(Ordering::SeqCst));
+    assert!(called_1.load(Ordering::SeqCst));
+    assert!(called_2.load(Ordering::SeqCst));
 
     assert!(boxed_observer_1.on_termination(Termination::<Infallible>::Completed));
     assert!(boxed_observer_2.on_termination(Termination::<Infallible>::Completed));
@@ -406,10 +405,10 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Completed);
-    assert!(disposed_1.read());
-    assert!(disposed_2.read());
-    assert!(called_1.read());
-    assert!(called_2.read());
+    assert!(disposed_1.load(Ordering::SeqCst));
+    assert!(disposed_2.load(Ordering::SeqCst));
+    assert!(called_1.load(Ordering::SeqCst));
+    assert!(called_2.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -422,29 +421,29 @@ fn test_unsub_on_next_by_take() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::new();
 
     let observable = observable
         .do_after_disposal(|| {
-            assert!(disposed.read());
-            called_cloned.write(true);
+            assert!(disposed.load(Ordering::SeqCst));
+            called_cloned.store(true, Ordering::SeqCst);
         })
         .take(1);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     assert!(boxed_observer.as_mut().unwrap().on_next(111).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -457,7 +456,7 @@ fn test_multiple_operation() {
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::new();
@@ -466,43 +465,43 @@ fn test_multiple_operation() {
     let called_2_cloned = called_2.clone();
     let observable = observable
         .do_after_disposal(|| {
-            assert!(disposed.read());
-            called_1_cloned.write(true);
+            assert!(disposed.load(Ordering::SeqCst));
+            called_1_cloned.store(true, Ordering::SeqCst);
         })
         .do_after_disposal(|| {
-            assert!(disposed.read());
-            called_2_cloned.write(true);
+            assert!(disposed.load(Ordering::SeqCst));
+            called_2_cloned.store(true, Ordering::SeqCst);
         });
 
     let subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called_1.read());
-    assert!(!called_2.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called_1.load(Ordering::SeqCst));
+    assert!(!called_2.load(Ordering::SeqCst));
 
     assert!(boxed_observer.as_mut().unwrap().on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called_1.read());
-    assert!(!called_2.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called_1.load(Ordering::SeqCst));
+    assert!(!called_2.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(disposed.read());
-    assert!(called_1.read());
-    assert!(called_2.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called_1.load(Ordering::SeqCst));
+    assert!(called_2.load(Ordering::SeqCst));
 
     boxed_observer
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(disposed.read());
-    assert!(called_1.read());
-    assert!(called_2.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called_1.load(Ordering::SeqCst));
+    assert!(called_2.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -514,42 +513,42 @@ fn test_without_convenient_api() {
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         DisposeOnDrop::new(CallbackDisposal::new(|| {
-            disposed.write(true);
+            disposed.store(true, Ordering::SeqCst);
         }))
     });
     let (checker, observer) = Checker::new();
 
     let called_cloned = called.clone();
     let observable = DoAfterDisposal::new(observable, || {
-        assert!(disposed.read());
-        called_cloned.write(true);
+        assert!(disposed.load(Ordering::SeqCst));
+        called_cloned.store(true, Ordering::SeqCst);
     });
 
     let subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     assert!(boxed_observer.as_mut().unwrap().on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(!disposed.read());
-    assert!(!called.read());
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 
     boxed_observer
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(disposed.read());
-    assert!(called.read());
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
 }
 
 #[test]

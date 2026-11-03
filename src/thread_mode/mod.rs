@@ -48,12 +48,12 @@
 
 pub mod mutable;
 
-use mutable::{MutableBoolHelper, MutableHelper};
+use mutable::{LocalFlag, MutableHelper, RaiseOnlyFlag, SharedFlag};
 use std::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     marker::PhantomData,
     rc::Rc,
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    sync::{Arc, Mutex},
 };
 
 mod sealed {
@@ -106,10 +106,10 @@ pub trait ThreadMode: sealed::Mode + 'static {
     /// The weak counterpart of [`Ptr`](ThreadMode::Ptr), which does not keep the state alive:
     /// `rc::Weak<RefCell<T>>` or `sync::Weak<Mutex<T>>`.
     type Weak<T>: Clone;
-    /// A flag shared by several owners and read without a lock: `Rc<Cell<bool>>` or
-    /// `Arc<AtomicBool>`. Clones share the flag. Reach through it with [`MutableBoolHelper`];
-    /// create it with `Default`.
-    type Flag: Clone + Default + MutableBoolHelper;
+    /// A flag shared by several owners and read without a lock, which can only be raised:
+    /// [`LocalFlag`] (an `Rc<Cell<bool>>`) or [`SharedFlag`] (an `Arc<AtomicBool>`). Clones share
+    /// the flag. Reach through it with [`RaiseOnlyFlag`]; create it lowered with `Default`.
+    type Flag: Clone + Default + RaiseOnlyFlag;
     /// The mode joined with another one: [`Shared`] if either is. An operator with several sources
     /// computes its own mode with it; see [`Joined`].
     type Or<M: ThreadMode>: ThreadMode;
@@ -142,7 +142,7 @@ pub struct Shared(());
 impl ThreadMode for Local {
     type Ptr<T> = Rc<RefCell<T>>;
     type Weak<T> = std::rc::Weak<RefCell<T>>;
-    type Flag = Rc<Cell<bool>>;
+    type Flag = LocalFlag;
     type Or<M: ThreadMode> = M;
 
     fn ptr<T>(value: T) -> Self::Ptr<T> {
@@ -159,7 +159,7 @@ impl ThreadMode for Local {
 impl ThreadMode for Shared {
     type Ptr<T> = Arc<Mutex<T>>;
     type Weak<T> = std::sync::Weak<Mutex<T>>;
-    type Flag = Arc<AtomicBool>;
+    type Flag = SharedFlag;
     type Or<M: ThreadMode> = Shared;
 
     fn ptr<T>(value: T) -> Self::Ptr<T> {

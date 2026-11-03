@@ -105,7 +105,7 @@ use crate::{
     },
     thread_mode::{
         Local, Shared, ThreadMode,
-        mutable::{MutableBoolHelper, MutableHelper},
+        mutable::{MutableHelper, RaiseOnlyFlag},
     },
     utils::{on_panic::on_panic, pending_events::PendingEvents},
 };
@@ -217,7 +217,7 @@ struct Pipe<T, E, M: ThreadMode, OR> {
 impl<T, E, M: ThreadMode, OR> Pipe<T, E, M, OR> {
     /// Closes `state` under its lock, returning what it held, to be dropped after the lock.
     fn close_state(&self, state: &mut State<T, E, OR>) -> State<T, E, OR> {
-        self.is_closed.write(true);
+        self.is_closed.raise();
         std::mem::replace(state, State::Vacant)
     }
 
@@ -246,7 +246,7 @@ impl<T, E, M: ThreadMode, OR> Drop for UnicastSender<T, E, M, OR> {
     fn drop(&mut self) {
         if let Some(observer) = self.observer.take() {
             // Held here, so the state is vacant: raising the flag closes the pipe.
-            self.pipe.is_closed.write(true);
+            self.pipe.is_closed.raise();
             drop(observer);
             return;
         }
@@ -279,7 +279,7 @@ impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
     /// It turns true at once, while the observer may stay alive until the sender releases it, as
     /// the [module documentation](self#releasing-the-observer) describes.
     pub fn is_closed(&self) -> bool {
-        self.pipe.is_closed.read()
+        self.pipe.is_closed.is_raised()
     }
 
     /// Sends the event that `payload` makes while the sender does not hold the observer. On
@@ -293,7 +293,7 @@ impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
                     let rejected = pending.push(into_event(payload));
                     (Unheld::Queued, None, rejected, None)
                 }
-                State::Attached(_) if !self.pipe.is_closed.read() => {
+                State::Attached(_) if !self.pipe.is_closed.is_raised() => {
                     let State::Attached(observer) = std::mem::replace(current, State::Vacant)
                     else {
                         unreachable!()
@@ -339,7 +339,7 @@ impl<T, E, M: ThreadMode, OR: Observer<T, E>> Observer<T, E> for UnicastSender<T
         };
         let observer = self.observer.take().expect("the sender holds the observer");
         // The drop of the sender, right after this, closes the pipe.
-        if self.pipe.is_closed.read() {
+        if self.pipe.is_closed.is_raised() {
             drop(observer);
             drop(termination);
         } else {
@@ -355,23 +355,23 @@ impl<T, E, M: ThreadMode, OR: Observer<T, E>> UnicastSender<T, E, M, OR> {
     /// since disposing from inside the notification is how a consumer usually stops: the observer
     /// is then released at once instead of at the next event.
     fn send_held(&mut self, value: T) -> Flow {
-        if !self.pipe.is_closed.read() {
+        if !self.pipe.is_closed.is_raised() {
             let observer = self
                 .observer
                 .as_mut()
                 .expect("the sender holds the observer");
             // A panicking observer closes the pipe, as it does during the replay; the sender then
             // drops it at the next event or on its own drop.
-            let close_on_panic = on_panic(|| self.pipe.is_closed.write(true));
+            let close_on_panic = on_panic(|| self.pipe.is_closed.raise());
             let flow = observer.on_next(value); // Notify without the lock
             drop(close_on_panic);
-            if flow.is_continue() && !self.pipe.is_closed.read() {
+            if flow.is_continue() && !self.pipe.is_closed.is_raised() {
                 return Flow::Continue;
             }
         }
         // The state is vacant, so raising the flag closes the pipe. An undelivered value is dropped
         // after the observer.
-        self.pipe.is_closed.write(true);
+        self.pipe.is_closed.raise();
         drop(self.observer.take());
         Flow::Stop
     }
@@ -457,7 +457,7 @@ pub struct Disposal<M: ThreadMode>(#[educe(Debug(ignore))] M::Flag);
 
 impl<M: ThreadMode> Disposable for Disposal<M> {
     fn dispose(self) {
-        self.0.write(true);
+        self.0.raise();
     }
 }
 
@@ -480,7 +480,10 @@ fn deliver<T, E, M: ThreadMode, OR: Observer<T, E>>(pipe: &Pipe<T, E, M, OR>, mu
     loop {
         // No disposal exists yet, and the sender closes the pipe only once it holds the observer.
         // Asserted outside the lock, which a failing assertion would otherwise poison.
-        debug_assert!(!pipe.is_closed.read(), "the replay runs on an open pipe");
+        debug_assert!(
+            !pipe.is_closed.is_raised(),
+            "the replay runs on an open pipe"
+        );
         let step: Step<T, E, OR> = pipe.state.with_mut(|current| {
             // The replay holds the observer, so neither the state nor the sender can.
             let State::Pending(pending) = &mut *current else {

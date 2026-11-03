@@ -50,6 +50,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `ThreadMode::Flag` can only be raised. It is `thread_mode::mutable::LocalFlag` or
+  `SharedFlag` instead of `Rc<Cell<bool>>` / `Arc<AtomicBool>`, reached through the new
+  `RaiseOnlyFlag` trait — `raise()` and `is_raised()` — so a flag seen raised stays raised. A
+  state that turns back belongs under the lock of `ThreadMode::Ptr`.
 - `scheduler::drive` accepts a `sleep` whose future resolves to anything, not only to `()`; what
   it resolves to is ignored, only its completion counts. A runtime timer that answers a value —
   smol's `Timer::after`, which resolves to an `Instant` — is handed over as it is, instead of
@@ -70,6 +74,12 @@ All notable changes to this project are documented here. The format follows
   callback, as an `Option`. A model that stops its caller, an inner observable that has been
   superseded say, calls `UpdateOutcome::answering_stop` instead of returning a `Flow` as its
   result. `DeliveryStopped` is removed.
+
+### Removed
+
+- **Breaking:** `thread_mode::mutable::MutableBoolHelper`. It read and wrote the flag of either
+  mode as a `bool`, which a flag no longer offers; an `AtomicBool` or a `Cell<bool>` of your own
+  is read and written with its own methods.
 
 ## [2.0.1] - 2026-10-28
 

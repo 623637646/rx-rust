@@ -41,7 +41,7 @@ pub trait Observable<OR>: ObservableTypes {
 pub trait ThreadMode: 'static {                     // sealed; Local / Shared are never instantiated
     type Ptr<T>: Clone + MutableHelper<Value = T>;    // Rc<RefCell<T>>   / Arc<Mutex<T>>
     type Weak<T>: Clone;                              // rc::Weak         / sync::Weak
-    type Flag: Clone + Default + MutableBoolHelper;  // Rc<Cell<bool>>   / Arc<AtomicBool>
+    type Flag: Clone + Default + RaiseOnlyFlag;      // LocalFlag        / SharedFlag
     type Or<M: ThreadMode>: ThreadMode;               // Local.Or<M> = M, Shared.Or<M> = Shared
     fn ptr<T>(value: T) -> Self::Ptr<T>;
     fn downgrade<T>(ptr: &Self::Ptr<T>) -> Self::Weak<T>;
@@ -146,7 +146,17 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    because `Observable<OR>` has no associated type, so each subscription picks it.
    `hook_on_subscription` / `hook_on_termination` follow the same split. `Emitter` lives in
    `observer::emitter`, since it is not specific to `Create`, and `Emitter::new` is public.
-10. **The features are additive.** `single-threaded` and `utils::types` are gone; every scheduler
+10. **A flag can only be raised.** `M::Flag` is a `LocalFlag` (an `Rc<Cell<bool>>`) or a
+    `SharedFlag` (an `Arc<AtomicBool>`), with private fields, reached through `RaiseOnlyFlag`:
+    `raise` and `is_raised`, nothing that lowers it or sets a value. Every flag of the crate says
+    that something happened for good — a subscription disposed, a pipe closed, a delivery
+    stopped — and the code reading it without a lock relies on that: `LockedCore::after_stop`
+    reads the flag raised, then locks, and must find the core stopped. The type guarantees it, so
+    no call site has to be checked for it. The newtypes keep it from being bypassed through the
+    concrete type, which `<Local as ThreadMode>::Flag` normalizes to. A bool that goes back and
+    forth has to agree with the state it describes, so it belongs under that state's lock, in the
+    `M::Ptr<_>`. See [A `bool` flag](#a-bool-flag--replaced) below.
+11. **The features are additive.** `single-threaded` and `utils::types` are gone; every scheduler
     feature can be enabled together, and a binary can hold `Local` and `Shared` pipelines side by
     side.
 
@@ -210,3 +220,12 @@ still a `cfg`. That step kept `'or` (a context's disposal still boxed the observ
 `E` as type parameters (as associated types they hung rustc with the bounds of the time) and left
 the context helpers unchanged. Points 3 and 4 above removed all three; the hang does not occur with
 the current bounds, on stable or on the MSRV (`rust-version` in `Cargo.toml`).
+
+### A `bool` flag — replaced
+
+`M::Flag` was the bare `Rc<Cell<bool>>` / `Arc<AtomicBool>`, reached through a public
+`MutableBoolHelper` (`read`, `write(bool)`, `set_if_changed(bool)`) implemented for both and for
+the `Cell` and `AtomicBool` inside. Every flag of the crate was only ever raised, but that held
+call site by call site, and a reader that relied on it had to trust all of them. The helper went
+with the bare types: without a generic flag to reach, it was only a shorthand for the `Ordering`
+of an `AtomicBool`, which the tests now spell out as they do for their `AtomicUsize` counters.

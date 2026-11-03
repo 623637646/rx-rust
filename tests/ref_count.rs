@@ -21,14 +21,13 @@ use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::subject::replay_subject::ReplaySubject;
 use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableHelper};
+use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Flow, Observer, Termination},
 };
 use std::convert::Infallible;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -245,8 +244,10 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
 
     impl Drop for RecordSourceStateOnDrop {
         fn drop(&mut self) {
-            self.disconnected_when_dropped
-                .write(self.source_disconnected.read());
+            self.disconnected_when_dropped.store(
+                self.source_disconnected.load(Ordering::SeqCst),
+                Ordering::SeqCst,
+            );
         }
     }
 
@@ -256,7 +257,7 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
     let source = Create::shared_boxed(move |_: SendBoxedObserver<'_, (), Infallible>| {
         let source_disconnected = source_disconnected_cloned.clone();
         DisposeOnDrop::new(CallbackDisposal::new(move || {
-            source_disconnected.write(true);
+            source_disconnected.store(true, Ordering::SeqCst);
         }))
     });
     let observable = source.publish().ref_count();
@@ -266,13 +267,13 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
     };
 
     let subscription = observable.subscribe(observer);
-    assert!(!source_disconnected.read());
-    assert!(!disconnected_when_observer_dropped.read());
+    assert!(!source_disconnected.load(Ordering::SeqCst));
+    assert!(!disconnected_when_observer_dropped.load(Ordering::SeqCst));
 
     subscription.dispose();
 
-    assert!(source_disconnected.read());
-    assert!(!disconnected_when_observer_dropped.read());
+    assert!(source_disconnected.load(Ordering::SeqCst));
+    assert!(!disconnected_when_observer_dropped.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -1874,7 +1875,7 @@ fn test_race_condition() {
         let observable = Create::shared_boxed(
             move |mut observer: SendBoxedObserver<'static, i32, Infallible>| {
                 if connected_of_source.fetch_add(1, Ordering::SeqCst) != 0 {
-                    overlapped_of_source.write(true);
+                    overlapped_of_source.store(true, Ordering::SeqCst);
                 }
                 let _ = observer.on_next(1);
                 observer.on_termination(Termination::Completed);
@@ -1916,7 +1917,10 @@ fn test_race_condition() {
             assert!(values == [1] || values.is_empty(), "{values:?}");
             assert_eq!(checker.state(), State::Completed);
         }
-        assert!(!overlapped.read(), "the source was connected twice at once");
+        assert!(
+            !overlapped.load(Ordering::SeqCst),
+            "the source was connected twice at once"
+        );
         drop(results);
         assert_eq!(connected.load(Ordering::SeqCst), 0);
     }
@@ -1940,7 +1944,7 @@ fn test_race_condition_with_unsubscribe() {
         let observable = Create::shared_boxed(
             move |mut observer: SendBoxedObserver<'static, i32, Infallible>| {
                 if connected_of_source.fetch_add(1, Ordering::SeqCst) != 0 {
-                    overlapped_of_source.write(true);
+                    overlapped_of_source.store(true, Ordering::SeqCst);
                 }
                 let _ = observer.on_next(1);
                 let connected = connected_of_source.clone();
@@ -1970,7 +1974,10 @@ fn test_race_condition_with_unsubscribe() {
         for handle in handles {
             handle.join().unwrap();
         }
-        assert!(!overlapped.read(), "the source was connected twice at once");
+        assert!(
+            !overlapped.load(Ordering::SeqCst),
+            "the source was connected twice at once"
+        );
         assert_eq!(connected.load(Ordering::SeqCst), 0);
     }
 }
@@ -2164,7 +2171,7 @@ macro_rules! connection_counting_source {
                 let _ = observer.on_next(1);
                 let is_disconnected = is_disconnected.clone();
                 DisposeOnDrop::new(CallbackDisposal::new(move || {
-                    is_disconnected.write(true);
+                    is_disconnected.store(true, Ordering::SeqCst);
                 }))
             },
         )
@@ -2192,12 +2199,12 @@ fn test_panicking_late_subscriber_keeps_the_ref_count() {
         // The subject replays `1` inside `subscribe`, while this subscriber is counted in.
         let _subscription = observable_of_panic.subscribe(PanicOnNext(Some(panic_on_drop)));
     });
-    assert!(!is_disconnected.read());
+    assert!(!is_disconnected.load(Ordering::SeqCst));
 
     // The subscriber that never came back is counted out again, so the last live subscription is
     // still the one that disconnects the source.
     drop(subscription);
-    assert!(is_disconnected.read());
+    assert!(is_disconnected.load(Ordering::SeqCst));
     assert_eq!(connections.load(Ordering::SeqCst), 1);
 
     // Held until here, so that the disconnection above is the ref count's own, and not the state
@@ -2231,7 +2238,7 @@ fn test_panicking_first_subscriber_gives_the_controller_back() {
     assert_eq!(connections.load(Ordering::SeqCst), 1);
 
     drop(subscription);
-    assert!(is_disconnected.read());
+    assert!(is_disconnected.load(Ordering::SeqCst));
     drop(observable);
 }
 
@@ -2255,7 +2262,7 @@ fn test_panicking_connection_gives_the_controller_back() {
                 let _ = observer.on_next(1);
                 let is_disconnected = is_disconnected.clone();
                 DisposeOnDrop::new(CallbackDisposal::new(move || {
-                    is_disconnected.write(true);
+                    is_disconnected.store(true, Ordering::SeqCst);
                 }))
             },
         )
@@ -2278,7 +2285,7 @@ fn test_panicking_connection_gives_the_controller_back() {
 
     // The subscriber whose connection panicked is counted out, so this one is the last.
     drop(subscription);
-    assert!(is_disconnected.read());
+    assert!(is_disconnected.load(Ordering::SeqCst));
     drop(observable);
 }
 
@@ -2401,7 +2408,7 @@ fn test_panicking_source_clone_gives_the_controller_back() {
 
     // The subscriber whose connection panicked is counted out, so this one is the last.
     drop(subscription);
-    assert!(is_disconnected.read());
+    assert!(is_disconnected.load(Ordering::SeqCst));
     drop(observable);
 }
 
@@ -2448,9 +2455,9 @@ fn test_panicking_subscriber_does_not_connect_while_unwinding() {
 
     // The waiting subscriber is still counted, so it is the last one that disconnects.
     drop(subscription);
-    assert!(!is_disconnected.read());
+    assert!(!is_disconnected.load(Ordering::SeqCst));
     drop(waiting.take_value());
-    assert!(is_disconnected.read());
+    assert!(is_disconnected.load(Ordering::SeqCst));
     drop(observable);
 }
 
@@ -2517,9 +2524,9 @@ fn test_disposal_does_not_connect_while_unwinding() {
     // The subscriber disposed during the unwind is counted out, and the waiting one is still
     // counted, so it is the last one that disconnects.
     drop(subscription);
-    assert!(!is_disconnected.read());
+    assert!(!is_disconnected.load(Ordering::SeqCst));
     drop(waiting.take_value());
-    assert!(is_disconnected.read());
+    assert!(is_disconnected.load(Ordering::SeqCst));
     drop(observable);
 }
 

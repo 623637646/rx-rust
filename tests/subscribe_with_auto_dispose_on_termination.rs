@@ -1,14 +1,13 @@
 mod tests_utils;
 
 use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observer::{Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use std::convert::Infallible;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// An observer running `callback` from inside its `on_termination`.
@@ -34,11 +33,11 @@ fn test_completed() {
         |observer| {
             observer_slot = Some(observer);
             DisposeOnDrop::new(CallbackDisposal::new(move || {
-                is_disposed_of_source.write(true);
+                is_disposed_of_source.store(true, Ordering::SeqCst);
             }))
         },
     );
-    assert!(!is_disposed.read());
+    assert!(!is_disposed.load(Ordering::SeqCst));
 
     observer_slot
         .take()
@@ -46,7 +45,7 @@ fn test_completed() {
         .on_termination(Termination::Completed);
 
     // The termination disposes the source instead of waiting for the subscription to be dropped.
-    assert!(is_disposed.read());
+    assert!(is_disposed.load(Ordering::SeqCst));
 }
 
 #[cfg(panic = "unwind")]
@@ -68,7 +67,7 @@ fn test_panicking_on_termination_disposes_the_source() {
         |observer| {
             observer_slot = Some(observer);
             DisposeOnDrop::new(CallbackDisposal::new(move || {
-                is_disposed_of_source.write(true);
+                is_disposed_of_source.store(true, Ordering::SeqCst);
             }))
         },
     );
@@ -83,5 +82,5 @@ fn test_panicking_on_termination_disposes_the_source() {
 
     // The source is disposed on the way out of the panic, instead of staying subscribed until the
     // subscription is dropped.
-    assert!(is_disposed.read());
+    assert!(is_disposed.load(Ordering::SeqCst));
 }

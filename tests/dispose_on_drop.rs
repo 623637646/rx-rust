@@ -2,8 +2,8 @@ mod tests_utils;
 
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop};
-use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableHelper};
-use std::sync::atomic::AtomicBool;
+use rx_rust::thread_mode::mutable::MutableHelper;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tests_utils::test_struct::TestStruct;
 
@@ -13,8 +13,8 @@ struct TestDisposal {
 
 impl Disposable for TestDisposal {
     fn dispose(self) {
-        assert!(!self.disposed.read());
-        self.disposed.write(true);
+        assert!(!self.disposed.load(Ordering::SeqCst));
+        self.disposed.store(true, Ordering::SeqCst);
     }
 }
 
@@ -25,9 +25,9 @@ fn test_disposal_dispose() {
         disposed: disposed.clone(),
     };
     let disposal = DisposeOnDrop::new(test_disposal);
-    assert!(!disposed.read());
+    assert!(!disposed.load(Ordering::SeqCst));
     disposal.dispose();
-    assert!(disposed.read());
+    assert!(disposed.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -38,9 +38,9 @@ fn test_disposal_dropped() {
             disposed: disposed.clone(),
         };
         let _disposal = DisposeOnDrop::new(test_disposal);
-        assert!(!disposed.read());
+        assert!(!disposed.load(Ordering::SeqCst));
     }
-    assert!(disposed.read());
+    assert!(disposed.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -48,12 +48,12 @@ fn test_callback_dispose() {
     let disposed = Arc::new(AtomicBool::new(false));
     let disposed_clone = disposed.clone();
     let disposal = DisposeOnDrop::new(CallbackDisposal::new(move || {
-        assert!(!disposed_clone.read());
-        disposed_clone.write(true);
+        assert!(!disposed_clone.load(Ordering::SeqCst));
+        disposed_clone.store(true, Ordering::SeqCst);
     }));
-    assert!(!disposed.read());
+    assert!(!disposed.load(Ordering::SeqCst));
     disposal.dispose();
-    assert!(disposed.read());
+    assert!(disposed.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -62,12 +62,12 @@ fn test_callback_dropped() {
     {
         let disposed_clone = disposed.clone();
         let _disposal = DisposeOnDrop::new(CallbackDisposal::new(move || {
-            assert!(!disposed_clone.read());
-            disposed_clone.write(true);
+            assert!(!disposed_clone.load(Ordering::SeqCst));
+            disposed_clone.store(true, Ordering::SeqCst);
         }));
-        assert!(!disposed.read());
+        assert!(!disposed.load(Ordering::SeqCst));
     }
-    assert!(disposed.read());
+    assert!(disposed.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -81,11 +81,11 @@ fn test_chain_disposable() {
         disposed: disposed_2.clone(),
     };
     let disposal = DisposeOnDrop::new(test_disposal_1).preceded_by(test_disposal_2);
-    assert!(!disposed_1.read());
-    assert!(!disposed_2.read());
+    assert!(!disposed_1.load(Ordering::SeqCst));
+    assert!(!disposed_2.load(Ordering::SeqCst));
     disposal.dispose();
-    assert!(disposed_1.read());
-    assert!(disposed_2.read());
+    assert!(disposed_1.load(Ordering::SeqCst));
+    assert!(disposed_2.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -99,11 +99,11 @@ fn test_chain_disposable_then() {
         disposed: disposed_2.clone(),
     };
     let disposal = DisposeOnDrop::new(test_disposal_1).then(test_disposal_2);
-    assert!(!disposed_1.read());
-    assert!(!disposed_2.read());
+    assert!(!disposed_1.load(Ordering::SeqCst));
+    assert!(!disposed_2.load(Ordering::SeqCst));
     disposal.dispose();
-    assert!(disposed_1.read());
-    assert!(disposed_2.read());
+    assert!(disposed_1.load(Ordering::SeqCst));
+    assert!(disposed_2.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -119,11 +119,11 @@ fn test_chain_wrapped_disposals() {
     let disposal_1 = DisposeOnDrop::new(test_disposal_1);
     let disposal_2 = DisposeOnDrop::new(test_disposal_2);
     let disposal = disposal_1.preceded_by_wrapped(disposal_2);
-    assert!(!disposed_1.read());
-    assert!(!disposed_2.read());
+    assert!(!disposed_1.load(Ordering::SeqCst));
+    assert!(!disposed_2.load(Ordering::SeqCst));
     disposal.dispose();
-    assert!(disposed_1.read());
-    assert!(disposed_2.read());
+    assert!(disposed_1.load(Ordering::SeqCst));
+    assert!(disposed_2.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -152,15 +152,15 @@ fn test_conversion_preserves_disposal() {
         disposed: disposed.clone(),
     }
     .into_dispose_on_drop();
-    assert!(!disposed.read());
+    assert!(!disposed.load(Ordering::SeqCst));
 
     let disposal = disposal.map_inner(DisposableExt::into_boxed);
-    assert!(!disposed.read());
+    assert!(!disposed.load(Ordering::SeqCst));
     let disposal = disposal.map_inner_into::<Converted<_>>();
-    assert!(!disposed.read());
+    assert!(!disposed.load(Ordering::SeqCst));
 
     drop(disposal);
-    assert!(disposed.read());
+    assert!(disposed.load(Ordering::SeqCst));
 }
 
 #[test]

@@ -12,14 +12,13 @@ use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     observable::{ObservableExt, stream::ObservableStream},
     observer::{Observer, Termination},
 };
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -67,21 +66,21 @@ fn test_completed_lazy_subscription() {
     let subscribed = Arc::new(AtomicBool::new(false));
     let subscribed_cloned = subscribed.clone();
     let observable = Create::shared_boxed(move |mut observer| {
-        subscribed_cloned.write(true);
+        subscribed_cloned.store(true, Ordering::SeqCst);
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Completed);
         DisposeOnDrop::default()
     });
 
     let stream = observable.into_stream();
-    assert!(!subscribed.read());
+    assert!(!subscribed.load(Ordering::SeqCst));
 
     time.advance_by(Duration::ZERO);
-    assert!(!subscribed.read());
+    assert!(!subscribed.load(Ordering::SeqCst));
 
     let (checker, _subscription) = Checker::<_, Infallible>::from_stream(stream, scheduler.clone());
     time.advance_by(Duration::ZERO);
-    assert!(subscribed.read());
+    assert!(subscribed.load(Ordering::SeqCst));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }

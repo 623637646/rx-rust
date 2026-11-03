@@ -19,7 +19,7 @@ use rx_rust::scheduler::{
 };
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use std::convert::Infallible;
 use std::future::Future;
 use std::pin::pin;
@@ -773,18 +773,21 @@ fn test_drive_delay_too_long_never_ends() {
     let ran = Arc::new(AtomicBool::new(false));
     let slept_sleep = slept.clone();
     let ran_task = ran.clone();
-    let task = Task::once(move || ran_task.write(true), |task| task());
+    let task = Task::once(
+        move || ran_task.store(true, Ordering::SeqCst),
+        |task| task(),
+    );
 
     let clock = time.scheduler().clock();
     let mut future = pin!(drive(task, Some(Duration::MAX), clock, move |_| {
-        slept_sleep.write(true);
+        slept_sleep.store(true, Ordering::SeqCst);
         std::future::ready(())
     },));
     let mut cx = Context::from_waker(Waker::noop());
     assert!(future.as_mut().poll(&mut cx).is_pending());
     assert!(future.as_mut().poll(&mut cx).is_pending());
-    assert!(!slept.read());
-    assert!(!ran.read());
+    assert!(!slept.load(Ordering::SeqCst));
+    assert!(!ran.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -1412,13 +1415,13 @@ fn test_main_loop_disposes_a_queued_task() {
     let disposal = scheduler.schedule(
         move || {
             drop(probe);
-            ran_task.write(true);
+            ran_task.store(true, Ordering::SeqCst);
         },
         Some(Duration::from_secs(1)),
     );
 
     disposal.dispose();
     assert!(dropped_rx.recv_timeout(DURATION_100_MS).is_ok());
-    assert!(!ran.read());
+    assert!(!ran.load(Ordering::SeqCst));
     main_loop.quit();
 }
