@@ -110,19 +110,6 @@ impl<T, E> PendingEvents<T, E> {
         None
     }
 
-    /// Takes the next event to deliver, which is the termination once no value is left.
-    pub(crate) fn pop(&mut self) -> Option<Event<T, E>> {
-        match self.pop_next() {
-            Some(value) => Some(Event::Next(value)),
-            None => self.take_termination().map(Event::Termination),
-        }
-    }
-
-    /// Takes the next value to deliver, leaving the termination in place.
-    pub(crate) fn pop_next(&mut self) -> Option<T> {
-        self.values.pop_front()
-    }
-
     /// Moves every queued value into `batch`, which must be empty, leaving the termination in
     /// place, and returns whether there was any. The queue keeps the allocation of `batch` in
     /// exchange, so a loop that keeps taking batches goes back and forth between two buffers
@@ -173,10 +160,8 @@ mod tests {
         assert!(pending.push(Event::Next(3)).is_some());
         batch.clear();
         assert!(!pending.take_values_into(&mut batch));
-        assert_eq!(
-            pending.pop(),
-            Some(Event::Termination(Termination::Completed))
-        );
+        assert_eq!(pending.take_termination(), Some(Termination::Completed));
+        assert!(pending.is_empty());
     }
 
     #[test]
@@ -191,11 +176,10 @@ mod tests {
         // Nothing can follow a termination: the event is handed back to be dropped elsewhere.
         assert!(pending.push(Event::Next(2)).is_some());
 
-        assert_eq!(pending.pop(), Some(Event::Next(1)));
-        assert_eq!(
-            pending.pop(),
-            Some(Event::Termination(Termination::Completed))
-        );
-        assert_eq!(pending.pop(), None);
+        let mut batch = VecDeque::new();
+        assert!(pending.take_values_into(&mut batch));
+        assert_eq!(batch, [1]);
+        assert_eq!(pending.take_termination(), Some(Termination::Completed));
+        assert_eq!(pending.take_termination(), None);
     }
 }

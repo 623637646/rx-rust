@@ -86,6 +86,10 @@ All notable changes to this project are documented here. The format follows
   raised with the lock as the subscription is disposed. The values of a batch left undelivered,
   as the subscription is disposed or the downstream stops, are now dropped after the operator's
   sources are released rather than before.
+- A unicast subject replays the events buffered before its subscription in batches, taking the
+  lock of its pipe once per batch of the values queued meanwhile rather than once per value.
+- A unicast sender releases the shared pipe state once it takes over the observer and the
+  subscribing call returns, instead of retaining that allocation until the sender is dropped.
 - `observe_on` starts its task before it subscribes to the source. On a scheduler running beside
   the subscribing thread, the values a synchronous source sends as it is subscribed are delivered
   meanwhile, and a downstream that stops — a `take(1)` — stops the source before its subscription

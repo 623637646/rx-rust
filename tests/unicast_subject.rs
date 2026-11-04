@@ -3,16 +3,20 @@ mod tests_utils;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::test_scheduler::block_on;
+use futures::executor::ThreadPool;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::{Observable, ObservableExt};
 use rx_rust::observer::{Flow, Observer, Termination};
+use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
 use rx_rust::subject::unicast_subject::{self, BoxedUnicastSender};
 use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::thread_mode::mutable::MutableHelper;
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
+use std::time::Duration;
 use tests_utils::checker::{Checker, CheckerObserver};
+use tests_utils::scheduler_ext::SchedulerExt;
 use tests_utils::test_struct::TestStruct;
 
 #[test]
@@ -421,6 +425,86 @@ fn test_async() {
     });
 }
 
+/// The first value holds the replay open while another thread queues the second. Once released,
+/// the replay and the sender race over the rest: each value must arrive once and in order, until
+/// completion or the observer's stop, including the transition to direct delivery by the sender.
+fn race_subscription_with_next(stop_after: Option<usize>) {
+    const VALUES: usize = 100;
+    const TIMEOUT: Duration = Duration::from_secs(5);
+    let scheduler = ThreadPoolScheduler::from_pool(ThreadPool::new().unwrap());
+
+    for _ in 0..500 {
+        let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
+        assert!(sender.on_next(0).is_continue());
+        let (checker, observer) = match stop_after {
+            Some(count) => Checker::stopping_after(count),
+            None => Checker::new(),
+        };
+        let (started, first_value) = mpsc::channel();
+        let (resume, remaining_values) = mpsc::channel();
+        let (subscribed, subscription) = mpsc::channel();
+        let _task = scheduler.schedule(
+            move || {
+                let subscription = observable
+                    .hook_on_next(move |downstream, value| {
+                        let flow = downstream.on_next(value);
+                        if value == 0 {
+                            started.send(()).unwrap();
+                            remaining_values
+                                .recv_timeout(TIMEOUT)
+                                .expect("the sender releases the replay");
+                        }
+                        flow
+                    })
+                    .subscribe(observer);
+                subscribed.send(subscription).unwrap();
+            },
+            None,
+        );
+
+        first_value
+            .recv_timeout(TIMEOUT)
+            .expect("the replay delivers the first value");
+        assert!(sender.on_next(1).is_continue());
+        resume.send(()).unwrap();
+        for value in 2..VALUES {
+            if sender.on_next(value).is_stop() {
+                assert!(stop_after.is_some(), "the observer has not stopped");
+                break;
+            }
+        }
+
+        match stop_after {
+            None => {
+                sender.on_termination(Termination::Completed);
+                let _subscription = subscription
+                    .recv_timeout(TIMEOUT)
+                    .expect("the replay finishes subscribing");
+                assert_eq!(checker.values(), (0..VALUES).collect::<Vec<_>>());
+                assert_eq!(checker.state(), State::Completed);
+            }
+            Some(count) => {
+                let _subscription = subscription
+                    .recv_timeout(TIMEOUT)
+                    .expect("the replay finishes subscribing");
+                assert!(sender.is_closed());
+                assert_eq!(checker.values(), (0..count).collect::<Vec<_>>());
+                assert_eq!(checker.state(), State::Dropped);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_race_condition() {
+    race_subscription_with_next(None);
+}
+
+#[test]
+fn test_race_condition_stop_on_next() {
+    race_subscription_with_next(Some(3));
+}
+
 /// Sending a value from an observer that the sender itself is delivering to is impossible: the
 /// sender is uniquely owned, so [`Observer::on_next`] holds the only handle to it while the
 /// observer runs. The re-entrant path is therefore the replay of the buffered values, which
@@ -741,6 +825,29 @@ fn test_drop_replayed_value_outside_lock() {
 }
 
 #[test]
+fn test_drop_replayed_values_after_a_stop_outside_lock() {
+    let drops = DropCount::new();
+    let sender_holder: SenderHolder = Arc::new(Mutex::new(None));
+    let (mut sender, observable) = unicast_subject::shared_boxed::<DropProbe, Infallible>();
+    for _ in 0..3 {
+        assert!(
+            sender
+                .on_next(reentrant_probe(&sender_holder, &drops))
+                .is_continue()
+        );
+    }
+    sender_holder.replace_value(Some(sender));
+
+    // The replay takes the three values together and stops after the first. The value its drop
+    // re-enters with is queued behind them, and dropped as the stop closes the pipe; the two left
+    // in the batch are dropped after it, each re-entering the closed pipe, which drops what they
+    // send.
+    let _subscription = observable.subscribe_with_callback(|_value| Flow::Stop, |_| {});
+    assert_eq!(drops.get(), 6);
+    assert!(sender_holder.take_value().unwrap().is_closed());
+}
+
+#[test]
 fn test_drop_delivered_value_outside_lock() {
     let drops = DropCount::new();
     let sender_holder: SenderHolder = Arc::new(Mutex::new(None));
@@ -758,7 +865,7 @@ fn test_drop_delivered_value_outside_lock() {
     );
     assert_eq!(drops.get(), 1);
 
-    // The observer was parked back, so the pipe keeps working.
+    // The sender holds the observer for the next direct delivery too.
     assert!(
         sender
             .on_next(reentrant_probe(&sender_holder, &drops))

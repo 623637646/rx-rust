@@ -44,7 +44,7 @@ use rx_rust::{
     },
     subject::{
         async_subject::AsyncSubject, behavior_subject::BehaviorSubject,
-        publish_subject::PublishSubject, replay_subject::ReplaySubject,
+        publish_subject::PublishSubject, replay_subject::ReplaySubject, unicast_subject,
     },
     thread_mode::{
         Local, Shared, ThreadMode,
@@ -254,6 +254,38 @@ fn test_async_subject() {
 }
 
 #[test]
+fn test_unicast_subject() {
+    let (mut sender, observable) = unicast_subject::local();
+    assert!(sender.on_next(Rc::new(1)).is_continue());
+    let (record, _subscription) = record(observable);
+    assert_eq!(record.values(), rcs([1]));
+
+    assert!(sender.on_next(Rc::new(2)).is_continue());
+    sender.on_termination(Termination::Error(Rc::new("error")));
+    assert_eq!(record.values(), rcs([1, 2]));
+    assert_eq!(
+        record.termination(),
+        Some(Termination::Error(Rc::new("error")))
+    );
+}
+
+#[test]
+fn test_unicast_subject_boxed() {
+    let (mut sender, observable) = unicast_subject::local_boxed();
+    for value in rcs([1, 2]) {
+        assert!(sender.on_next(value).is_continue());
+    }
+    sender.on_termination(Termination::Error(Rc::new("error")));
+
+    let (record, _subscription) = record(observable);
+    assert_eq!(record.values(), rcs([1, 2]));
+    assert_eq!(
+        record.termination(),
+        Some(Termination::Error(Rc::new("error")))
+    );
+}
+
+#[test]
 fn test_share_behavior() {
     // Each subscriber of a source that completes at once begins a new round, from the initial
     // value, with items that are not `Send`.
@@ -453,6 +485,17 @@ assert_send!(Emitter<Shared, SendBoxedObserver<'static, i32, ()>>);
 
 assert_not_send!(PublishSubject<'static, i32, (), Local>);
 assert_send!(PublishSubject<'static, i32, (), Shared>);
+
+assert_not_send!(unicast_subject::UnicastSender<i32, (), Local, ()>);
+assert_send!(unicast_subject::UnicastSender<i32, (), Shared, ()>);
+assert_not_send!(unicast_subject::UnicastObservable<i32, (), Local, ()>);
+assert_send!(unicast_subject::UnicastObservable<i32, (), Shared, ()>);
+assert_not_send!(unicast_subject::BoxedUnicastSender<'static, i32, (), Local>);
+assert_send!(unicast_subject::BoxedUnicastSender<'static, i32, (), Shared>);
+assert_not_send!(unicast_subject::BoxedUnicastObservable<'static, i32, (), Local>);
+assert_send!(unicast_subject::BoxedUnicastObservable<'static, i32, (), Shared>);
+assert_not_send!(unicast_subject::Disposal<Local>);
+assert_send!(unicast_subject::Disposal<Shared>);
 
 // A ref count's state follows its subject's mode.
 assert_not_send!(RefCount<FromIter<Vec<i32>>, PublishSubject<'static, i32, (), Local>>);

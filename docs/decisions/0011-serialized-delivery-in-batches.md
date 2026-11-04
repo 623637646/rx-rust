@@ -66,3 +66,20 @@ swaps the core for `Stopped` and drops what it held once the lock is released. A
 delivery's own that took a parked observer out of the cell used to exist too, but only the loop
 called it, where the cell is always empty: the tests that drove it on an idle delivery checked a
 path no caller reached, and now drive a `DeliveryStop` instead.
+
+## The unicast subject's replay takes its queue the same way
+
+Status: adopted.
+
+The unicast subject is not built on the serialized delivery: its replay, which runs once as the
+observable end is subscribed, used to take the lock of its pipe once per buffered value. It now
+takes the values queued so far with `take_values_into` too, and delivers them without the lock;
+values the sender queues meanwhile wait behind the batch, and the termination stays in the queue.
+No disposal exists during the replay, so only the observer can stop it between two values of a
+batch, by answering `Flow::Stop` or unwinding. The pipe is then closed, which drops what is still
+queued, and the replay drops the rest of its batch, then the observer: the same order as above.
+`test_drop_replayed_values_after_a_stop_outside_lock` pins it.
+
+Once the sender has taken the observer, it never looks at the pipe's state again, so it now lets
+go of its pointer to it: the buffer's allocation is freed once `subscribe` has returned too, rather
+than kept until the sender is dropped. The sender keeps the flag, which the disposal raises.
