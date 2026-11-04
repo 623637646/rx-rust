@@ -12,6 +12,11 @@
 //! the host's resources — is guarded by the delivery's lock, and the observer cell is only reached
 //! while that lock is held, so the two behave as one state.
 //!
+//! Under that lock, an idle core has its observer parked, a delivering core has its observer in
+//! the loop, and a stopped core owns no resources but may still have a parked observer. A raised
+//! flag implies a stopped core; the reverse does not hold, since a termination stops the core
+//! without raising the flag. [`StopView`] reports only the stops that raise it.
+//!
 //! A host that must change its own data, and emit the resulting events atomically, does so through
 //! [`SerializedDelivery::update`], which runs its callback under the same lock that then queues
 //! the events. The callback describes its outcome with an [`UpdateOutcome`], the one way to hand
@@ -47,12 +52,16 @@ pub use update_outcome::{DropDecided, DropUndecided, UpdateOutcome, Updated};
 ///
 /// `R` is whatever the host owns alongside the observer, its sources' subscriptions typically. It
 /// is dropped, outside the lock, once the delivery stops — after the terminal notification when the
-/// delivery stops by terminating. Otherwise the observer is released without a notification, and
-/// only after `R` is dropped, so that its release tells downstream that its sources are gone. The
-/// exceptions are the stops that cannot reach the observer: a [`DeliveryStop`] leaves it parked
-/// for the next event, update or handle dropped — typically the handle of a source, as `R`
-/// disposes it — and a stop that finds it held by a delivery loop on another thread leaves that
-/// loop to release it, which it may do while `R` is still being dropped.
+/// delivery stops by terminating. When the loop stops itself, it drops `R` before releasing the
+/// observer without a notification.
+///
+/// A [`DeliveryStop`] cannot reach the observer: it leaves a parked one for the next event, update
+/// or handle dropped — typically the handle of a source, as `R` disposes it — and one held by a
+/// delivery loop to that loop. Either may release the observer while `R` is still being dropped.
+///
+/// Dropping the last delivery handle also releases the observer without a notification. A stop
+/// handle may still own the core then, keeping `R` alive until it stops the core or is dropped:
+/// letting go of the observer is not itself a disposal.
 ///
 /// The pointers are the ones the thread mode `M` picks.
 #[derive(Educe)]
@@ -63,8 +72,8 @@ pub(crate) struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
     /// has nothing to release and takes no lock.
     #[educe(Debug(ignore))]
     core: FlaggedLock<M, Core<T, E, R>>,
-    // Declared after the core so that, when the last handle goes, the observer is released after
-    // the resources, as a stop releases them.
+    // Declared after the core so that the last owner of both releases the resources first. A
+    // DeliveryStop may keep only the core alive, letting the observer be released before them.
     #[educe(Debug(ignore))]
     observer: M::Ptr<Option<OR>>,
 }
@@ -104,18 +113,20 @@ impl<M: ThreadMode> StopView<M> {
     }
 }
 
-/// Stops `core`, raising its flag, and runs `callback` under the same lock: returns what the core
-/// held and what `callback` returned, to be dropped outside the lock, in that order.
+/// Stops `core`, raising its flag under the same lock, then drops what the core held — the queued
+/// events, then the resources — once the lock is released. Stopping again is a no-op.
 ///
-/// Every stop goes through here, whether or not it can reach the observer: a [`DeliveryStop`]
-/// passes a callback that does nothing, the delivery one that takes the observer out of its cell.
-/// Only a delivery that terminates ends elsewhere, in its loop, which consumes the observer. So
-/// the flag of the core is raised exactly when it has stopped other than by a termination.
-fn stop_core<M: ThreadMode, T, E, R, Out>(
-    core: &FlaggedLock<M, Core<T, E, R>>,
-    callback: impl FnOnce() -> Out,
-) -> (Core<T, E, R>, Out) {
-    core.raise_with(|core| (std::mem::replace(core, Core::Stopped), callback()))
+/// Every stop goes through here: a [`DeliveryStop`], and the delivery loop as its observer stops
+/// or unwinds. Neither touches the observer's cell — the first cannot name its type, the second
+/// holds the observer, leaving the cell empty — and the loop drops its observer after this
+/// returns, so both stops drop in one order: the queue, the resources, the observer. Only a
+/// delivery that terminates ends elsewhere, in its loop, which consumes the observer. So the flag
+/// of the core is raised exactly when it has stopped other than by a termination.
+fn stop_core<M: ThreadMode, T, E, R>(core: &FlaggedLock<M, Core<T, E, R>>) {
+    let previous = core.raise_with(|core| std::mem::replace(core, Core::Stopped));
+    // Outside the lock to avoid potential deadlock, and after the stop, so that what a drop sends
+    // is rejected.
+    drop(previous);
 }
 
 /// Everything a delivery holds except its observer.
@@ -128,7 +139,8 @@ enum Core<T, E, R> {
         pending: PendingEvents<T, E>,
         resources: R,
     },
-    /// The resources are gone. Every later event is rejected.
+    /// The resources have been moved out to be dropped or used outside the lock. Every later
+    /// event is rejected; their drop need not have finished yet.
     ///
     /// The one state that does not say where the observer is: a [`DeliveryStop`] that stopped an
     /// idle delivery cannot reach the cell, so the observer may still be parked there. Whoever
@@ -173,10 +185,9 @@ enum Step<T, E, OR, R> {
 impl<M: ThreadMode, T, E, R> DeliveryStop<M, T, E, R> {
     /// Stops the delivery. Stopping again is a no-op.
     pub(crate) fn stop(&self) {
-        // What the state held, the queued events and the resources, is bound here and so dropped
-        // outside the lock. The observer's type is not known here, so an observer parked in its
-        // cell stays there for whoever finds the stop next.
-        let (_deferred_drop, ()) = stop_core(&self.core, || ());
+        // The observer's type is not known here, so an observer parked in its cell stays there
+        // for whoever finds the stop next.
+        stop_core(&self.core);
     }
 }
 
@@ -190,20 +201,6 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
             observer: M::ptr(Some(observer_builder(StopView(core.view())))),
             core,
         }
-    }
-
-    /// Stops the delivery, dropping the observer without notifying it. Stopping again is a no-op.
-    fn stop(&self) {
-        // The observer parked in its cell is taken under the same lock that stops the state, so it
-        // is this call that drops it, after what the state held: the sources are released before
-        // downstream is, and anything either drop emits is rejected. A loop running elsewhere
-        // holds the observer instead, leaving the cell empty, and drops it itself when it sees
-        // the stop.
-        let (deferred_drop, parked) = stop_core(&self.core, || self.observer.take_value());
-        // Outside the lock to avoid potential deadlock. Should the first drop unwind, the
-        // observer is still released, after it, by the unwind.
-        drop(deferred_drop);
-        drop(parked);
     }
 
     /// Creates the handle that stops this delivery without naming its observer.
@@ -330,15 +327,15 @@ where
     fn deliver(&self, mut observer: OR, mut next: Option<T>) -> Flow {
         loop {
             if let Some(value) = next.take() {
-                let guard = on_panic(|| self.stop());
+                // The unwind then drops the observer, after what the stop drops.
+                let guard = on_panic(|| stop_core(&self.core));
                 let flow = observer.on_next(value);
                 drop(guard);
                 if flow.is_stop() {
                     // It has ended its own stream or been disposed, so it is released like a
-                    // disposed observer instead of being terminated. The loop holds it, so `stop`
-                    // finds its cell empty and drops only what the state held; the observer is
-                    // dropped right after, in the order `stop` drops a parked one.
-                    self.stop();
+                    // disposed observer instead of being terminated: after what the state held, as
+                    // a `DeliveryStop` leaves it.
+                    stop_core(&self.core);
                     drop(observer);
                     return Flow::Stop;
                 }
@@ -1139,7 +1136,7 @@ mod tests {
         let log = new_log();
         let delivery = builder(&log).build();
 
-        delivery.stop();
+        delivery.stop_handle().stop();
         assert!(delivery.send(next(1)).is_stop());
         assert!(delivery.send(completed()).is_stop());
         assert_eq!(
@@ -1191,32 +1188,36 @@ mod tests {
     // MARK: - Stopping
 
     #[test]
-    fn test_stop_drops_the_observer_without_notifying_it_and_is_idempotent() {
+    fn test_a_delivery_stop_is_idempotent() {
         let log = new_log();
         let delivery = builder(&log).build();
+        let stop = delivery.stop_handle();
 
-        delivery.stop();
+        stop.stop();
+        assert_eq!(records(&log), [Record::ResourcesDropped]);
+
+        stop.stop();
+        assert_eq!(
+            records(&log),
+            [Record::ResourcesDropped],
+            "stopping again must drop nothing more"
+        );
+
+        // The observer is released by the next event, once, and never notified.
+        assert!(delivery.send(next(1)).is_stop());
+        assert!(delivery.send(next(2)).is_stop());
         assert_eq!(
             records(&log),
             [Record::ResourcesDropped, Record::ObserverDropped]
         );
-
-        delivery.stop();
-        assert_eq!(
-            records(&log),
-            [Record::ResourcesDropped, Record::ObserverDropped],
-            "stopping again must drop nothing more"
-        );
     }
 
     #[test]
-    fn test_stop_drops_the_observer_and_the_resources_outside_the_lock() {
+    fn test_a_delivery_stop_drops_the_resources_outside_the_lock() {
         let log = new_log();
         let mut builder = builder(&log);
         let handle = builder.handle();
-        let delivery = builder
-            .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
-            .build();
+        let delivery = builder.build();
         delivery
             .update(|resources| {
                 resources.on_drop(note_and_reenter(&handle, &log, "resources dropped"));
@@ -1225,16 +1226,16 @@ mod tests {
             .result()
             .expect("the delivery is idle");
 
-        delivery.stop();
+        delivery.stop_handle().stop();
 
-        // Both drops re-entered the delivery, so neither of them ran while the state was locked.
+        // The drop re-entered the delivery, so it did not run while the state was locked. What it
+        // sent is the next event, which releases the observer the stop left parked.
         assert_eq!(
             records(&log),
             [
                 Record::ResourcesDropped,
                 Record::Note("resources dropped"),
                 Record::ObserverDropped,
-                Record::Note("observer dropped"),
             ]
         );
     }
@@ -1245,7 +1246,7 @@ mod tests {
         let delivery = builder(&log)
             .on_next(|delivery, number| {
                 if number == 2 {
-                    delivery.stop();
+                    delivery.stop_handle().stop();
                 }
             })
             .build();
@@ -1288,7 +1289,7 @@ mod tests {
                 .is_stop()
         );
 
-        // Answering `Flow::Stop` stops the delivery, exactly as stopping it by hand does: the
+        // Answering `Flow::Stop` stops the delivery, exactly as a `DeliveryStop` does: the
         // observer, which the loop holds here, is released after what the state held.
         assert_eq!(values(&log), [1, 2]);
         assert_eq!(
@@ -1300,6 +1301,38 @@ mod tests {
             ]
         );
         assert!(delivery.send(next(4)).is_stop());
+    }
+
+    #[test]
+    fn test_an_observer_that_stops_drops_the_resources_outside_the_lock() {
+        let log = new_log();
+        let mut builder = builder(&log);
+        let handle = builder.handle();
+        let delivery = builder
+            .stop_after(1)
+            .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
+            .build();
+        delivery
+            .update(|resources| {
+                resources.on_drop(note_and_reenter(&handle, &log, "resources dropped"));
+                UpdateOutcome::empty()
+            })
+            .result()
+            .expect("the delivery is idle");
+
+        assert!(delivery.send(next(1)).is_stop());
+
+        // Both drops re-entered the delivery, so neither of them ran while the state was locked.
+        assert_eq!(
+            records(&log),
+            [
+                Record::Next(1),
+                Record::ResourcesDropped,
+                Record::Note("resources dropped"),
+                Record::ObserverDropped,
+                Record::Note("observer dropped"),
+            ]
+        );
     }
 
     #[test]
@@ -1325,7 +1358,7 @@ mod tests {
         let delivery = builder(&log)
             .on_next(|delivery, number| {
                 if number == 1 {
-                    delivery.stop();
+                    delivery.stop_handle().stop();
                 }
             })
             .build();
@@ -1394,30 +1427,6 @@ mod tests {
                 Record::Note("observer dropped"),
             ]
         );
-    }
-
-    #[test]
-    fn test_a_delivery_stop_leaves_the_observer_to_a_later_stop() {
-        let log = new_log();
-        let mut builder = builder(&log);
-        let handle = builder.handle();
-        let delivery = builder
-            .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
-            .build();
-
-        delivery.stop_handle().stop();
-        delivery.stop();
-        assert_eq!(
-            records(&log),
-            [
-                Record::ResourcesDropped,
-                Record::ObserverDropped,
-                Record::Note("observer dropped"),
-            ]
-        );
-
-        delivery.stop();
-        assert_eq!(records(&log).len(), 3, "the observer is released only once");
     }
 
     #[test]
@@ -1790,7 +1799,7 @@ mod tests {
     fn test_a_stopped_update_does_not_run_and_is_dropped_outside_the_lock() {
         let log = new_log();
         let delivery = builder(&log).build();
-        delivery.stop();
+        delivery.stop_handle().stop();
 
         let probe = Value::new(0).on_drop(note_and_reenter(
             &DeliveryHandle::of(&delivery),
@@ -1803,9 +1812,14 @@ mod tests {
         });
 
         assert_eq!(result, Updated::Stopped);
+        // The update releases the observer the stop left parked, after the update itself.
         assert_eq!(
-            records(&log)[2..],
-            [Record::Note("update dropped")],
+            records(&log),
+            [
+                Record::ResourcesDropped,
+                Record::Note("update dropped"),
+                Record::ObserverDropped,
+            ],
             "the update must be dropped, outside the lock"
         );
     }
@@ -2055,7 +2069,7 @@ mod tests {
         let clone = delivery.clone();
 
         assert!(clone.send(next(1)).is_continue());
-        delivery.stop();
+        delivery.stop_handle().stop();
         assert!(clone.send(next(2)).is_stop());
         assert_eq!(values(&log), [1]);
     }
@@ -2073,6 +2087,22 @@ mod tests {
         assert_eq!(
             records(&log),
             [Record::ResourcesDropped, Record::ObserverDropped]
+        );
+    }
+
+    #[test]
+    fn test_dropping_the_last_handle_leaves_resources_owned_by_the_stop_handle() {
+        let log = new_log();
+        let delivery = builder(&log).build();
+        let stop = delivery.stop_handle();
+
+        drop(delivery);
+        assert_eq!(records(&log), [Record::ObserverDropped]);
+
+        stop.stop();
+        assert_eq!(
+            records(&log),
+            [Record::ObserverDropped, Record::ResourcesDropped]
         );
     }
 
