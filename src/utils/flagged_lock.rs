@@ -5,8 +5,9 @@
 //! [`FlaggedLock::raise_with`], under the lock, together with whatever its callback changes, so
 //! code that reads it raised and then takes the lock finds that change. Code that reads it lowered
 //! takes no lock at all, which is the point: the common path of a state that is rarely raised —
-//! the drop of a delivery's handle, each value `observe_on` delivers — costs one read of the
-//! flag, and does not contend with the threads that take the lock.
+//! the drop of a delivery's handle, each value of a batch a delivery loop delivers, each value
+//! `observe_on` delivers — costs one read of the flag, and does not contend with the threads that
+//! take the lock.
 //!
 //! The flag is only ever raised (a [`RaiseOnlyFlag`]), and the lock and the flag are private to
 //! this module, so nothing can raise it but a [`raise_with`](FlaggedLock::raise_with), which holds
@@ -52,11 +53,17 @@ impl<M: ThreadMode, T> FlaggedLock<M, T> {
         })
     }
 
+    /// Whether the flag has been raised, without taking the lock. The callback that raised it
+    /// may still be running; take the lock to inspect the value it changes.
+    pub(crate) fn is_raised(&self) -> bool {
+        self.raised.is_raised()
+    }
+
     /// Runs `callback` on the value, under the lock, once the flag has been raised, and takes no
     /// lock before: [`None`] until then. So it may be called anywhere, under this very lock
     /// included, as long as the flag is lowered there.
     pub(crate) fn if_raised<Out>(&self, callback: impl FnOnce(&mut T) -> Out) -> Option<Out> {
-        if !self.raised.is_raised() {
+        if !self.is_raised() {
             return None;
         }
         Some(self.value.with_mut(callback))
@@ -107,6 +114,8 @@ mod tests {
         let view = lock.view();
 
         let seen_raised = lock.raise_with(|value| {
+            // Reading the flag takes no lock, even while the raising callback holds it.
+            assert!(lock.is_raised());
             *value = 1;
             view.is_raised()
         });

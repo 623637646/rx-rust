@@ -43,6 +43,7 @@ use crate::{
     },
 };
 use educe::Educe;
+use std::collections::VecDeque;
 
 mod update_outcome;
 
@@ -52,8 +53,8 @@ pub use update_outcome::{DropDecided, DropUndecided, UpdateOutcome, Updated};
 ///
 /// `R` is whatever the host owns alongside the observer, its sources' subscriptions typically. It
 /// is dropped, outside the lock, once the delivery stops — after the terminal notification when the
-/// delivery stops by terminating. When the loop stops itself, it drops `R` before releasing the
-/// observer without a notification.
+/// delivery stops by terminating. When the loop stops itself, it drops `R`, then its undelivered
+/// values, before releasing the observer without a notification.
 ///
 /// A [`DeliveryStop`] cannot reach the observer: it leaves a parked one for the next event, update
 /// or handle dropped — typically the handle of a source, as `R` disposes it — and one held by a
@@ -69,7 +70,8 @@ pub use update_outcome::{DropDecided, DropUndecided, UpdateOutcome, Updated};
 pub(crate) struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
     /// The flag is raised by every stop but a termination, through [`stop_core`], and only there.
     /// Until a stop has run, nothing can be parked in a stopped core, so the `Drop` of a handle
-    /// has nothing to release and takes no lock.
+    /// has nothing to release and takes no lock, and a delivery loop delivers the next value of
+    /// its batch without the lock either.
     #[educe(Debug(ignore))]
     core: FlaggedLock<M, Core<T, E, R>>,
     // Declared after the core so that the last owner of both releases the resources first. A
@@ -81,10 +83,12 @@ pub(crate) struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
 /// Stops a [`SerializedDelivery`] without naming its observer's type: what a disposal holds.
 ///
 /// Stopping drops the queued events and the resources, outside the lock, and rejects every later
-/// event. The observer is released by the first handle of the delivery that is dropped afterwards —
-/// typically at once, since dropping the resources disposes the sources that hold those handles,
-/// and even while another handle, such as a scheduler task's, lives on — or by the next event or
-/// update that arrives, whichever comes first.
+/// event. The values a running delivery loop has already taken from the queue, to deliver them
+/// without the lock, are out of its reach: the loop drops them, with its observer, once it sees
+/// the stop — before selecting another value. A parked observer is released by the first delivery
+/// handle dropped afterwards — typically at once, since dropping the resources disposes the
+/// sources that hold those handles, even while a scheduler task's handle lives on — or by the next
+/// event or update that arrives, whichever comes first.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
 pub(crate) struct DeliveryStop<M: ThreadMode, T, E, R> {
@@ -118,10 +122,11 @@ impl<M: ThreadMode> StopView<M> {
 ///
 /// Every stop goes through here: a [`DeliveryStop`], and the delivery loop as its observer stops
 /// or unwinds. Neither touches the observer's cell — the first cannot name its type, the second
-/// holds the observer, leaving the cell empty — and the loop drops its observer after this
-/// returns, so both stops drop in one order: the queue, the resources, the observer. Only a
-/// delivery that terminates ends elsewhere, in its loop, which consumes the observer. So the flag
-/// of the core is raised exactly when it has stopped other than by a termination.
+/// holds the observer, leaving the cell empty — and whatever the loop holds, its batch and its
+/// observer, it drops after this returns, so both stops drop in one order: the queue, the
+/// resources, the batch, the observer. Only a delivery that terminates ends elsewhere, in its
+/// loop, which consumes the observer. So the flag of the core is raised exactly when it has
+/// stopped other than by a termination.
 fn stop_core<M: ThreadMode, T, E, R>(core: &FlaggedLock<M, Core<T, E, R>>) {
     let previous = core.raise_with(|core| std::mem::replace(core, Core::Stopped));
     // Outside the lock to avoid potential deadlock, and after the stop, so that what a drop sends
@@ -167,9 +172,9 @@ enum EnqueueAction<T, E, OR> {
 
 /// One transition of the delivery loop, computed while the state is locked and acted on outside
 /// it. The observer is threaded through, so it is never used or dropped under the lock.
-enum Step<T, E, OR, R> {
-    /// Deliver one value, then ask for the next step.
-    Next(OR, T),
+enum Step<E, OR, R> {
+    /// Deliver the values just moved into the loop's batch, then ask for the next step.
+    Batch(OR),
     /// Deliver the termination, then drop `resources`. The state is already `Stopped`.
     Terminate {
         observer: OR,
@@ -312,9 +317,20 @@ where
 
     /// Delivers `next`, then every queued event, one at a time.
     ///
-    /// The lock is taken again between two events, so events arriving during the delivery are
-    /// delivered in arrival order, and a stop takes effect immediately — even between two values
-    /// of an `EventBatch::NextBatch`: the loop drops the observer instead of feeding it further.
+    /// Each time it runs out of values, the loop takes the lock once and moves every value queued
+    /// so far into a batch of its own, which it then delivers without the lock; the termination
+    /// stays in the queue, so nothing can still be queued after it. Events arriving during the
+    /// delivery queue up behind the batch, so they are delivered in arrival order.
+    ///
+    /// A stop takes effect between any two values all the same — even two of an
+    /// `EventBatch::NextBatch`: it raises the flag of the core, which the loop reads, without the
+    /// lock, between values of its batch, and finds `Stopped` when it locks for the next batch.
+    /// The loop then drops its batch and observer instead of feeding it further. The batch is out
+    /// of the stop's reach, so it may be dropped while a stopping thread still releases the queued
+    /// events and resources. A stop of the loop's own — its observer answering [`Flow::Stop`], or
+    /// unwinding — drops in the same order: the queue and the resources, then the batch and the
+    /// observer. A value selected before the stop may still be delivered: stopping does not wait
+    /// for an in-flight notification.
     ///
     /// Every observer callback runs outside the lock. An `on_next` that unwinds stops the delivery,
     /// so a caught panic does not leave it stuck in the delivering state — and taking the lock
@@ -325,29 +341,47 @@ where
     /// or the delivery had stopped already — and [`Flow::Continue`] when the observer was parked
     /// back for the next event.
     fn deliver(&self, mut observer: OR, mut next: Option<T>) -> Flow {
+        // The values taken from the queue under one lock, delivered one at a time without it. It
+        // trades its allocation with the queue's at each batch, so `new` allocates nothing here.
+        // Both buffers are released when the loop terminates or parks its observer.
+        let mut batch = VecDeque::new();
         loop {
             if let Some(value) = next.take() {
-                // The unwind then drops the observer, after what the stop drops.
+                // The unwind then drops the batch and the observer, after what the stop drops.
                 let guard = on_panic(|| stop_core(&self.core));
                 let flow = observer.on_next(value);
                 drop(guard);
                 if flow.is_stop() {
                     // It has ended its own stream or been disposed, so it is released like a
-                    // disposed observer instead of being terminated: after what the state held, as
-                    // a `DeliveryStop` leaves it.
+                    // disposed observer instead of being terminated: after what the state held and
+                    // the batch, as a `DeliveryStop` leaves them.
                     stop_core(&self.core);
+                    drop(batch);
                     drop(observer);
                     return Flow::Stop;
                 }
             }
 
+            if !batch.is_empty() {
+                // A stop raises the flag under the lock, as it turns the core `Stopped`, so a
+                // lowered flag is all the next value needs, and it takes no lock.
+                if self.core.is_raised() {
+                    // Out of the stop's reach, so dropped here, outside the lock.
+                    drop(batch);
+                    drop(observer);
+                    return Flow::Stop;
+                }
+                next = batch.pop_front();
+                continue;
+            }
+
             match self
                 .core
-                .with_mut(|core| core.next_step(observer, &self.observer))
+                .with_mut(|core| core.next_step(observer, &self.observer, &mut batch))
             {
-                Step::Next(next_observer, value) => {
+                Step::Batch(next_observer) => {
                     observer = next_observer;
-                    next = Some(value);
+                    next = batch.pop_front();
                 }
                 Step::Terminate {
                     observer,
@@ -466,16 +500,23 @@ impl<T, E, R> Core<T, E, R> {
         }
     }
 
-    /// Returns the next step of a running delivery loop, moving to `Stopped` and handing the
-    /// resources back to the caller before a terminal event.
-    fn next_step<OR, P>(&mut self, observer: OR, observer_cell: &P) -> Step<T, E, OR, R>
+    /// Returns the next step of a running delivery loop, moving every queued value into `batch`,
+    /// which the loop has emptied, or moving to `Stopped` and handing the resources back to the
+    /// caller before a terminal event. `batch` stays with the loop either way, so its buffer is
+    /// released outside the lock.
+    fn next_step<OR, P>(
+        &mut self,
+        observer: OR,
+        observer_cell: &P,
+        batch: &mut VecDeque<T>,
+    ) -> Step<E, OR, R>
     where
         P: MutableHelper<Value = Option<OR>>,
     {
         match self {
             Self::Delivering { pending, .. } => {
-                if let Some(value) = pending.pop_next() {
-                    return Step::Next(observer, value);
+                if pending.take_values_into(batch) {
+                    return Step::Batch(observer);
                 }
             }
             Self::Stopped => return Step::Stopped(observer),
@@ -538,9 +579,13 @@ mod tests {
     };
     #[cfg(panic = "unwind")]
     use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
-    use std::sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+    use std::{
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, Ordering},
+            mpsc,
+        },
+        time::Duration,
     };
 
     type TestError = &'static str;
@@ -1243,9 +1288,13 @@ mod tests {
     #[test]
     fn test_stop_from_on_next_drops_the_values_that_are_still_queued() {
         let log = new_log();
+        let log_of_queued = log.clone();
         let delivery = builder(&log)
-            .on_next(|delivery, number| {
+            .on_next(move |delivery, number| {
                 if number == 2 {
+                    // Queued behind the batch the loop holds, so the stop finds it in the queue.
+                    let queued = Value::new(4).on_drop(note(&log_of_queued, "4 dropped"));
+                    assert!(delivery.send(EventBatch::Next(queued)).is_continue());
                     delivery.stop_handle().stop();
                 }
             })
@@ -1265,9 +1314,12 @@ mod tests {
         assert_eq!(
             records(&log)[2..],
             [
-                Record::Note("3 dropped"),
+                // The stop drops what the queue still holds, then the resources.
+                Record::Note("4 dropped"),
                 Record::ResourcesDropped,
-                // The loop drops the observer it holds only once it sees the stopped state.
+                // The loop took 3 from the queue with 2, so the stop cannot reach it: the loop
+                // drops it, and the observer it holds, once it sees the stop, before delivering it.
+                Record::Note("3 dropped"),
                 Record::ObserverDropped,
             ]
         );
@@ -1289,14 +1341,14 @@ mod tests {
                 .is_stop()
         );
 
-        // Answering `Flow::Stop` stops the delivery, exactly as a `DeliveryStop` does: the
-        // observer, which the loop holds here, is released after what the state held.
+        // Answering `Flow::Stop` stops the delivery, exactly as a `DeliveryStop` does: 3, which the
+        // loop took with 2, and the observer the loop holds are released after what the state held.
         assert_eq!(values(&log), [1, 2]);
         assert_eq!(
             records(&log)[2..],
             [
-                Record::Note("3 dropped"),
                 Record::ResourcesDropped,
+                Record::Note("3 dropped"),
                 Record::ObserverDropped,
             ]
         );
@@ -2140,6 +2192,71 @@ mod tests {
 
     #[cfg(panic = "unwind")]
     #[test]
+    fn test_a_panic_during_a_batch_drops_the_remaining_values_outside_the_lock() {
+        let log = new_log();
+        let mut builder = builder(&log);
+        let handle = builder.handle();
+        let handle_of_observer = handle.clone();
+        let log_of_observer = log.clone();
+        let delivery = builder
+            .on_next(move |delivery, number| {
+                if number == 2 {
+                    // Value 3 is in the loop's batch; value 4 and the termination stay queued.
+                    let queued = Value::new(4).on_drop(note_and_reenter(
+                        &handle_of_observer,
+                        &log_of_observer,
+                        "4 dropped",
+                    ));
+                    assert!(
+                        delivery
+                            .send(EventBatch::NextAndTermination(
+                                queued,
+                                Termination::Completed
+                            ))
+                            .is_stop()
+                    );
+                    resume_unwind(Box::new(()));
+                }
+            })
+            .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
+            .build();
+        delivery
+            .update(|resources| {
+                resources.on_drop(note_and_reenter(&handle, &log, "resources dropped"));
+                UpdateOutcome::empty()
+            })
+            .result()
+            .expect("the delivery is idle");
+
+        let undelivered = Value::new(3).on_drop(note_and_reenter(&handle, &log, "3 dropped"));
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            delivery.send(EventBatch::NextBatch(vec![
+                Value::new(1),
+                Value::new(2),
+                undelivered,
+            ]))
+        }));
+        assert!(result.is_err());
+        assert_eq!(
+            records(&log),
+            [
+                Record::Next(1),
+                Record::Next(2),
+                // The guard stops the delivery, dropping what the queue held and the resources.
+                Record::Note("4 dropped"),
+                Record::ResourcesDropped,
+                Record::Note("resources dropped"),
+                // The unwind then drops the batch and the observer the loop held.
+                Record::Note("3 dropped"),
+                Record::ObserverDropped,
+                Record::Note("observer dropped"),
+            ]
+        );
+        assert!(delivery.send(next(5)).is_stop());
+    }
+
+    #[cfg(panic = "unwind")]
+    #[test]
     fn test_a_panic_from_on_termination_drops_the_resources() {
         let log = new_log();
         let delivery = builder(&log)
@@ -2162,6 +2279,79 @@ mod tests {
     }
 
     // MARK: - Concurrency
+
+    #[test]
+    fn test_a_concurrent_stop_during_a_batch_suppresses_the_remaining_events() {
+        const TIMEOUT: Duration = Duration::from_secs(5);
+        let log = new_log();
+        let (entered, wait_entered) = mpsc::channel();
+        let (resume, wait_resume) = mpsc::channel();
+        let mut builder = builder(&log);
+        let handle = builder.handle();
+        let delivery = builder
+            .on_next(move |_delivery, number| {
+                if number == 2 {
+                    entered.send(()).expect("the test is waiting for value 2");
+                    wait_resume
+                        .recv_timeout(TIMEOUT)
+                        .expect("the test resumes delivery after stopping it");
+                }
+            })
+            .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
+            .build();
+        let stop = delivery.stop_handle();
+        let undelivered = Value::new(3).on_drop(note_and_reenter(&handle, &log, "3 dropped"));
+
+        std::thread::scope(|scope| {
+            let sending = delivery.clone();
+            let worker = scope.spawn(move || {
+                sending.send(EventBatch::NextBatch(vec![
+                    Value::new(1),
+                    Value::new(2),
+                    undelivered,
+                ]))
+            });
+            wait_entered
+                .recv_timeout(TIMEOUT)
+                .expect("delivery reaches value 2");
+            let queued = Value::new(4).on_drop(note_and_reenter(&handle, &log, "4 dropped"));
+            assert!(
+                delivery
+                    .send(EventBatch::NextAndTermination(
+                        queued,
+                        Termination::Completed
+                    ))
+                    .is_stop()
+            );
+
+            stop.stop();
+            assert_eq!(
+                records(&log),
+                [
+                    Record::Next(1),
+                    Record::Next(2),
+                    Record::Note("4 dropped"),
+                    Record::ResourcesDropped,
+                ]
+            );
+
+            resume.send(()).expect("delivery is waiting to resume");
+            assert!(worker.join().expect("delivery must not panic").is_stop());
+        });
+        assert_eq!(
+            records(&log),
+            [
+                Record::Next(1),
+                Record::Next(2),
+                Record::Note("4 dropped"),
+                Record::ResourcesDropped,
+                Record::Note("3 dropped"),
+                Record::ObserverDropped,
+                Record::Note("observer dropped"),
+            ]
+        );
+        assert!(delivery.send(next(5)).is_stop());
+    }
 
     #[test]
     fn test_concurrent_sends_are_delivered_one_at_a_time() {
@@ -2197,9 +2387,20 @@ mod tests {
             }
         });
 
-        // Whichever thread sent it, and whichever thread delivered it, every value arrives exactly
-        // once.
+        // Interleaving between producers is free, but each producer's values stay in order.
         let mut delivered = values(&log);
+        for thread in 0..THREADS {
+            assert_eq!(
+                delivered
+                    .iter()
+                    .copied()
+                    .filter(|value| *value / VALUES_PER_THREAD == thread)
+                    .collect::<Vec<_>>(),
+                (thread * VALUES_PER_THREAD..(thread + 1) * VALUES_PER_THREAD).collect::<Vec<_>>()
+            );
+        }
+
+        // Whichever thread delivered them, every value arrives exactly once.
         delivered.sort_unstable();
         assert_eq!(
             delivered,

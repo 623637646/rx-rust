@@ -123,6 +123,22 @@ impl<T, E> PendingEvents<T, E> {
         self.values.pop_front()
     }
 
+    /// Moves every queued value into `batch`, which must be empty, leaving the termination in
+    /// place, and returns whether there was any. The queue keeps the allocation of `batch` in
+    /// exchange, so a loop that keeps taking batches goes back and forth between two buffers
+    /// instead of allocating one per batch.
+    pub(crate) fn take_values_into(&mut self, batch: &mut VecDeque<T>) -> bool {
+        debug_assert!(
+            batch.is_empty(),
+            "a batch is taken once the last one is done"
+        );
+        if self.values.is_empty() {
+            return false;
+        }
+        std::mem::swap(&mut self.values, batch);
+        true
+    }
+
     /// Takes the last event, whether or not values are still queued before it.
     pub(crate) fn take_termination(&mut self) -> Option<Termination<E>> {
         self.termination.take()
@@ -132,7 +148,36 @@ impl<T, E> PendingEvents<T, E> {
 #[cfg(test)]
 mod tests {
     use super::PendingEvents;
-    use crate::observer::{Event, Termination};
+    use crate::observer::{Event, EventBatch, Termination};
+    use std::collections::VecDeque;
+
+    #[test]
+    fn test_take_values_into_leaves_the_termination() {
+        let mut pending = PendingEvents::<_, ()>::new();
+        let mut batch = VecDeque::new();
+        assert!(!pending.take_values_into(&mut batch));
+
+        assert!(
+            pending
+                .push_batch(EventBatch::NextBatchAndTermination(
+                    vec![1, 2],
+                    Termination::Completed
+                ))
+                .is_none()
+        );
+        assert!(pending.take_values_into(&mut batch));
+        assert_eq!(batch, [1, 2]);
+
+        // The termination stays queued, so nothing can be queued after it still.
+        assert!(pending.is_terminated());
+        assert!(pending.push(Event::Next(3)).is_some());
+        batch.clear();
+        assert!(!pending.take_values_into(&mut batch));
+        assert_eq!(
+            pending.pop(),
+            Some(Event::Termination(Termination::Completed))
+        );
+    }
 
     #[test]
     fn test_nothing_after_termination() {

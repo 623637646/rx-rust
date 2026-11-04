@@ -80,6 +80,12 @@ All notable changes to this project are documented here. The format follows
 - `observe_on` delivers each value without taking the lock of its queue, which the source pushes
   the next values through: a flag raised with the lock, as the subscription is disposed or an
   error queued, tells the task when it must look before the next value.
+- The operators built on `subscribe_with_context` and the subjects take the lock of their queue
+  once per batch of the values queued meanwhile — by other threads, or from inside a
+  notification — rather than once per value, and deliver the batch without it, reading a flag
+  raised with the lock as the subscription is disposed. The values of a batch left undelivered,
+  as the subscription is disposed or the downstream stops, are now dropped after the operator's
+  sources are released rather than before.
 - `observe_on` starts its task before it subscribes to the source. On a scheduler running beside
   the subscribing thread, the values a synchronous source sends as it is subscribed are delivered
   meanwhile, and a downstream that stops — a `take(1)` — stops the source before its subscription
