@@ -166,6 +166,13 @@ clock a yield is due at once, so `advance_by` would never finish.
    [decision 0004](decisions/0004-a-source-that-drops-its-observer.md).
 10. `test_unsub_after_abandon` — the same, then the subscription is disposed before that work ran:
     the disposal cancels it, and nothing is delivered.
+11. `test_stop_on_next_on_sub` — for an operator whose task delivers what the source sends
+    (`observe_on`): a synchronous source keeps sending as it is subscribed, the scheduler runs the
+    task between its values (a `ThreadCheckerScheduler` driven from the source), and a downstream
+    `take(1)` stops the source before its subscription returns.
+12. `test_unsub_on_drop_before_error` — for an operator that discards the values an error
+    preempts (`observe_on`): dropping such a value disposes the subscription, and the error is
+    then not delivered.
 
 ## Compile checks
 

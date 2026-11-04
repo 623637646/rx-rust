@@ -898,23 +898,29 @@ fn test_observe_on_panic_on_sub() {
     let mut pool = LocalPool::new();
     let scheduler = LocalPoolScheduler::from_spawner(pool.spawner());
     let (bound, drops) = ThreadBound::new();
+    let mut source_observer = None;
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         Create::shared_boxed(
-            |_: SendBoxedObserver<'static, i32, Infallible>| -> DisposeOnDrop<()> {
+            |mut observer: SendBoxedObserver<'static, i32, Infallible>| -> DisposeOnDrop<()> {
+                assert!(observer.on_next(1).is_continue());
+                source_observer = Some(observer);
                 panic!("the source's subscription panicked");
             },
         )
         .observe_on(scheduler)
         .subscribe_with_callback(
-            move |_| {
+            move |_| -> () {
                 let _ = &bound;
+                panic!("a panicking subscription delivered a queued value");
             },
             |_| panic!("a panicking subscription was terminated"),
         )
     }));
     assert!(result.is_err());
-    // Released as the subscription unwound, before any task ran.
-    assert_eq!(drops.clone_value(), 1);
+    // Unwinding stops the inbox even if the source keeps its observer. The cancelled task owns
+    // downstream until the scheduler drops it, on this thread.
+    assert!(source_observer.as_mut().unwrap().on_next(2).is_stop());
+    assert_eq!(drops.clone_value(), 0);
     pool.run_until_stalled();
     assert_eq!(drops.clone_value(), 1);
 }

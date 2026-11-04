@@ -20,6 +20,8 @@ All notable changes to this project are documented here. The format follows
   is subscribed, a notifier that fires at once, a downstream answering `Flow::Stop`, or the first
   window of `window` being refused.
 - `Task::periodic` waits for its anchor before its first step, even without an initial delay.
+- `observe_on` no longer delivers an error after the subscription is disposed by the drop of a
+  value that error preempts.
 
 ### Added
 
@@ -77,6 +79,12 @@ All notable changes to this project are documented here. The format follows
 - `observe_on` delivers each value without taking the lock of its queue, which the source pushes
   the next values through: a flag raised with the lock, as the subscription is disposed or an
   error queued, tells the task when it must look before the next value.
+- `observe_on` starts its task before it subscribes to the source. On a scheduler running beside
+  the subscribing thread, the values a synchronous source sends as it is subscribed are delivered
+  meanwhile, and a downstream that stops — a `take(1)` — stops the source before its subscription
+  returns, rather than after it has sent everything, which an infinite iterator never did. If the
+  source's subscription panics, the downstream observer is now released when the scheduler drops
+  the cancelled task, not as the subscription unwinds.
 
 ### Removed
 

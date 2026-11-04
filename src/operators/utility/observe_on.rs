@@ -42,7 +42,7 @@ use inbox::{AfterValue, InboxHandle, Pushed};
 /// ```
 ///
 /// The source is subscribed with an observer that only queues the events and wakes the task of
-/// `scheduler`, which is started when the operator is subscribed and owns the downstream observer.
+/// `scheduler`, which is started before subscribing to the source and owns the downstream observer.
 /// So a source that emits from another thread can be observed on a `Local` scheduler, bound to the
 /// thread it was made on, by an observer that is not `Send` — only the events cross the threads:
 ///
@@ -75,8 +75,11 @@ use inbox::{AfterValue, InboxHandle, Pushed};
 ///     .subscribe_with_callback(move |_| drop(ui.clone()), |_| {});
 /// ```
 ///
-/// The task owns the downstream observer, so a disposal stops the delivery at once but releases
-/// that observer only when the scheduler drops the cancelled task, on the scheduler's thread.
+/// A disposal stops queueing and cancels the task. A notification that has already passed the
+/// task's inbox check may still run concurrently with the disposal; disposing from `on_next`
+/// prevents the next notification. The task owns the downstream observer and releases it when the
+/// scheduler drops the cancelled task, on the scheduler's thread — also when the source's
+/// subscription panics.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ObserveOn<OE, S> {
@@ -132,10 +135,9 @@ mod inbox {
         Stopped,
     }
 
-    /// A handle on an [`Inbox`], the only place its lock is taken. Disposing it stops the delivery,
-    /// so that nothing is delivered once the subscription is disposed, even while the task is
-    /// running. Its own module keeps the inbox out of reach of the rest of the operator, so that
-    /// nothing else can take that lock.
+    /// A handle on an [`Inbox`], the only place its lock is taken. Disposing it stops queueing and
+    /// tells the task to stop at its next inbox check. Its own module keeps the inbox out of reach
+    /// of the rest of the operator, so that nothing else can take that lock.
     ///
     /// The inbox is `None` once the delivery has stopped: disposed, or ended by downstream or by a
     /// termination. The source's observer then answers [`Flow::Stop`](crate::observer::Flow::Stop),
@@ -189,17 +191,27 @@ mod inbox {
 
         /// Takes everything queued, or `None` once the delivery has stopped. The inbox is left with
         /// room for as many values, so that those queued meanwhile do not grow a new `Vec` from
-        /// nothing.
+        /// nothing. A termination leaves no room: there is no next batch to reserve space for.
         pub(super) fn take(&self) -> Option<(Vec<T>, Option<Termination<E>>)> {
             self.0.with_mut(|slot| {
                 slot.as_mut().map(|inbox| {
-                    let room = inbox.values.len();
+                    let room = if inbox.termination.is_some() {
+                        0
+                    } else {
+                        inbox.values.len()
+                    };
                     (
                         take_leaving_room(&mut inbox.values, room),
                         inbox.termination.take(),
                     )
                 })
             })
+        }
+
+        /// Whether the delivery has stopped. A stop raises the flag, so this takes the lock only
+        /// once the flag is raised.
+        pub(super) fn is_stopped(&self) -> bool {
+            self.0.if_raised(|slot| slot.is_none()).unwrap_or(false)
         }
 
         /// What the task checks after each value it delivers, before the next event. An error
@@ -231,6 +243,32 @@ mod inbox {
     impl<M: ThreadMode, T, E> Disposable for InboxHandle<M, T, E> {
         fn dispose(self) {
             self.stop();
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::InboxHandle;
+        use crate::{
+            observer::{Event, Termination},
+            thread_mode::Local,
+        };
+
+        #[test]
+        fn test_take_after_termination_leaves_no_buffer() {
+            for termination in [Termination::Completed, Termination::Error("error")] {
+                let inbox = InboxHandle::<Local, _, _>::new();
+                inbox.push(Event::Next(111));
+                inbox.push(Event::Next(222));
+                inbox.push(Event::Termination(termination.clone()));
+
+                let (values, taken_termination) = inbox.take().unwrap();
+                assert_eq!(values, [111, 222]);
+                assert_eq!(taken_termination, Some(termination));
+                inbox.0.with_mut(|slot| {
+                    assert_eq!(slot.as_ref().unwrap().values.capacity(), 0);
+                });
+            }
         }
     }
 }
@@ -273,7 +311,10 @@ where
             AfterValue::Stopped => return Next::Finished,
         };
         if let Some(termination) = termination {
-            if let Some(observer) = self.observer.take() {
+            // Dropping values preempted by an error may itself dispose the subscription.
+            if !self.inbox.is_stopped()
+                && let Some(observer) = self.observer.take()
+            {
                 observer.on_termination(termination);
             }
             Next::Finished
@@ -290,11 +331,10 @@ where
     /// Delivers `values` in order, and answers what the inbox says after the last one: whether the
     /// termination the step took may follow, or an error preempts it.
     ///
-    /// Every event of a step comes right after a look at the inbox: the first after the `take`
-    /// that brought it, each other after the value before it. So nothing is delivered after a
-    /// disposal, which may come from the observer itself or from another thread, and an error
-    /// queued since the step took `values` is delivered instead of the values left, as it would
-    /// have been had it come before the step.
+    /// The first value follows the `take` that brought it, each other a check after the value
+    /// before it. A disposal from a callback stops the next notification; one from another thread
+    /// may race a notification that passed its check. An error queued since the step took
+    /// `values` preempts those left once the next check sees it.
     fn deliver(&mut self, values: Vec<T>) -> AfterValue<E> {
         let Some(observer) = self.observer.as_mut() else {
             return AfterValue::Stopped;
@@ -372,14 +412,20 @@ where
             inbox: inbox.clone(),
             waker,
         };
-        source_subscription.replace_with(|| self.source.subscribe(source_observer));
-        // The task holds the source's subscription only through the slot, and the runtime owns
-        // the task: no cycle.
-        self.scheduler
+        // Start delivery before a synchronous source begins sending. Keep the whole disposal on
+        // the stack so a panicking subscription stops the inbox and cancels the task too. The
+        // task holds the source's subscription only through the slot, and the runtime owns the
+        // task: no cycle.
+        let subscription = self
+            .scheduler
             .run_task(task, None)
             .preceded_by(inbox)
-            .then(source_subscription)
-            .map_inner_into()
+            .then(source_subscription.clone())
+            .map_inner_into();
+        // The task may stop while the source is still subscribing: the slot then disposes the
+        // source's subscription as soon as it is returned.
+        source_subscription.replace_with(|| self.source.subscribe(source_observer));
+        subscription
     }
 }
 

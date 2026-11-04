@@ -8,7 +8,7 @@ use crate::tests_utils::{
     test_scheduler::block_on,
 };
 use futures::executor::ThreadPool;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::disposable::{boxed_disposal::SendBoxedDisposal, callback_disposal::CallbackDisposal};
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
@@ -20,7 +20,10 @@ use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Flow, Observer, Termination},
-    operators::{creating::never::Never, utility::observe_on::ObserveOn},
+    operators::{
+        creating::{from_iter::FromIter, never::Never},
+        utility::observe_on::ObserveOn,
+    },
 };
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
@@ -576,6 +579,29 @@ fn test_stop_on_next() {
     });
 }
 
+/// Delivery can stop a synchronous source before its subscription returns. The source lets the
+/// observing thread run before producing each value, so the interleaving is deterministic.
+#[test]
+fn test_stop_on_next_on_sub() {
+    let thread_1 = ThreadCheckerExecutor::new("thread_1");
+    let produced = Arc::new(AtomicUsize::new(0));
+    let (checker, observer) = Checker::new();
+    let values = [111, 222, 333].into_iter().inspect(|_| {
+        produced.fetch_add(1, Ordering::SeqCst);
+        futures::executor::block_on(thread_1.run_until_stalled());
+    });
+
+    let _subscription = FromIter::new(values)
+        .into_shared()
+        .observe_on(thread_1.scheduler())
+        .take(1)
+        .subscribe(observer);
+
+    assert_eq!(produced.load(Ordering::SeqCst), 2);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
 /// Downstream ends its own stream: the task disposes the source before it releases downstream, so
 /// that the release tells downstream the source is gone, as the operators built on a context do.
 #[test]
@@ -723,6 +749,39 @@ fn test_error_in_the_middle_of_a_batch() {
     time.advance_by(Duration::ZERO);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// Discarding a value preempted by an error runs its `Drop`, which can cancel the subscription
+/// before the task delivers the error.
+#[test]
+fn test_unsub_on_drop_before_error() {
+    let time = VirtualTime::new();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+    let subscription = Arc::new(Mutex::new(None));
+    let subscription_cloned = subscription.clone();
+    let value = DisposeOnDrop::new(CallbackDisposal::new(move || {
+        if let Some(subscription) = subscription_cloned.take_value() {
+            Disposable::dispose(subscription);
+        }
+    }));
+
+    subscription.replace_value(Some(
+        observable
+            .observe_on(time.scheduler())
+            .map(|_| 111)
+            .subscribe(observer)
+            .map_inner(SendBoxedDisposal::new),
+    ));
+    assert!(sender.on_next(value).is_continue());
+    sender.on_termination(Termination::Error("error"));
+    time.advance_by(Duration::ZERO);
+
+    assert!(subscription.take_value().is_none());
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
     assert_eq!(time.pending_tasks(), 0);
 }

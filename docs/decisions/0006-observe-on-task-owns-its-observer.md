@@ -14,16 +14,30 @@ the mode of the source and the scheduler joined. The downstream observer sits in
 alone calls it and drops it. The source's subscription sits in a `ReplaceableDisposal` that the
 task disposes as it stops, so the context-owns-its-source rule (decision 0005) still holds.
 
+The task is started before subscribing to the source. A scheduler that runs concurrently with the
+subscribing thread can therefore deliver values, and stop a synchronous source, before that source's
+subscription returns. The whole disposal is already on the subscribing stack: if the source's
+subscription panics, unwinding stops the inbox and cancels the task. The observer is released when
+the scheduler drops that cancelled task, as with an ordinary disposal. If the task stops while the
+source is still subscribing, the slot disposes the source's subscription as soon as it is returned.
+
 The disposal stops the inbox first, then cancels the task, then disposes the source. A step of
 the task takes the events queued so far and delivers them; what comes meanwhile waits for the next
 step, so a step is as long as what was queued when it began, however fast the source keeps
 sending. After every value it delivers, before the next value or the termination, the task checks
-the inbox — the first event of a step needs no check, as the step has just taken it from there —
-so nothing is delivered after a disposal, even one made by the observer itself in the middle of a
-batch, or from another thread while the task runs, and an error queued meanwhile preempts the
-values left in the batch, as it preempts those still queued when the step begins. A task dropped
-before it stopped — cancelled, unwound by a panic of the observer, or dropped with its runtime —
-stops the inbox and disposes the source from its `Drop`.
+the inbox — the first value follows the step's take from it. Disposing from a callback stops the
+next notification. Disposing from another thread may race a notification that has passed its
+check; cancellation does not wait for that notification to finish. An error queued meanwhile
+preempts the values left in the batch once a check sees it, as it preempts those still queued when
+the step begins. Before delivering a termination, the task checks again for a disposal: dropping
+values preempted by an error may itself dispose the subscription. A task dropped before it stopped
+— cancelled, unwound by a panic of the observer, or dropped with its runtime — stops the inbox and
+disposes the source from its `Drop`.
+
+Taking a batch reserves space for the next one, except when a termination is already queued: no
+new buffer is needed then. After delivering a batch, the task parks rather than schedules an empty
+pass. Its waker was registered before taking the batch, so a value arriving afterwards finds the
+inbox empty and wakes the task; values queued behind it share that wake.
 
 ### Why
 
@@ -45,8 +59,7 @@ stops the inbox and disposes the source from its `Drop`.
 
 - **A disposal releases the observer promptly, not at once.** The observer is released when the
   scheduler drops the cancelled task, on the scheduler's thread — for Tokio, the next time its
-  runtime polls the task — while every other operator releases it before `dispose` returns. Nothing
-  is delivered after the disposal either way; only the release of what the observer holds is late.
+  runtime polls the task — while every other operator releases it before `dispose` returns.
   The same was already true of a subscription disposed after its source had let go of its observer
   (decision 0004).
 - **`observe_on` does not use the helper** that the other operators with a scheduler task use
