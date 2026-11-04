@@ -150,12 +150,13 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
     `SharedFlag` (an `Arc<AtomicBool>`), with private fields, reached through `RaiseOnlyFlag`:
     `raise` and `is_raised`, nothing that lowers it or sets a value. Every flag of the crate says
     that something happened for good — a subscription disposed, a pipe closed, a delivery
-    stopped — and the code reading it without a lock relies on that: `LockedCore::after_stop`
-    reads the flag raised, then locks, and must find the core stopped. The type guarantees it, so
-    no call site has to be checked for it. The newtypes keep it from being bypassed through the
-    concrete type, which `<Local as ThreadMode>::Flag` normalizes to. A bool that goes back and
-    forth has to agree with the state it describes, so it belongs under that state's lock, in the
-    `M::Ptr<_>`. See [A `bool` flag](#a-bool-flag--replaced) below.
+    stopped — and the code reading it without a lock relies on that: the `Drop` of a
+    `SerializedDelivery` handle reads the flag of its `FlaggedLock` raised, then locks, and must
+    find the core stopped. The type guarantees it, so no call site has to be checked for it. The
+    newtypes keep it from being bypassed through the concrete type, which
+    `<Local as ThreadMode>::Flag` normalizes to. A bool that goes back and forth has to agree with
+    the state it describes, so it belongs under that state's lock, in the `M::Ptr<_>`. See
+    [A `bool` flag](#a-bool-flag--replaced) below.
 11. **The features are additive.** `single-threaded` and `utils::types` are gone; every scheduler
     feature can be enabled together, and a binary can hold `Local` and `Shared` pipelines side by
     side.

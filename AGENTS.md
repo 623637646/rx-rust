@@ -121,10 +121,10 @@ when they fail.
 - `src/utils/` — shared machinery. Public modules are for users writing their own operators:
   `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`.
   A module shared inside the crate only is `pub(crate) mod`: `serialized_delivery`,
-  `serialized_multicast`, `subscribe_fn`, `pending_events`, `reservation_slot`, `reservation_map`,
-  `id_generator`, `on_panic`, `lazy_subscription`. A module stays public only when a public
-  signature names its items or a user writing an operator needs them; otherwise it is
-  `pub(crate)`, and so is everything in it — the crate's `#![warn(unreachable_pub)]` is what
+  `serialized_multicast`, `flagged_lock`, `subscribe_fn`, `pending_events`, `reservation_slot`,
+  `reservation_map`, `id_generator`, `on_panic`, `lazy_subscription`. A module stays public only
+  when a public signature names its items or a user writing an operator needs them; otherwise it
+  is `pub(crate)`, and so is everything in it — the crate's `#![warn(unreachable_pub)]` is what
   catches a `pub` left behind in one, and CI denies warnings. The few items of such a module that
   a public signature does name stay `pub` and are re-exported by the public module naming them
   (`serialized_delivery::UpdateOutcome` from `subscribe_with_context`).

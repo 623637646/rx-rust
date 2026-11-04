@@ -31,15 +31,16 @@ use crate::{
         ThreadMode,
         mutable::{MutableExt, MutableHelper},
     },
-    utils::{on_panic::on_panic, pending_events::PendingEvents},
+    utils::{
+        flagged_lock::{FlagView, FlaggedLock},
+        on_panic::on_panic,
+        pending_events::PendingEvents,
+    },
 };
 use educe::Educe;
-use locked_core::LockedCore;
 
-mod locked_core;
 mod update_outcome;
 
-pub(crate) use locked_core::StopView;
 pub use update_outcome::{DropDecided, DropUndecided, UpdateOutcome, Updated};
 
 /// A shared, serialized delivery of events to one observer.
@@ -57,8 +58,11 @@ pub use update_outcome::{DropDecided, DropUndecided, UpdateOutcome, Updated};
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
 pub(crate) struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
+    /// The flag is raised by every stop but a termination, through [`stop_core`], and only there.
+    /// Until a stop has run, nothing can be parked in a stopped core, so the `Drop` of a handle
+    /// has nothing to release and takes no lock.
     #[educe(Debug(ignore))]
-    core: LockedCore<M, T, E, R>,
+    core: FlaggedLock<M, Core<T, E, R>>,
     // Declared after the core so that, when the last handle goes, the observer is released after
     // the resources, as a stop releases them.
     #[educe(Debug(ignore))]
@@ -76,7 +80,42 @@ pub(crate) struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
 #[educe(Debug, Clone(bound()))]
 pub(crate) struct DeliveryStop<M: ThreadMode, T, E, R> {
     #[educe(Debug(ignore))]
-    core: LockedCore<M, T, E, R>,
+    core: FlaggedLock<M, Core<T, E, R>>,
+}
+
+/// Tells, without a lock, whether a delivery has been stopped other than by its termination: by a
+/// [`DeliveryStop`], or by its own loop, as its observer answers [`Flow::Stop`] or panics.
+///
+/// While the observer runs, only the first can happen, so the observer learns from it that its
+/// subscription has been disposed — from inside one of its own notifications, or from another
+/// thread meanwhile — which the delivery itself checks between two events only. An observer that
+/// emits several events for one, or runs user code before an emission, checks it before each of
+/// them. A disposal during the termination raises it too: a stop raises it whatever state it finds
+/// the core in, a termination that has already stopped it included.
+///
+/// It is raised under the lock, before the stop drops what the core held, so code that runs as the
+/// resources are dropped — the disposal of a source, and a user callback it runs — sees it raised.
+pub(crate) struct StopView<M: ThreadMode>(FlagView<M>);
+
+impl<M: ThreadMode> StopView<M> {
+    /// Whether the delivery has been stopped, for good, other than by its termination.
+    pub(crate) fn is_stopped(&self) -> bool {
+        self.0.is_raised()
+    }
+}
+
+/// Stops `core`, raising its flag, and runs `callback` under the same lock: returns what the core
+/// held and what `callback` returned, to be dropped outside the lock, in that order.
+///
+/// Every stop goes through here, whether or not it can reach the observer: a [`DeliveryStop`]
+/// passes a callback that does nothing, the delivery one that takes the observer out of its cell.
+/// Only a delivery that terminates ends elsewhere, in its loop, which consumes the observer. So
+/// the flag of the core is raised exactly when it has stopped other than by a termination.
+fn stop_core<M: ThreadMode, T, E, R, Out>(
+    core: &FlaggedLock<M, Core<T, E, R>>,
+    callback: impl FnOnce() -> Out,
+) -> (Core<T, E, R>, Out) {
+    core.raise_with(|core| (std::mem::replace(core, Core::Stopped), callback()))
 }
 
 /// Everything a delivery holds except its observer.
@@ -137,7 +176,7 @@ impl<M: ThreadMode, T, E, R> DeliveryStop<M, T, E, R> {
         // What the state held, the queued events and the resources, is bound here and so dropped
         // outside the lock. The observer's type is not known here, so an observer parked in its
         // cell stays there for whoever finds the stop next.
-        let (_deferred_drop, ()) = self.core.stop_with(|| ());
+        let (_deferred_drop, ()) = stop_core(&self.core, || ());
     }
 }
 
@@ -146,9 +185,9 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
     /// around the [`StopView`] of the delivery parked in its cell. An observer with no use for the
     /// view ignores it.
     pub(crate) fn idle(observer_builder: impl FnOnce(StopView<M>) -> OR, resources: R) -> Self {
-        let core = LockedCore::new(Core::Idle { resources });
+        let core = FlaggedLock::new(Core::Idle { resources });
         Self {
-            observer: M::ptr(Some(observer_builder(core.stop_view()))),
+            observer: M::ptr(Some(observer_builder(StopView(core.view())))),
             core,
         }
     }
@@ -160,7 +199,7 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
         // downstream is, and anything either drop emits is rejected. A loop running elsewhere
         // holds the observer instead, leaving the cell empty, and drops it itself when it sees
         // the stop.
-        let (deferred_drop, parked) = self.core.stop_with(|| self.observer.take_value());
+        let (deferred_drop, parked) = stop_core(&self.core, || self.observer.take_value());
         // Outside the lock to avoid potential deadlock. Should the first drop unwind, the
         // observer is still released, after it, by the unwind.
         drop(deferred_drop);
@@ -343,13 +382,16 @@ impl<M: ThreadMode, T, E, OR, R> Drop for SerializedDelivery<M, T, E, OR, R> {
     /// `dispose` returns rather than when the runtime gets round to dropping the cancelled task.
     ///
     /// Only a [`DeliveryStop`] leaves the observer parked in a stopped delivery, so until a stop
-    /// has run, which a flag of the [`LockedCore`] says without a lock, there is nothing to release
-    /// and no lock is taken. A handle can therefore be dropped anywhere, even under the delivery's
-    /// own lock: after the stop, nothing runs under that lock that could drop one.
+    /// has run, which the flag of the [`FlaggedLock`] says without a lock, there is nothing to
+    /// release and no lock is taken. A handle can therefore be dropped anywhere, even under the
+    /// delivery's own lock: after the stop, nothing runs under that lock that could drop one.
     fn drop(&mut self) {
         let parked = self
             .core
-            .after_stop(|| self.observer.take_value())
+            .if_raised(|core| {
+                debug_assert!(matches!(core, Core::Stopped), "a stop is final");
+                self.observer.take_value()
+            })
             .flatten();
         drop(parked); // Drop outside the lock to avoid potential deadlock
     }
