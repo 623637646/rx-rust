@@ -13,7 +13,7 @@ use crate::{
     thread_mode::ThreadMode,
 };
 use educe::Educe;
-use inbox::{BeforeValue, InboxHandle, Pushed};
+use inbox::{AfterValue, InboxHandle, Pushed};
 
 /// Specifies the `Scheduler` on which an observer will observe this observable: every event is
 /// delivered from a task of that scheduler, in order.
@@ -97,21 +97,16 @@ mod inbox {
     use crate::{
         disposable::Disposable,
         observer::{Event, Termination},
-        thread_mode::{ThreadMode, mutable::MutableHelper},
-        utils::take_leaving_room,
+        thread_mode::ThreadMode,
+        utils::{flagged_lock::FlaggedLock, take_leaving_room},
     };
     use educe::Educe;
 
-    /// What the source's observer, the task and the disposal share: the events not delivered yet,
-    /// and whether the delivery has stopped. It holds no observer, so it is `Send` as soon as the
-    /// events are.
+    /// What the source's observer, the task and the disposal share: the events not delivered yet.
+    /// It holds no observer, so it is `Send` as soon as the events are.
     struct Inbox<T, E> {
         values: Vec<T>,
         termination: Option<Termination<E>>,
-        /// The delivery stopped: disposed, or ended by downstream or by a termination. The source's
-        /// observer then answers [`Flow::Stop`](crate::observer::Flow::Stop), and nothing more is
-        /// queued.
-        stopped: bool,
     }
 
     /// What [`InboxHandle::push`] did with an event.
@@ -125,11 +120,13 @@ mod inbox {
         Stopped,
     }
 
-    /// What [`InboxHandle::take_preempting_error`] tells the task before each value it delivers.
-    pub(super) enum BeforeValue<E> {
-        /// Nothing preempts the value: deliver it.
-        Deliver,
-        /// An error queued since the step took its values, taken: it is delivered instead of them.
+    /// What [`InboxHandle::check_after_value`] tells the task after each value it delivers: what
+    /// the next event of the step is.
+    pub(super) enum AfterValue<E> {
+        /// Nothing preempts the next event: deliver it.
+        Continue,
+        /// An error queued since the step took its values, taken: it is delivered instead of those
+        /// left.
         Preempted(Termination<E>),
         /// The delivery has stopped.
         Stopped,
@@ -139,47 +136,63 @@ mod inbox {
     /// so that nothing is delivered once the subscription is disposed, even while the task is
     /// running. Its own module keeps the inbox out of reach of the rest of the operator, so that
     /// nothing else can take that lock.
+    ///
+    /// The inbox is `None` once the delivery has stopped: disposed, or ended by downstream or by a
+    /// termination. The source's observer then answers [`Flow::Stop`](crate::observer::Flow::Stop),
+    /// and nothing more is queued.
+    ///
+    /// The flag of the lock is raised as the delivery stops and as an error is queued: whatever
+    /// the task must not deliver an event past. Until then, the task goes from one value to the
+    /// next without taking the lock, so that it does not contend with the source pushing the next
+    /// ones.
     #[derive(Educe)]
     #[educe(Clone(bound()))]
-    pub(super) struct InboxHandle<M: ThreadMode, T, E>(M::Ptr<Inbox<T, E>>);
+    pub(super) struct InboxHandle<M: ThreadMode, T, E>(FlaggedLock<M, Option<Inbox<T, E>>>);
 
     impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
         pub(super) fn new() -> Self {
-            Self(M::ptr(Inbox {
+            Self(FlaggedLock::new(Some(Inbox {
                 values: Vec::new(),
                 termination: None,
-                stopped: false,
-            }))
+            })))
         }
 
         /// Queues `event`, unless the delivery has stopped: `event` is then dropped, outside the
         /// lock.
         pub(super) fn push(&self, event: Event<T, E>) -> Pushed {
-            self.0
-                .with_mut(|inbox| {
-                    if inbox.stopped {
-                        return Err(event);
-                    }
-                    let pushed = if inbox.values.is_empty() && inbox.termination.is_none() {
-                        Pushed::Wake
-                    } else {
-                        Pushed::Behind
-                    };
-                    match event {
-                        Event::Next(value) => inbox.values.push(value),
-                        Event::Termination(termination) => inbox.termination = Some(termination),
-                    }
-                    Ok(pushed)
-                })
-                .unwrap_or(Pushed::Stopped)
+            // An error preempts the values queued before it, so queuing one raises the flag, which
+            // makes the task take the lock after the value it is delivering. Raising it on a
+            // stopped inbox, which drops the error, changes nothing: the stop has raised it.
+            let preempts = matches!(event, Event::Termination(Termination::Error(_)));
+            let queue = |slot: &mut Option<Inbox<T, E>>| {
+                let Some(inbox) = slot else {
+                    return Err(event);
+                };
+                let pushed = if inbox.values.is_empty() && inbox.termination.is_none() {
+                    Pushed::Wake
+                } else {
+                    Pushed::Behind
+                };
+                match event {
+                    Event::Next(value) => inbox.values.push(value),
+                    Event::Termination(termination) => inbox.termination = Some(termination),
+                }
+                Ok(pushed)
+            };
+            let queued = if preempts {
+                self.0.raise_with(queue)
+            } else {
+                self.0.with_mut(queue)
+            };
+            queued.unwrap_or(Pushed::Stopped)
         }
 
         /// Takes everything queued, or `None` once the delivery has stopped. The inbox is left with
         /// room for as many values, so that those queued meanwhile do not grow a new `Vec` from
         /// nothing.
         pub(super) fn take(&self) -> Option<(Vec<T>, Option<Termination<E>>)> {
-            self.0.with_mut(|inbox| {
-                (!inbox.stopped).then(|| {
+            self.0.with_mut(|slot| {
+                slot.as_mut().map(|inbox| {
                     let room = inbox.values.len();
                     (
                         take_leaving_room(&mut inbox.values, room),
@@ -189,33 +202,29 @@ mod inbox {
             })
         }
 
-        pub(super) fn is_stopped(&self) -> bool {
-            self.0.with_ref(|inbox| inbox.stopped)
-        }
-
-        /// What the task checks before each value it delivers. An error queued is taken, since it
-        /// preempts the values not delivered yet; a completion does not, so it is left queued.
-        pub(super) fn take_preempting_error(&self) -> BeforeValue<E> {
-            self.0.with_mut(|inbox| {
-                if inbox.stopped {
-                    BeforeValue::Stopped
-                } else if let Some(error) = inbox
-                    .termination
-                    .take_if(|termination| matches!(termination, Termination::Error(_)))
-                {
-                    BeforeValue::Preempted(error)
-                } else {
-                    BeforeValue::Deliver
-                }
-            })
+        /// What the task checks after each value it delivers, before the next event. An error
+        /// queued is taken, since it preempts the values not delivered yet; a completion does not,
+        /// so it is left queued.
+        ///
+        /// Takes the lock only once the flag is raised: until then, the delivery has not stopped
+        /// and no error is queued, so the next event is delivered. A stop or an error that lands
+        /// right after the flag is read is seen after the next value, as one that lands right after
+        /// the lock would be.
+        pub(super) fn check_after_value(&self) -> AfterValue<E> {
+            self.0
+                .if_raised(|slot| match slot {
+                    None => AfterValue::Stopped,
+                    Some(inbox) => inbox
+                        .termination
+                        .take_if(|termination| matches!(termination, Termination::Error(_)))
+                        .map_or(AfterValue::Continue, AfterValue::Preempted),
+                })
+                .unwrap_or(AfterValue::Continue)
         }
 
         /// Marks the delivery stopped, and drops what is still queued, outside the lock.
         pub(super) fn stop(&self) {
-            drop(self.0.with_mut(|inbox| {
-                inbox.stopped = true;
-                (std::mem::take(&mut inbox.values), inbox.termination.take())
-            }));
+            drop(self.0.raise_with(Option::take));
         }
     }
 
@@ -258,56 +267,48 @@ where
         if let Some(Termination::Error(_)) = termination {
             values.clear();
         }
-        let idle = values.is_empty();
-        if !self.deliver(values) {
-            return Next::Finished;
-        }
+        let termination = match self.deliver(values) {
+            AfterValue::Continue => termination,
+            AfterValue::Preempted(error) => Some(error),
+            AfterValue::Stopped => return Next::Finished,
+        };
         if let Some(termination) = termination {
-            self.terminate(termination);
+            if let Some(observer) = self.observer.take() {
+                observer.on_termination(termination);
+            }
             Next::Finished
         } else if source_closed {
             // Released without a termination (decision 0004).
             Next::Finished
-        } else if idle {
-            Next::Pending
         } else {
-            // Yield rather than park, so that the values arriving while this batch was delivered
-            // are taken by the next pass without waiting for a wake.
-            Next::Yield
+            // A value that arrived while this step delivered found the inbox empty, and woke the
+            // task, which registered its waker before the step: parking loses nothing.
+            Next::Pending
         }
     }
 
-    /// Delivers `values` in order, and returns whether the delivery may go on. Before each value
-    /// it honors a disposal, which may come from the observer itself or from another thread, and
-    /// an error queued since the step took `values`: the error is delivered instead of the values
-    /// left, as it would have been had it come before the step.
-    fn deliver(&mut self, values: Vec<T>) -> bool {
+    /// Delivers `values` in order, and answers what the inbox says after the last one: whether the
+    /// termination the step took may follow, or an error preempts it.
+    ///
+    /// Every event of a step comes right after a look at the inbox: the first after the `take`
+    /// that brought it, each other after the value before it. So nothing is delivered after a
+    /// disposal, which may come from the observer itself or from another thread, and an error
+    /// queued since the step took `values` is delivered instead of the values left, as it would
+    /// have been had it come before the step.
+    fn deliver(&mut self, values: Vec<T>) -> AfterValue<E> {
+        let Some(observer) = self.observer.as_mut() else {
+            return AfterValue::Stopped;
+        };
         for value in values {
-            match self.inbox.take_preempting_error() {
-                BeforeValue::Deliver => {}
-                BeforeValue::Preempted(error) => {
-                    self.terminate(error);
-                    return false;
-                }
-                BeforeValue::Stopped => return false,
-            }
-            let Some(observer) = self.observer.as_mut() else {
-                return false;
-            };
             if observer.on_next(value).is_stop() {
-                return false;
+                return AfterValue::Stopped;
+            }
+            match self.inbox.check_after_value() {
+                AfterValue::Continue => {}
+                stopped_or_preempted => return stopped_or_preempted,
             }
         }
-        true
-    }
-
-    /// Delivers `termination`, unless the delivery was disposed.
-    fn terminate(&mut self, termination: Termination<E>) {
-        if !self.inbox.is_stopped()
-            && let Some(observer) = self.observer.take()
-        {
-            observer.on_termination(termination);
-        }
+        AfterValue::Continue
     }
 }
 

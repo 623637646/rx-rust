@@ -1,11 +1,12 @@
 //! A lock together with a flag that is raised only under it, and read without it.
 //!
-//! What the flag means is up to the owner of the lock — a delivery that has stopped, say — but
-//! the guarantee is the same: the flag is raised by [`FlaggedLock::raise_with`], under the lock,
-//! together with whatever its callback changes, so code that reads it raised and then takes the
-//! lock finds that change. Code that reads it lowered takes no lock at all, which is the point:
-//! the common path of a state that is rarely raised — the drop of a delivery's handle — costs one
-//! read of the flag, and does not contend with the threads that take the lock.
+//! What the flag means is up to the owner of the lock — a delivery that has stopped, an inbox
+//! that the next value must not skip — but the guarantee is the same: the flag is raised by
+//! [`FlaggedLock::raise_with`], under the lock, together with whatever its callback changes, so
+//! code that reads it raised and then takes the lock finds that change. Code that reads it lowered
+//! takes no lock at all, which is the point: the common path of a state that is rarely raised —
+//! the drop of a delivery's handle, each value `observe_on` delivers — costs one read of the
+//! flag, and does not contend with the threads that take the lock.
 //!
 //! The flag is only ever raised (a [`RaiseOnlyFlag`]), and the lock and the flag are private to
 //! this module, so nothing can raise it but a [`raise_with`](FlaggedLock::raise_with), which holds

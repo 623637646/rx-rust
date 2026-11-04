@@ -74,6 +74,9 @@ All notable changes to this project are documented here. The format follows
   callback, as an `Option`. A model that stops its caller, an inner observable that has been
   superseded say, calls `UpdateOutcome::answering_stop` instead of returning a `Flow` as its
   result. `DeliveryStopped` is removed.
+- `observe_on` delivers each value without taking the lock of its queue, which the source pushes
+  the next values through: a flag raised with the lock, as the subscription is disposed or an
+  error queued, tells the task when it must look before the next value.
 
 ### Removed
 
