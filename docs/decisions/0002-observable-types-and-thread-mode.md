@@ -154,9 +154,10 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
     `SerializedDelivery` handle reads the flag of its `FlaggedLock` raised, then locks, and must
     find the core stopped. The type guarantees it, so no call site has to be checked for it. The
     newtypes keep it from being bypassed through the concrete type, which
-    `<Local as ThreadMode>::Flag` normalizes to. A bool that goes back and forth has to agree with
-    the state it describes, so it belongs under that state's lock, in the `M::Ptr<_>`. See
-    [A `bool` flag](#a-bool-flag--replaced) below.
+    `<Local as ThreadMode>::Flag` normalizes to, and `RaiseOnlyFlag` is sealed, like `ThreadMode`,
+    so no other type can claim the guarantee without keeping it. A bool that goes back and forth
+    has to agree with the state it describes, so it belongs under that state's lock, in the
+    `M::Ptr<_>`. See [A `bool` flag](#a-bool-flag--replaced) below.
 11. **The features are additive.** `single-threaded` and `utils::types` are gone; every scheduler
     feature can be enabled together, and a binary can hold `Local` and `Shared` pipelines side by
     side.

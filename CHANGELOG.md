@@ -54,8 +54,9 @@ All notable changes to this project are documented here. The format follows
 
 - **Breaking:** `ThreadMode::Flag` can only be raised. It is `thread_mode::mutable::LocalFlag` or
   `SharedFlag` instead of `Rc<Cell<bool>>` / `Arc<AtomicBool>`, reached through the new
-  `RaiseOnlyFlag` trait — `raise()` and `is_raised()` — so a flag seen raised stays raised. A
-  state that turns back belongs under the lock of `ThreadMode::Ptr`.
+  `RaiseOnlyFlag` trait — `raise()` and `is_raised()` — so a flag seen raised stays raised. The
+  trait is sealed: `LocalFlag` and `SharedFlag` are its only implementations. A state that
+  turns back belongs under the lock of `ThreadMode::Ptr`.
 - `scheduler::drive` accepts a `sleep` whose future resolves to anything, not only to `()`; what
   it resolves to is ignored, only its completion counts. A runtime timer that answers a value —
   smol's `Timer::after`, which resolves to an `Instant` — is handed over as it is, instead of

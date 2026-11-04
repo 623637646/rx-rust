@@ -148,7 +148,30 @@ impl<M: MutableHelper + ?Sized> MutableExt for M {}
 ///
 /// The [`SharedFlag`] raises and reads with [`Ordering::SeqCst`]: what a thread wrote before it
 /// raised the flag is visible to a thread that reads it raised.
-pub trait RaiseOnlyFlag {
+///
+/// The trait is sealed: [`LocalFlag`] and [`SharedFlag`] are the only flags, so the guarantee is
+/// theirs rather than that of an implementation one has to trust. Even a flag that only forwards
+/// to one of them cannot be added:
+///
+// No twin compiles here, so nothing proves that the sealing is what fails it: keep every item of
+// `RaiseOnlyFlag` implemented as the trait changes, or a missing one would fail the example too,
+// and it would pass with the sealing gone.
+/// ```compile_fail
+/// use rx_rust::thread_mode::mutable::{LocalFlag, RaiseOnlyFlag};
+///
+/// struct Custom(LocalFlag);
+///
+/// impl RaiseOnlyFlag for Custom {
+///     fn raise(&self) {
+///         self.0.raise()
+///     }
+///
+///     fn is_raised(&self) -> bool {
+///         self.0.is_raised()
+///     }
+/// }
+/// ```
+pub trait RaiseOnlyFlag: super::sealed::Flag {
     /// Raises the flag, for good. Raising a raised flag does nothing.
     fn raise(&self);
     /// Whether the flag has been raised.

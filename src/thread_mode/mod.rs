@@ -57,11 +57,18 @@ use std::{
 };
 
 mod sealed {
-    use super::{Local, Shared};
+    use super::{
+        Local, Shared,
+        mutable::{LocalFlag, SharedFlag},
+    };
 
     pub trait Mode {}
     impl Mode for Local {}
     impl Mode for Shared {}
+
+    pub trait Flag {}
+    impl Flag for LocalFlag {}
+    impl Flag for SharedFlag {}
 }
 
 /// One of the two thread modes, [`Local`] and [`Shared`], and the types each one picks.
