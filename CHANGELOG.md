@@ -46,6 +46,11 @@ All notable changes to this project are documented here. The format follows
   repeats a source that completes as it is subscribed once that `subscribe` has returned, so the
   rounds take the stack of one subscription, and disposes each round before subscribing the next.
   The trampoline behind both now lives in `utils::trampoline`.
+- `ObservableExt::window_with_time(time_span, scheduler)` and
+  `window_with_time_or_count(count, time_span, scheduler)` are the windowed twins of
+  `buffer_with_time` and `buffer_with_time_or_count`: the first window opens at the subscription
+  and is completed one `time_span` later, at a fixed rate, and the second also completes a window
+  as soon as it holds `count` items, which restarts the timer.
 - `scheduler::Task::from_stream_acked_then`, with `scheduler::StreamAck` and
   `StreamAckedThenContext`: the task behind the two sources, public like `from_stream_then`, for
   operators written outside the crate.

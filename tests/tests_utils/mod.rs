@@ -11,6 +11,7 @@ pub(crate) mod test_channel;
 pub(crate) mod test_scheduler;
 pub(crate) mod test_struct;
 pub(crate) mod thread_checker_scheduler;
+pub(crate) mod window_checker;
 
 use std::time::{Duration, Instant};
 

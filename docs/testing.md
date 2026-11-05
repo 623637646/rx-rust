@@ -131,11 +131,11 @@ subscriber joins. `publish`, `publish_behavior`, `publish_last` and `replay` cov
 Some scheduler-based operators have no `test_next_on_sub` (e.g. `from_future`).
 
 A time-based operator (`delay`, `debounce`, `timeout`, `interval`, `timer`, `throttle`, the
-`buffer_with_time*` pair, `timestamp`, `time_interval`, …) is tested on a virtual clock:
-`let time = VirtualTime::new(); let scheduler = time.scheduler();`, then `time.advance_by(d)` where a
-real test would sleep. No `block_on`, no `.await`. Assert on the exact boundary — nothing after
-`advance_by(DURATION_100_MS - DURATION_1_MS)`, the event after one more `advance_by(DURATION_1_MS)` —
-rather than with a margin around it. A disposal on the virtual clock drops the task at once, so no
+`buffer_with_time*` and `window_with_time*` pairs, `timestamp`, `time_interval`, …) is tested on
+a virtual clock: `let time = VirtualTime::new(); let scheduler = time.scheduler();`, then
+`time.advance_by(d)` where a real test would sleep. No `block_on`, no `.await`. Assert on the
+exact boundary — nothing after `advance_by(DURATION_100_MS - DURATION_1_MS)`, the event after one
+more `advance_by(DURATION_1_MS)` — rather than with a margin around it. A disposal on the virtual clock drops the task at once, so no
 wait is needed before checking `State::Dropped`. `test_async` alone stays on `block_on`: it is the
 case about a real scheduler, and runs on all of them. It runs on real time six times over, so keep
 it well under nextest's 3 s `leak-timeout`: a long test among millisecond ones gets those reported

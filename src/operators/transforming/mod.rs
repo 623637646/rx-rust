@@ -12,4 +12,7 @@ pub mod map;
 pub mod scan;
 pub mod switch_map;
 pub mod window;
+mod window_core;
 pub mod window_with_count;
+pub mod window_with_time;
+pub mod window_with_time_or_count;

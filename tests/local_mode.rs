@@ -61,7 +61,7 @@ use std::{
     time::Duration,
 };
 use tests_utils::scheduler_ext::SchedulerExt;
-use tests_utils::{DURATION_10_MS, DURATION_100_MS};
+use tests_utils::{DURATION_10_MS, DURATION_30_MS, DURATION_100_MS};
 
 /// What [`record`] has seen: the values, then the termination.
 struct Record<T, E> {
@@ -593,6 +593,41 @@ on_local_schedulers!(
     }
 );
 
+on_local_schedulers!(test_window_with_time, |scheduler| async move {
+    let mut subject: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let (record, _subscription) = record(
+        subject
+            .clone()
+            .window_with_time(DURATION_100_MS, scheduler)
+            .concat_map(|window| window.to_vec()),
+    );
+    assert!(subject.on_next(Rc::new(1)).is_continue());
+    sleep(DURATION_100_MS + DURATION_30_MS).await;
+    assert_eq!(record.values(), [rcs([1])]);
+    assert!(subject.on_next(Rc::new(2)).is_continue());
+    subject.on_termination(Termination::Completed);
+    assert_eq!(record.values(), [rcs([1]), rcs([2])]);
+    assert_eq!(record.termination(), Some(Termination::Completed));
+});
+
+on_local_schedulers!(test_window_with_time_or_count, |scheduler| async move {
+    let mut subject: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let (record, _subscription) = record(
+        subject
+            .clone()
+            .window_with_time_or_count(NonZeroUsize::MIN, DURATION_100_MS, scheduler)
+            .concat_map(|window| window.to_vec()),
+    );
+    assert!(subject.on_next(Rc::new(1)).is_continue());
+    assert_eq!(record.values(), [rcs([1])]);
+    sleep(DURATION_100_MS + DURATION_30_MS).await;
+    assert_eq!(record.values(), [rcs([1]), rcs([])]);
+    assert!(subject.on_next(Rc::new(2)).is_continue());
+    assert_eq!(record.values(), [rcs([1]), rcs([]), rcs([2])]);
+    subject.on_termination(Termination::Completed);
+    assert_eq!(record.termination(), Some(Termination::Completed));
+});
+
 // MARK: - The clock of a single-threaded scheduler
 
 // The operators that only read the time take the local scheduler's clock, not the scheduler. That
@@ -630,7 +665,15 @@ const _: fn(TokioLocalScheduler) = |local| {
         .observe_on(local.clone())
         .subscribe_with_callback(move |_| drop(not_send.clone()), |_| {});
     let _buffer = subject
-        .buffer_with_time_or_count(NonZeroUsize::MIN, DURATION_100_MS, local)
+        .clone()
+        .buffer_with_time_or_count(NonZeroUsize::MIN, DURATION_100_MS, local.clone())
+        .subscribe_with_callback(|_| {}, |_| {});
+    let _window = subject
+        .clone()
+        .window_with_time(DURATION_100_MS, local.clone())
+        .subscribe_with_callback(|_| {}, |_| {});
+    let _window_or_count = subject
+        .window_with_time_or_count(NonZeroUsize::MIN, DURATION_100_MS, local)
         .subscribe_with_callback(|_| {}, |_| {});
 };
 

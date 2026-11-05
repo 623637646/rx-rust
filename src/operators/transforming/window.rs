@@ -1,16 +1,17 @@
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 
+use super::window_core::{Action, DelegateObserver, WindowContext, rotate, terminate};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
-    observer::{EventBatch, Flow, Observer, Termination, boxed_observer::ObserverMode},
-    subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
+    observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
+    subject::unicast_subject::BoxedUnicastObservable,
     thread_mode::ThreadMode,
     utils::{
         MarkerType,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
+        subscribe_with_context::{self, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
@@ -99,7 +100,7 @@ impl<OE, OE1> Window<'_, OE, OE1> {
 
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
-    subscribe_with_context::Disposal<M, DelegateAction<T, E>, E, (), ChainDisposal<D, D1>>,
+    subscribe_with_context::Disposal<M, Action<T, E>, E, (), ChainDisposal<D, D1>>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -131,20 +132,16 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let observer = DelegateObserver {
-            outer_observer: observer,
-            sender: None,
-        };
+        let observer = DelegateObserver::new(observer);
         // The windows own their buffered items, so the context needs no model of its own: it only
         // serializes the actions below and owns the source and boundary subscriptions.
         subscribe_with_context_two_steps(
             observer,
             (),
             |context| {
-                // The first window is opened before subscribing, so that a synchronous source has
-                // a window to deliver its values to. An observer that stops on that first window
-                // leaves the stream over, and then neither source is subscribed.
-                if matches!(context.send_next(DelegateAction::EmitWindow), Flow::Stop) {
+                // Open the first window before subscribing, so synchronous values have somewhere
+                // to go. An observer that stops on it keeps both sources from being subscribed.
+                if context.send_next(Action::EmitWindow).is_stop() {
                     return None;
                 }
                 Some(self.boundary.subscribe(BoundaryObserver(context.clone())))
@@ -155,12 +152,9 @@ where
     }
 }
 
-type WindowContext<'a, M, T, E, OR, D> =
-    SubscriptionContext<M, DelegateAction<T, E>, E, DelegateObserver<'a, M, T, E, OR>, (), D>;
-
 #[doc(hidden)]
 pub struct SourceObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
-    WindowContext<'a, M, T, E, OR, D>,
+    WindowContext<'a, M, T, E, OR, (), D>,
 );
 
 impl<'a, M, T, E, OR, D> Observer<T, E> for SourceObserver<'a, M, T, E, OR, D>
@@ -172,7 +166,7 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         // The value is queued as an action, so that it reaches the window outside the lock.
-        self.0.send_next(DelegateAction::ForwardValue(value))
+        self.0.send_next(Action::ForwardValue(value))
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -180,25 +174,9 @@ where
     }
 }
 
-/// Terminates the current window, then the outer observable.
-fn terminate<'a, M, T, E, OR, D>(
-    context: WindowContext<'a, M, T, E, OR, D>,
-    termination: Termination<E>,
-) where
-    M: ObserverMode,
-    E: Clone,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-    D: Disposable,
-{
-    let _ = context.send(EventBatch::NextAndTermination(
-        DelegateAction::TerminateWindow(termination.clone()),
-        termination,
-    ));
-}
-
 #[doc(hidden)]
 pub struct BoundaryObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
-    WindowContext<'a, M, T, E, OR, D>,
+    WindowContext<'a, M, T, E, OR, (), D>,
 );
 
 impl<'a, M, T, T1, E, OR, D> Observer<T1, E> for BoundaryObserver<'a, M, T, E, OR, D>
@@ -209,12 +187,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T1) -> Flow {
-        // Two events rather than one, so that disposing the outer subscription while the current
-        // window is completing suppresses the new window.
-        let flow = self.0.send(EventBatch::NextBatch(vec![
-            DelegateAction::TerminateWindow(Termination::Completed),
-            DelegateAction::EmitWindow,
-        ]));
+        let flow = rotate(&self.0);
         // Only the arrival of a boundary matters, never its value, which is dropped here, after
         // the window rotation and outside its lock, since dropping it can run arbitrary code.
         drop(value);
@@ -227,66 +200,5 @@ where
         if let error @ Termination::Error(_) = termination {
             terminate(self.0, error);
         }
-    }
-}
-
-enum DelegateAction<T, E> {
-    /// Sends a source value to the current window, if there is one.
-    ForwardValue(T),
-    /// Terminates the current window, if there is one.
-    TerminateWindow(Termination<E>),
-    /// Opens a new window, makes it the current one and emits it downstream.
-    EmitWindow,
-}
-
-/// Owns the state that the actions act on, so that a window is fed and emitted outside the lock of
-/// the context that serializes the source against the boundary.
-#[doc(hidden)]
-pub struct DelegateObserver<'a, M: ObserverMode, T, E, OR> {
-    outer_observer: OR,
-    /// The sending end of the window that is currently open, which is the only place where the
-    /// windows are fed from. It is `None` until the first window opens and after the last window
-    /// ended.
-    sender: Option<BoxedUnicastSender<'a, T, E, M>>,
-}
-
-impl<'a, M, T, E, OR> Observer<DelegateAction<T, E>, E> for DelegateObserver<'a, M, T, E, OR>
-where
-    M: ObserverMode,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-{
-    fn on_next(&mut self, action: DelegateAction<T, E>) -> Flow {
-        match action {
-            DelegateAction::ForwardValue(value) => {
-                match &mut self.sender {
-                    // The consumer of one window stops that window, not the operator: the next
-                    // window has its own consumer.
-                    Some(sender) => {
-                        let _ = sender.on_next(value);
-                    }
-                    // No window accepts values, so this one has nowhere to go.
-                    None => drop(value),
-                }
-                Flow::Continue
-            }
-            DelegateAction::TerminateWindow(termination) => {
-                if let Some(sender) = self.sender.take() {
-                    sender.on_termination(termination);
-                }
-                Flow::Continue
-            }
-            DelegateAction::EmitWindow => {
-                debug_assert!(self.sender.is_none());
-                let (sender, window) = unicast_subject::new_boxed();
-                self.sender = Some(sender);
-                self.outer_observer.on_next(window)
-            }
-        }
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        // The current window is terminated by the `TerminateWindow` action that precedes this one.
-        debug_assert!(self.sender.is_none());
-        self.outer_observer.on_termination(termination);
     }
 }

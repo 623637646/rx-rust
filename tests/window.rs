@@ -4,6 +4,7 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::window_checker::WindowChecker;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
@@ -27,165 +28,75 @@ use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::Tes
 fn test_completed_from_source() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Completed);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Completed)
+        ]
+    );
+    assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -194,476 +105,216 @@ fn test_completed_from_source() {
 fn test_completed_from_boundary() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Completed);
 
     assert!(sender.on_next(444).is_continue());
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), [444]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![444], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
 
     sender.on_termination(Termination::Completed);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), [444]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Completed);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![444], State::Completed)
+        ]
+    );
+    assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
 fn test_completed_source_and_boundary_are_same() {
     let mut subject = PublishSubject::<_, Infallible, _>::shared();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = subject.clone().window(subject.clone());
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
+
+    assert!(subject.on_next(()).is_continue());
+    assert_eq!(
+        checker.windows(),
+        [(vec![], State::Completed), (vec![()], State::Active)]
     );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.state(), State::Active);
 
     assert!(subject.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [()]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
-
-    assert!(subject.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [()]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), [()]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![], State::Completed),
+            (vec![()], State::Completed),
+            (vec![()], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [()]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), [()]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Completed);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![], State::Completed),
+            (vec![()], State::Completed),
+            (vec![()], State::Completed)
+        ]
+    );
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
 fn test_error_from_source() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Error("error"));
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Error("error"));
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Error("error"))
+        ]
+    );
+    assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -673,31 +324,20 @@ fn test_error_from_boundary() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
     let (boundary_sender, boundary_observable, boundary_channel_checker) =
         test_channel::<'_, (), &str>();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| termination_observer.on_termination(termination),
-    );
+    let _subscription = observable.subscribe(observer);
 
     assert!(sender.on_next(111).is_continue());
     boundary_sender.on_termination(Termination::Error("boundary error"));
 
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        let (checker, _) = &checker_sub_vec[0];
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Error("boundary error"));
-    });
-    assert_eq!(termination_checker.state(), State::Error("boundary error"));
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Error("boundary error"))]
+    );
+    assert_eq!(checker.state(), State::Error("boundary error"));
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(
         boundary_channel_checker.state(),
@@ -787,190 +427,89 @@ fn test_error_from_boundary_while_no_window_subscribed() {
 fn test_completed_boundary_does_not_mask_later_source_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Completed);
 
     assert!(sender.on_next(444).is_continue());
     sender.on_termination(Termination::Error("error"));
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), [444]);
-                    assert_eq!(checker.state(), State::Error("error"));
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Error("error"));
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![444], State::Error("error"))
+        ]
+    );
+    assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
@@ -978,163 +517,75 @@ fn test_completed_boundary_does_not_mask_later_source_error() {
 fn test_unsubscribe() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    let subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     subscription.dispose();
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    for (index, (checker, _sub)) in checker_sub_vec.take_value().into_iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), [111]);
-                assert_eq!(checker.state(), State::Completed);
-            }
-            1 => {
-                assert_eq!(checker.values(), [222, 333]);
-                assert_eq!(checker.state(), State::Completed);
-            }
-            2 => {
-                assert_eq!(checker.values(), []);
-                assert_eq!(checker.state(), State::Dropped);
-            }
-            _ => panic!(),
-        }
-    }
-    assert_eq!(termination_checker.state(), State::Dropped);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Dropped)
+        ]
+    );
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -1148,165 +599,78 @@ fn test_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert!(checker.values().is_empty());
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&value_1).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [&value_1]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.windows(), [(vec![&value_1], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [&value_1]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert!(checker.values().is_empty());
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![&value_1], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&value_2).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [&value_1]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [&value_2]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![&value_1], State::Completed),
+            (vec![&value_2], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&value_3).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [&value_1]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [&value_2, &value_3]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![&value_1], State::Completed),
+            (vec![&value_2, &value_3], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [&value_1]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [&value_2, &value_3]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert!(checker.values().is_empty());
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![&value_1], State::Completed),
+            (vec![&value_2, &value_3], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error(&error));
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [&value_1]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [&value_2, &value_3]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert!(checker.values().is_empty());
-                    assert_eq!(checker.state(), State::Error(&error));
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Error(&error));
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![&value_1], State::Completed),
+            (vec![&value_2, &value_3], State::Completed),
+            (vec![], State::Error(&error))
+        ]
+    );
+    assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(channel_checker.state(), ChannelState::Error(&error));
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -1316,39 +680,15 @@ fn test_async() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-        let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-        let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+        let (checker, observer) = WindowChecker::new();
 
         let observable = observable.window(boundary_observable);
 
-        let checker_sub_vec_cloned = checker_sub_vec.clone();
         let _subscription = scheduler
-            .spawn(async move {
-                observable.subscribe_with_callback(
-                    move |value| {
-                        let (checker, observer) = Checker::new();
-                        let sub = value.subscribe(observer);
-                        checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-                    },
-                    |termination| {
-                        termination_observer.on_termination(termination);
-                    },
-                )
-            })
+            .spawn(async move { observable.subscribe(observer) })
             .await;
-        assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-        checker_sub_vec.with_ref(|checker_sub_vec| {
-            for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-                match index {
-                    0 => {
-                        assert_eq!(checker.values(), []);
-                        assert_eq!(checker.state(), State::Active);
-                    }
-                    _ => panic!(),
-                }
-            }
-        });
-        assert_eq!(termination_checker.state(), State::Active);
+        assert_eq!(checker.windows(), [(vec![], State::Active)]);
+        assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
@@ -1358,19 +698,8 @@ fn test_async() {
                 sender
             })
             .await;
-        assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-        checker_sub_vec.with_ref(|checker_sub_vec| {
-            for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-                match index {
-                    0 => {
-                        assert_eq!(checker.values(), [111]);
-                        assert_eq!(checker.state(), State::Active);
-                    }
-                    _ => panic!(),
-                }
-            }
-        });
-        assert_eq!(termination_checker.state(), State::Active);
+        assert_eq!(checker.windows(), [(vec![111], State::Active)]);
+        assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
@@ -1380,23 +709,11 @@ fn test_async() {
                 boundary_sender
             })
             .await;
-        assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-        checker_sub_vec.with_ref(|checker_sub_vec| {
-            for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-                match index {
-                    0 => {
-                        assert_eq!(checker.values(), [111]);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    1 => {
-                        assert_eq!(checker.values(), []);
-                        assert_eq!(checker.state(), State::Active);
-                    }
-                    _ => panic!(),
-                }
-            }
-        });
-        assert_eq!(termination_checker.state(), State::Active);
+        assert_eq!(
+            checker.windows(),
+            [(vec![111], State::Completed), (vec![], State::Active)]
+        );
+        assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
@@ -1406,23 +723,11 @@ fn test_async() {
                 sender
             })
             .await;
-        assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-        checker_sub_vec.with_ref(|checker_sub_vec| {
-            for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-                match index {
-                    0 => {
-                        assert_eq!(checker.values(), [111]);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    1 => {
-                        assert_eq!(checker.values(), [222]);
-                        assert_eq!(checker.state(), State::Active);
-                    }
-                    _ => panic!(),
-                }
-            }
-        });
-        assert_eq!(termination_checker.state(), State::Active);
+        assert_eq!(
+            checker.windows(),
+            [(vec![111], State::Completed), (vec![222], State::Active)]
+        );
+        assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
@@ -1432,23 +737,14 @@ fn test_async() {
                 sender
             })
             .await;
-        assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-        checker_sub_vec.with_ref(|checker_sub_vec| {
-            for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-                match index {
-                    0 => {
-                        assert_eq!(checker.values(), [111]);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    1 => {
-                        assert_eq!(checker.values(), [222, 333]);
-                        assert_eq!(checker.state(), State::Active);
-                    }
-                    _ => panic!(),
-                }
-            }
-        });
-        assert_eq!(termination_checker.state(), State::Active);
+        assert_eq!(
+            checker.windows(),
+            [
+                (vec![111], State::Completed),
+                (vec![222, 333], State::Active)
+            ]
+        );
+        assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
@@ -1458,54 +754,30 @@ fn test_async() {
                 boundary_sender
             })
             .await;
-        assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-        checker_sub_vec.with_ref(|checker_sub_vec| {
-            for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-                match index {
-                    0 => {
-                        assert_eq!(checker.values(), [111]);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    1 => {
-                        assert_eq!(checker.values(), [222, 333]);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    2 => {
-                        assert_eq!(checker.values(), []);
-                        assert_eq!(checker.state(), State::Active);
-                    }
-                    _ => panic!(),
-                }
-            }
-        });
-        assert_eq!(termination_checker.state(), State::Active);
+        assert_eq!(
+            checker.windows(),
+            [
+                (vec![111], State::Completed),
+                (vec![222, 333], State::Completed),
+                (vec![], State::Active)
+            ]
+        );
+        assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
         scheduler
             .spawn(async move { sender.on_termination(Termination::Completed) })
             .await;
-        assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-        checker_sub_vec.with_ref(|checker_sub_vec| {
-            for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-                match index {
-                    0 => {
-                        assert_eq!(checker.values(), [111]);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    1 => {
-                        assert_eq!(checker.values(), [222, 333]);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    2 => {
-                        assert_eq!(checker.values(), []);
-                        assert_eq!(checker.state(), State::Completed);
-                    }
-                    _ => panic!(),
-                }
-            }
-        });
-        assert_eq!(termination_checker.state(), State::Completed);
+        assert_eq!(
+            checker.windows(),
+            [
+                (vec![111], State::Completed),
+                (vec![222, 333], State::Completed),
+                (vec![], State::Completed)
+            ]
+        );
+        assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
     });
@@ -1515,293 +787,113 @@ fn test_async() {
 fn test_subscribe_by_different_observer() {
     let (channels, observable) = test_channels::<'_, _, Infallible>();
     let (boundary_channels, boundary_observable) = test_channels();
-    let (termination_checker_1, termination_observer_1) = Checker::<Infallible, _>::new();
-    let checker_sub_vec_1 = Arc::new(Mutex::new(Vec::new()));
-    let (termination_checker_2, termination_observer_2) = Checker::<Infallible, _>::new();
-    let checker_sub_vec_2 = Arc::new(Mutex::new(Vec::new()));
+    let (checker_1, observer_1) = WindowChecker::new();
+    let (checker_2, observer_2) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
-    let checker_sub_vec_cloned = checker_sub_vec_1.clone();
-    let _subscription_1 = observable_1.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer_1.on_termination(termination);
-        },
-    );
-    let checker_sub_vec_cloned = checker_sub_vec_2.clone();
-    let _subscription_2 = observable_2.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer_2.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 1);
-    checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
-        for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.with_ref(Vec::len), 1);
-    checker_sub_vec_2.with_ref(|checker_sub_vec_2| {
-        for (index, (checker, _)) in checker_sub_vec_2.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_2.state(), State::Active);
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_2 = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker_2.state(), State::Active);
 
     assert!(channels.on_next(0, 111).is_continue());
     assert!(channels.on_next(1, 111).is_continue());
-    assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 1);
-    checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
-        for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.with_ref(Vec::len), 1);
-    checker_sub_vec_2.with_ref(|checker_sub_vec_2| {
-        for (index, (checker, _)) in checker_sub_vec_2.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_2.state(), State::Active);
+    assert_eq!(checker_1.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker_2.state(), State::Active);
 
     assert!(boundary_channels.on_next(0, ()).is_continue());
     assert!(boundary_channels.on_next(1, ()).is_continue());
-    assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 2);
-    checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
-        for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.with_ref(Vec::len), 2);
-    checker_sub_vec_2.with_ref(|checker_sub_vec_2| {
-        for (index, (checker, _)) in checker_sub_vec_2.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_2.state(), State::Active);
+    assert_eq!(
+        checker_1.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(
+        checker_2.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker_2.state(), State::Active);
 
     assert!(channels.on_next(0, 222).is_continue());
     assert!(channels.on_next(1, 222).is_continue());
-    assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 2);
-    checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
-        for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.with_ref(Vec::len), 2);
-    checker_sub_vec_2.with_ref(|checker_sub_vec_2| {
-        for (index, (checker, _)) in checker_sub_vec_2.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_2.state(), State::Active);
+    assert_eq!(
+        checker_1.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(
+        checker_2.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker_2.state(), State::Active);
 
     assert!(channels.on_next(0, 333).is_continue());
     assert!(channels.on_next(1, 333).is_continue());
-    assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 2);
-    checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
-        for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.with_ref(Vec::len), 2);
-    checker_sub_vec_2.with_ref(|checker_sub_vec_2| {
-        for (index, (checker, _)) in checker_sub_vec_2.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_2.state(), State::Active);
+    assert_eq!(
+        checker_1.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(
+        checker_2.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker_2.state(), State::Active);
 
     assert!(boundary_channels.on_next(0, ()).is_continue());
     assert!(boundary_channels.on_next(1, ()).is_continue());
-    assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 3);
-    checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
-        for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.with_ref(Vec::len), 3);
-    checker_sub_vec_2.with_ref(|checker_sub_vec_2| {
-        for (index, (checker, _)) in checker_sub_vec_2.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_2.state(), State::Active);
+    assert_eq!(
+        checker_1.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(
+        checker_2.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker_2.state(), State::Active);
 
     channels.on_termination(0, Termination::Completed);
     channels.on_termination(1, Termination::Completed);
-    assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 3);
-    checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
-        for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_1.state(), State::Completed);
-    assert_eq!(checker_sub_vec_2.with_ref(Vec::len), 3);
-    checker_sub_vec_2.with_ref(|checker_sub_vec_2| {
-        for (index, (checker, _)) in checker_sub_vec_2.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker_2.state(), State::Completed);
+    assert_eq!(
+        checker_1.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Completed)
+        ]
+    );
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(
+        checker_2.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Completed)
+        ]
+    );
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
@@ -1809,35 +901,13 @@ fn test_unsub_on_next_by_take() {
     let (_sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (_boundary_sender, boundary_observable, boundary_channel_checker) =
         test_channel::<'_, (), _>();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(boundary_observable).take(1);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Dropped);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Completed);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Dropped)]);
+    assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Initialized);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Initialized);
 }
@@ -2503,165 +1573,75 @@ fn test_multiple_operation_same_boundary() {
 fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = Window::new(observable, boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.windows(), [(vec![111], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![111], State::Completed), (vec![222], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     assert!(boundary_sender.on_next(()).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Active)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [222, 333]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                2 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Completed);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![111], State::Completed),
+            (vec![222, 333], State::Completed),
+            (vec![], State::Completed)
+        ]
+    );
+    assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -2860,151 +1840,62 @@ fn test_next_on_sub() {
     let source = source.start_with([111]);
     let (_, boundary_subject_source, _) = test_channel();
     let boundary_subject_source = boundary_subject_source.start_with([()]);
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = source.window(boundary_subject_source);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(
+        checker.windows(),
+        [(vec![], State::Completed), (vec![111], State::Active)]
     );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [111]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(checker.state(), State::Active);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [111, 222]);
-                    assert_eq!(checker.state(), State::Active);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(
+        checker.windows(),
+        [(vec![], State::Completed), (vec![111, 222], State::Active)]
+    );
+    assert_eq!(checker.state(), State::Active);
 
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                1 => {
-                    assert_eq!(checker.values(), [111, 222]);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Completed);
+    assert_eq!(
+        checker.windows(),
+        [
+            (vec![], State::Completed),
+            (vec![111, 222], State::Completed)
+        ]
+    );
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
 fn test_complete_on_sub() {
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = Empty.into_shared().window(Empty);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Completed);
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Completed);
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Completed)]);
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
 fn test_error_on_sub() {
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = Throw::new("error")
         .into_shared()
         .window(Empty.with_error_type());
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Error("error"));
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Error("error"));
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Error("error"))]);
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]
 fn test_next_on_unsub() {
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
     let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), Infallible>();
 
     // The source emits from inside its own disposal, so the value arrives while downstream is
@@ -3018,35 +1909,20 @@ fn test_next_on_unsub() {
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    assert_eq!(termination_checker.state(), State::Active);
+    let subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     subscription.dispose();
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    for (checker, _sub) in checker_sub_vec.take_value() {
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Dropped);
-    }
-    assert_eq!(termination_checker.state(), State::Dropped);
+    assert_eq!(checker.windows(), [(vec![], State::Dropped)]);
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_complete_on_unsub() {
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
     let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), Infallible>();
 
     // The source completes from inside its own disposal, so it terminates while downstream is
@@ -3059,35 +1935,20 @@ fn test_complete_on_unsub() {
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    assert_eq!(termination_checker.state(), State::Active);
+    let subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     subscription.dispose();
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    for (checker, _sub) in checker_sub_vec.take_value() {
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Dropped);
-    }
-    assert_eq!(termination_checker.state(), State::Dropped);
+    assert_eq!(checker.windows(), [(vec![], State::Dropped)]);
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_error_on_unsub() {
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
     let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), &str>();
 
     // The source fails from inside its own disposal, so it terminates while downstream is
@@ -3100,66 +1961,33 @@ fn test_error_on_unsub() {
 
     let observable = observable.window(boundary_observable);
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    assert_eq!(termination_checker.state(), State::Active);
+    let subscription = observable.subscribe(observer);
+    assert_eq!(checker.windows(), [(vec![], State::Active)]);
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     subscription.dispose();
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    for (checker, _sub) in checker_sub_vec.take_value() {
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Dropped);
-    }
-    assert_eq!(termination_checker.state(), State::Dropped);
+    assert_eq!(checker.windows(), [(vec![], State::Dropped)]);
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_error_on_sub_from_boundary() {
     let (_sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+    let (checker, observer) = WindowChecker::new();
 
     let observable = observable.window(Throw::new("boundary error"));
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let _subscription = observable.subscribe_with_callback(
-        move |value| {
-            let (checker, observer) = Checker::new();
-            let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
-        },
-        |termination| {
-            termination_observer.on_termination(termination);
-        },
-    );
+    let _subscription = observable.subscribe(observer);
 
     // The boundary errors during its own subscription, before the source is subscribed.
     // The window opened up front is still emitted, and it observes the error.
-    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
-    checker_sub_vec.with_ref(|checker_sub_vec| {
-        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
-            match index {
-                0 => {
-                    assert_eq!(checker.values(), []);
-                    assert_eq!(checker.state(), State::Error("boundary error"));
-                }
-                _ => panic!(),
-            }
-        }
-    });
-    assert_eq!(termination_checker.state(), State::Error("boundary error"));
+    assert_eq!(
+        checker.windows(),
+        [(vec![], State::Error("boundary error"))]
+    );
+    assert_eq!(checker.state(), State::Error("boundary error"));
     assert_eq!(channel_checker.state(), ChannelState::Initialized);
 }
 

@@ -8,7 +8,7 @@
 //! | Module | Operators |
 //! |---|---|
 //! | [`creating`] | `Create`, `Defer`, `Empty`, `FromFuture`, `FromTryFuture`, `FromIter`, `FromResult`, `FromStream`, `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked`, `Interval`, `Just`, `Never`, `Range`, `Repeat`, `Start`, `Throw`, `Timer` |
-//! | [`transforming`] | `map`, `scan`, `flat_map`, `concat_map`, `switch_map`, `group_by`, `buffer`, `buffer_with_count`, `buffer_with_time`, `buffer_with_time_or_count`, `window`, `window_with_count` |
+//! | [`transforming`] | `map`, `scan`, `flat_map`, `concat_map`, `switch_map`, `group_by`, `buffer`, `buffer_with_count`, `buffer_with_time`, `buffer_with_time_or_count`, `window`, `window_with_count`, `window_with_time`, `window_with_time_or_count` |
 //! | [`filtering`] | `filter`, `first`, `last`, `element_at`, `take`, `take_last`, `skip`, `skip_last`, `distinct`, `distinct_until_changed`, `debounce`, `throttle`, `sample`, `ignore_elements` |
 //! | [`combining`] | `merge_with`, `merge_all`, `concat_with`, `concat_all`, `switch`, `zip`, `combine_latest`, `start_with` |
 //! | [`conditional_boolean`] | `all`, `contains`, `sequence_equal`, `default_if_empty`, `amb_with`, `take_while`, `take_until`, `skip_while`, `skip_until` |

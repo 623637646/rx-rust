@@ -94,7 +94,8 @@ use crate::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
             flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan, switch_map::SwitchMap,
-            window::Window, window_with_count::WindowWithCount,
+            window::Window, window_with_count::WindowWithCount, window_with_time::WindowWithTime,
+            window_with_time_or_count::WindowWithTimeOrCount,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_after_disposal::DoAfterDisposal,
@@ -1368,6 +1369,28 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Self::Mode: ObserverMode,
     {
         WindowWithCount::new(self, count)
+    }
+
+    /// Collects items into windows that each last `time_span`, on the provided scheduler: the
+    /// first one opens at the subscription, and each following one as the one before is
+    /// completed.
+    fn window_with_time<'a, S>(
+        self,
+        time_span: Duration,
+        scheduler: S,
+    ) -> WindowWithTime<'a, Self, S> {
+        WindowWithTime::new(self, time_span, scheduler)
+    }
+
+    /// Collects items into windows completed when they reach `count` items or every `time_span`,
+    /// whichever comes first; the timer first fires one `time_span` after the subscription.
+    fn window_with_time_or_count<'a, S>(
+        self,
+        count: NonZeroUsize,
+        time_span: Duration,
+        scheduler: S,
+    ) -> WindowWithTimeOrCount<'a, Self, S> {
+        WindowWithTimeOrCount::new(self, count, time_span, scheduler)
     }
 
     /// Gives an observable whose error type is `Infallible` a concrete error type.

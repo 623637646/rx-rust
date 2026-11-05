@@ -79,6 +79,7 @@ not a disposal and not a termination.
   | `debounce` | the pending value is emitted when the quiet period ends, as it is when the source falls silent; a completion would flush it at once, but there is none |
   | `timeout` | the timer fires and the stream fails with `Error::Timeout` |
   | `buffer_with_time`, `buffer_with_time_or_count` | the open buffer is emitted at its tick, and the ticks go on, with empty buffers, until the subscription is disposed |
+  | `window_with_time`, `window_with_time_or_count` | the open window is completed at its tick, and the ticks go on, with empty windows, until the subscription is disposed |
 
 - **The downstream observer is dropped, never terminated, once nothing more can come**: when the
   queue is drained, the delayed values are out, the pending value is emitted. That is what `map`
