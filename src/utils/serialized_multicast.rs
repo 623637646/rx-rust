@@ -217,7 +217,7 @@ where
     pub(crate) fn subscribe(
         self,
         observer: impl IntoBoxedObserver<'or, T, E, M>,
-    ) -> Option<MulticastDisposal<'or, T, E, M, R>> {
+    ) -> MulticastDisposal<'or, T, E, M, R> {
         self.subscribe_with(observer, |_, terminated| match terminated {
             Some(termination) => Admission::Terminated(Vec::new(), termination.clone()),
             None => Admission::Join(Vec::new()),
@@ -230,14 +230,15 @@ where
     /// values `admit` snapshots are exactly the ones the newcomer missed: see the module
     /// documentation. `admit` runs under the lock and must not notify anyone.
     ///
-    /// Returns the disposal of the subscription, or [`None`] when the observer did not join: it
-    /// has then already been notified, outside the lock — unless the multicast was killed by a
-    /// panicking observer, in which case it is dropped without being notified.
+    /// Returns the disposal of the subscription. When the observer did not join, that disposal
+    /// holds nothing and releases nothing: the observer was notified before this returns, outside
+    /// the lock — or, when a panicking observer killed the multicast, dropped without being
+    /// notified.
     pub(crate) fn subscribe_with(
         self,
         observer: impl IntoBoxedObserver<'or, T, E, M>,
         admit: impl FnOnce(&mut R, Option<&Termination<E>>) -> Admission<T, E>,
-    ) -> Option<MulticastDisposal<'or, T, E, M, R>> {
+    ) -> MulticastDisposal<'or, T, E, M, R> {
         let disposed = M::Flag::default();
         // The observer travels with its entry, and stays here when there is no entry to join.
         let mut observer = Some(observer);
@@ -262,11 +263,11 @@ where
             Updated::Ran {
                 result: Admitted::Added(id),
                 ..
-            } => Some(MulticastDisposal {
+            } => MulticastDisposal(Some(Joined {
                 delivery: self.0,
                 disposed,
                 id,
-            }),
+            })),
             Updated::Ran {
                 result: Admitted::Terminated(values, termination),
                 ..
@@ -284,13 +285,13 @@ where
                 if flow.is_continue() {
                     observer.on_termination(termination);
                 }
-                None
+                MulticastDisposal(None)
             }
             Updated::Stopped => {
                 // The delivery only stops once an observer panicked, which kills the multicast:
                 // the termination went with the resources, so this observer is dropped here
                 // instead, outside the lock. See the module documentation.
-                None
+                MulticastDisposal(None)
             }
         }
     }
@@ -447,9 +448,18 @@ where
 }
 
 /// Unsubscribes one observer from a [`SerializedMulticast`].
+///
+/// Holds nothing when the observer never joined — it was terminated at once, or dropped by a
+/// multicast a panicking observer killed — so that such a subscription keeps no part of the
+/// multicast alive.
 #[derive(Educe)]
 #[educe(Debug(bound()))]
-pub(crate) struct MulticastDisposal<'or, T, E, M: ObserverMode, R> {
+pub(crate) struct MulticastDisposal<'or, T, E, M: ObserverMode, R>(Option<Joined<'or, T, E, M, R>>);
+
+/// The subscription of an observer that joined: what its disposal needs to take it away.
+#[derive(Educe)]
+#[educe(Debug(bound()))]
+struct Joined<'or, T, E, M: ObserverMode, R> {
     #[educe(Debug(ignore))]
     delivery: Delivery<'or, T, E, M, R>,
     #[educe(Debug(ignore))]
@@ -463,9 +473,14 @@ where
     E: Clone,
 {
     fn dispose(self) {
+        let Some(joined) = self.0 else {
+            return; // Never joined, so there is nothing to take away.
+        };
         // The flag is what stops the events; the action only releases the observer afterwards.
-        self.disposed.raise();
-        let _ = self.delivery.send(EventBatch::Next(Action::Prune(self.id)));
+        joined.disposed.raise();
+        let _ = joined
+            .delivery
+            .send(EventBatch::Next(Action::Prune(joined.id)));
     }
 }
 
@@ -490,21 +505,15 @@ mod tests {
         let multicast = SerializedMulticast::<_, (), Local, _>::idle(());
 
         let seen_by_first = Arc::clone(&seen);
-        let first = multicast
-            .clone()
-            .subscribe(CallbackObserver::new(
-                move |value| seen_by_first.with_mut(|seen| seen.push(("first", value))),
-                |_| {},
-            ))
-            .expect("not terminated yet");
+        let first = multicast.clone().subscribe(CallbackObserver::new(
+            move |value| seen_by_first.with_mut(|seen| seen.push(("first", value))),
+            |_| {},
+        ));
         let seen_by_second = Arc::clone(&seen);
-        let _second = multicast
-            .clone()
-            .subscribe(CallbackObserver::new(
-                move |value| seen_by_second.with_mut(|seen| seen.push(("second", value))),
-                |_| {},
-            ))
-            .expect("not terminated yet");
+        let _second = multicast.clone().subscribe(CallbackObserver::new(
+            move |value| seen_by_second.with_mut(|seen| seen.push(("second", value))),
+            |_| {},
+        ));
 
         assert_eq!(multicast.send(EventBatch::Next(1)), Flow::Continue);
         first.dispose();
@@ -517,5 +526,27 @@ mod tests {
             seen.clone_value(),
             [("first", 1), ("second", 1), ("second", 2)]
         );
+    }
+
+    /// An observer that subscribes after the termination is terminated at once, and its disposal
+    /// holds nothing of the multicast.
+    #[test]
+    fn test_subscribe_after_termination() {
+        let terminations = Arc::new(Mutex::new(Vec::new()));
+        let multicast = SerializedMulticast::<i32, (), Local, _>::idle(());
+        assert_eq!(
+            multicast.send(EventBatch::Termination(Termination::Completed)),
+            Flow::Stop
+        );
+
+        let terminations_seen = Arc::clone(&terminations);
+        let disposal = multicast.subscribe(CallbackObserver::new(
+            |_| -> () { unreachable!() },
+            move |termination| terminations_seen.with_mut(|seen| seen.push(termination)),
+        ));
+
+        assert_eq!(terminations.clone_value(), [Termination::Completed]);
+        assert!(disposal.0.is_none());
+        disposal.dispose();
     }
 }

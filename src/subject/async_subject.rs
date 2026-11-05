@@ -8,7 +8,7 @@
 use super::Subject;
 use crate::{
     delegate_disposal,
-    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{
         EventBatch, Flow, Observer, Termination,
@@ -91,7 +91,7 @@ impl<T, E> AsyncSubject<'_, T, E, Shared> {
 
 delegate_disposal!(
     Disposal<'or, T, E, M>,
-    OptionDisposal<MulticastDisposal<'or, T, E, M, Option<T>>>,
+    MulticastDisposal<'or, T, E, M, Option<T>>,
     where M: ObserverMode
 );
 
@@ -114,8 +114,7 @@ where
     E: Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        match self
-            .0
+        self.0
             .subscribe_with(observer, |last, terminated| match terminated {
                 // Reading the last value and the termination is one step, so a subscriber can never
                 // observe one without the other.
@@ -125,11 +124,8 @@ where
                     Termination::Completed,
                 ),
                 Some(termination) => Admission::Terminated(Vec::new(), termination.clone()),
-            }) {
-            Some(disposal) => OptionDisposal::some(disposal),
-            None => OptionDisposal::none(),
-        }
-        .into_dispose_on_drop()
+            })
+            .into_dispose_on_drop()
     }
 }
 

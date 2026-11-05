@@ -7,7 +7,7 @@
 use super::Subject;
 use crate::{
     delegate_disposal,
-    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{
         EventBatch, Flow, Observer, Termination,
@@ -110,7 +110,7 @@ impl<T, E> BehaviorSubject<'_, T, E, Shared> {
 
 delegate_disposal!(
     Disposal<'or, T, E, M>,
-    OptionDisposal<MulticastDisposal<'or, T, E, M, T>>,
+    MulticastDisposal<'or, T, E, M, T>,
     where M: ObserverMode
 );
 
@@ -133,18 +133,14 @@ where
     E: Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        match self
-            .0
+        self.0
             .subscribe_with(observer, |value, terminated| match terminated {
                 // The current value is snapshotted under the very lock that queues the
                 // subscription, so it is followed by exactly the values emitted after it.
                 None => Admission::Join(vec![value.clone()]),
                 Some(termination) => Admission::Terminated(Vec::new(), termination.clone()),
-            }) {
-            Some(disposal) => OptionDisposal::some(disposal),
-            None => OptionDisposal::none(),
-        }
-        .into_dispose_on_drop()
+            })
+            .into_dispose_on_drop()
     }
 }
 

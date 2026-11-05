@@ -8,7 +8,7 @@
 use super::Subject;
 use crate::{
     delegate_disposal,
-    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{
         EventBatch, Flow, Observer, Termination,
@@ -111,7 +111,7 @@ impl<T, E> ReplaySubject<'_, T, E, Shared> {
 
 delegate_disposal!(
     Disposal<'or, T, E, M>,
-    OptionDisposal<MulticastDisposal<'or, T, E, M, Buffer<T>>>,
+    MulticastDisposal<'or, T, E, M, Buffer<T>>,
     where M: ObserverMode
 );
 
@@ -134,19 +134,17 @@ where
     E: Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        match self.0.subscribe_with(observer, |buffer, terminated| {
-            // The buffer is the history of the subject, so it is replayed whichever way the
-            // subject terminated: an error does not erase what was emitted before it.
-            let values = buffer.values.iter().cloned().collect();
-            match terminated {
-                None => Admission::Join(values),
-                Some(termination) => Admission::Terminated(values, termination.clone()),
-            }
-        }) {
-            Some(disposal) => OptionDisposal::some(disposal),
-            None => OptionDisposal::none(),
-        }
-        .into_dispose_on_drop()
+        self.0
+            .subscribe_with(observer, |buffer, terminated| {
+                // The buffer is the history of the subject, so it is replayed whichever way the
+                // subject terminated: an error does not erase what was emitted before it.
+                let values = buffer.values.iter().cloned().collect();
+                match terminated {
+                    None => Admission::Join(values),
+                    Some(termination) => Admission::Terminated(values, termination.clone()),
+                }
+            })
+            .into_dispose_on_drop()
     }
 }
 

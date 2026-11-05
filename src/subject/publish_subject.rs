@@ -8,7 +8,7 @@
 use super::Subject;
 use crate::{
     delegate_disposal,
-    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{
         EventBatch, Flow, Observer, Termination,
@@ -130,7 +130,7 @@ impl<T, E> PublishSubject<'_, T, E, Shared> {
 
 delegate_disposal!(
     Disposal<'or, T, E, M>,
-    OptionDisposal<MulticastDisposal<'or, T, E, M, ()>>,
+    MulticastDisposal<'or, T, E, M, ()>,
     where M: ObserverMode
 );
 
@@ -153,11 +153,7 @@ where
     E: Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        match self.0.subscribe(observer) {
-            Some(disposal) => OptionDisposal::some(disposal),
-            None => OptionDisposal::none(),
-        }
-        .into_dispose_on_drop()
+        self.0.subscribe(observer).into_dispose_on_drop()
     }
 }
 
