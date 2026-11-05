@@ -380,7 +380,8 @@ module documentation.
 ## Operators
 
 The full list, with a doc example for each, is on [docs.rs](https://docs.rs/rx-rust). Sources are
-types in `rx_rust::operators::creating`; everything else is a method of `ObservableExt`.
+types in `rx_rust::operators::creating`, plus `Using`; everything else is a method of
+`ObservableExt`.
 
 Category                    | Operators
 --------------------------- | ---------
@@ -391,7 +392,7 @@ Combining                   | `merge_with`, `merge_all`, `concat_with`, `concat_
 Conditional and boolean     | `all`, `contains`, `sequence_equal`, `default_if_empty`, `amb_with`, `take_while`, `take_until`, `skip_while`, `skip_until`
 Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`, `collect`, `to_vec`
 Error handling              | `catch`, `map_err`, `retry`
-Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `hold`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
+Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `hold`, `Using`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
 Connectable                 | `multicast`, `publish`, `publish_behavior`, `publish_last`, `replay`, `share`, `share_behavior`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
 Async conversion            | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`
 Type conversion             | `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`

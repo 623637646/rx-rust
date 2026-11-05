@@ -35,7 +35,11 @@ All notable changes to this project are documented here. The format follows
 - `ObservableExt::hold(resource)` keeps a value for as long as the subscription to its source
   lasts, and drops it when the subscription ends. Holding a `StreamAck` in the observable made of
   an item, inside a `concat_map` or a `flat_map`, acknowledges the item once that observable has
-  ended. It is ReactiveX's `Using`, without the factories.
+  ended.
+- `operators::utility::using::Using` is ReactiveX's `Using`: each subscription creates a
+  resource, builds the observable from it, and drops it when the subscription ends — before the
+  termination is delivered, so that a `retry` creates the next resource only once the previous one
+  is gone. A resource factory that returns an `Err` ends the subscription with that error.
 - `scheduler::Task::from_stream_acked_then`, with `scheduler::StreamAck` and
   `StreamAckedThenContext`: the task behind the two sources, public like `from_stream_then`, for
   operators written outside the crate.

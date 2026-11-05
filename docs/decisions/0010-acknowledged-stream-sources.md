@@ -34,8 +34,11 @@ FromTryStreamAcked::new(chunks, scheduler.clone())
   `flat_map` under `with_permits(n)` handles up to `n` at once, the bounded concurrency nothing
   else gives; `switch_map` drops the `StreamAck` of the inner it cancels. And it is not specific to
   acknowledgements: a lock guard, a temporary file or a metering token is tied to a subscription
-  the same way. It is ReactiveX's `Using` without the factories, since a resource is an owned
-  value, dropped with the observer that holds it.
+  the same way, as an owned value dropped with the observer that holds it. ReactiveX's `Using` is
+  a separate source, `operators::utility::using::Using`: it creates a resource for each
+  subscription, and drops it *before* the termination goes downstream, so that a `retry` finds
+  an exclusive resource released. An acknowledgement wants the other order, which is `hold`'s: the
+  item is done once its observable's termination has been handled.
 - **It keeps the stance on `request(n)`.** The README says an observable has no `request(n)` and
   that demand-driven consumption is what `Stream` is for. That still holds: no observer, subject
   or operator gains a demand protocol, and the pull side stays in the `Stream`. What is new is a

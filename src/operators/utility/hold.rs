@@ -17,6 +17,9 @@ use educe::Educe;
 /// The value lives in the observer given to the source, so it is dropped wherever and whenever the
 /// source drops that observer. An observable never subscribed drops it with itself.
 ///
+/// A resource created for each subscription, and released before the termination goes downstream,
+/// is [`Using`](crate::operators::utility::using::Using) instead.
+///
 /// This is how the `StreamAck` of a `FromStreamAcked` item (feature `futures`) is kept until the
 /// item has been handled, inside the `concat_map` or `flat_map` that handles it.
 ///
