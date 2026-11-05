@@ -15,7 +15,8 @@
 //! context is made of, the one to many observers that the subjects are made of, the lock with a
 //! flag raised only under it that guards the delivery, the subscribe function of an observer that
 //! subscribes an observable with an observer of its own type (as `retry` and `concat_all` do), the
-//! queue behind a running delivery, the reservation slot and its keyed form, the id generator, the
+//! trampoline that keeps a re-subscription from a termination from nesting (`retry`,
+//! `repeat_source`), the queue behind a running delivery, the reservation slot and its keyed form, the id generator, the
 //! panic guard and the lazy subscription of the future and stream adapters. They serve the crate's
 //! own operators. The few of their types that a public signature names — what a context's update
 //! answers — are re-exported by the public module naming them.
@@ -35,6 +36,7 @@ pub(crate) mod serialized_multicast;
 pub(crate) mod subscribe_fn;
 pub mod subscribe_with_auto_dispose_on_termination;
 pub mod subscribe_with_context;
+pub(crate) mod trampoline;
 
 use std::marker::PhantomData;
 

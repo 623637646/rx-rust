@@ -40,6 +40,12 @@ All notable changes to this project are documented here. The format follows
   resource, builds the observable from it, and drops it when the subscription ends — before the
   termination is delivered, so that a `retry` creates the next resource only once the previous one
   is gone. A resource factory that returns an `Err` ends the subscription with that error.
+- `ObservableExt::repeat_source(callback)` is the operator form of ReactiveX's `Repeat`: after
+  each completion it asks the callback for the next observable and subscribes to it, until the
+  callback returns `None`, which completes downstream; an error is not repeated. Like `retry`, it
+  repeats a source that completes as it is subscribed once that `subscribe` has returned, so the
+  rounds take the stack of one subscription, and disposes each round before subscribing the next.
+  The trampoline behind both now lives in `utils::trampoline`.
 - `scheduler::Task::from_stream_acked_then`, with `scheduler::StreamAck` and
   `StreamAckedThenContext`: the task behind the two sources, public like `from_stream_then`, for
   operators written outside the crate.

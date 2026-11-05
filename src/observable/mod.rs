@@ -102,8 +102,8 @@ use crate::{
             do_after_termination::DoAfterTermination, do_before_disposal::DoBeforeDisposal,
             do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
             do_before_termination::DoBeforeTermination, hold::Hold, materialize::Materialize,
-            observe_on::ObserveOn, subscribe_on::SubscribeOn, time_interval::TimeInterval,
-            timeout::Timeout, timestamp::Timestamp,
+            observe_on::ObserveOn, repeat_source::RepeatSource, subscribe_on::SubscribeOn,
+            time_interval::TimeInterval, timeout::Timeout, timestamp::Timestamp,
         },
     },
     subject::{
@@ -1084,6 +1084,16 @@ pub trait ObservableExt: ObservableTypes + Sized {
         F: FnMut(T0, Self::Item) -> T0,
     {
         Reduce::new(self, initial_value, callback)
+    }
+
+    /// Re-subscribes after a completion, to the observable the callback returns, until the
+    /// callback returns `None`.
+    fn repeat_source<OE1, F>(self, callback: F) -> RepeatSource<Self, F>
+    where
+        OE1: ObservableTypes<Item = Self::Item, Error = Self::Error>,
+        F: FnMut() -> Option<OE1>,
+    {
+        RepeatSource::new(self, callback)
     }
 
     /// Multicasts the source using a `ReplaySubject` that keeps the last `buffer_size` values, or

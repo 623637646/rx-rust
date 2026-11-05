@@ -9,11 +9,8 @@ use crate::{
     },
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    thread_mode::{
-        ThreadMode,
-        mutable::{MutableExt, MutableHelper},
-    },
-    utils::{on_panic::on_panic, subscribe_fn::SubscribeFn},
+    thread_mode::ThreadMode,
+    utils::{subscribe_fn::SubscribeFn, trampoline::Trampoline},
 };
 use educe::Educe;
 
@@ -146,7 +143,7 @@ where
                         .map_inner(|disposal| OptionDisposal::some(EitherDisposal::Left(disposal)))
                 })
             },
-            RetryObserver::retry_once,
+            |(observer, error)| RetryObserver::retry_once(observer, error),
         );
         DisposeOnDrop::new(replaceable_disposal).map_inner_into()
     }
@@ -163,7 +160,7 @@ pub struct RetryObserver<M: ThreadMode, OR, F, D: Disposable, OE1: ObservableTyp
     resubscribe: SubscribeFn<OE1, Self>,
     /// Where an error that arrives while this operator is subscribing waits for the subscription
     /// to return, so that retries follow one another instead of nesting.
-    trampoline: Trampoline<M, Self, OE1::Error>,
+    trampoline: Trampoline<M, (Self, OE1::Error)>,
 }
 
 impl<M, T, E, OR, D, OE1, F> Observer<T, E> for RetryObserver<M, OR, F, D, OE1>
@@ -183,8 +180,11 @@ where
             completion @ Termination::Completed => self.observer.on_termination(completion),
             Termination::Error(error) => {
                 let trampoline = self.trampoline.clone();
-                if let Some((observer, error)) = trampoline.park(self, error) {
-                    trampoline.run(|| observer.retry_once(error), Self::retry_once);
+                if let Some((observer, error)) = trampoline.park((self, error)) {
+                    trampoline.run(
+                        || observer.retry_once(error),
+                        |(observer, error)| observer.retry_once(error),
+                    );
                 }
             }
         }
@@ -220,84 +220,5 @@ where
                     DisposeOnDrop::new(OptionDisposal::none())
                 }
             })
-    }
-}
-
-/// Where a retry waits while the operator is still subscribing.
-///
-/// The observer is handed back by `on_termination`, so an error that arrives while a `subscribe`
-/// made by this operator has not returned yet — synchronously from that very call, or from another
-/// thread meanwhile — parks the observer and its error here and returns. [`run`](Self::run) takes
-/// them once the subscription returns and retries them itself. An error that arrives once no
-/// subscription is being made finds the trampoline idle and retries on the spot. There is one
-/// observer at a time, so at most one of them is ever parked.
-#[derive(Educe)]
-#[educe(Clone(bound()))]
-struct Trampoline<M: ThreadMode, O, E>(M::Ptr<Round<O, E>>);
-
-/// The state of a [`Trampoline`].
-enum Round<O, E> {
-    /// No subscription is being made.
-    Idle,
-    /// [`run`](Trampoline::run) is making subscriptions, and no error has arrived since it took
-    /// the last one.
-    Subscribing,
-    /// An error arrived while a subscription was being made, and waits for it to return.
-    Parked(O, E),
-}
-
-impl<M: ThreadMode, O, E> Default for Trampoline<M, O, E> {
-    fn default() -> Self {
-        Self(M::ptr(Round::Idle))
-    }
-}
-
-impl<M: ThreadMode, O, E> Trampoline<M, O, E> {
-    /// Runs `subscribe`, then `retry` on the error that arrived meanwhile, if any, and so on: a
-    /// retry that fails while it is being subscribed parks again and is picked up by this loop, so
-    /// the stack stays as deep as one subscription however many times in a row it fails.
-    ///
-    /// The trampoline stays subscribing from the first call to the last: between two of them, the
-    /// observer is in this loop's hands, so no error can arrive. A parked observer holds this
-    /// trampoline, which then holds the observer back: if a call unwinds, the guard empties the
-    /// trampoline so that the two do not keep each other alive.
-    fn run(&self, subscribe: impl FnOnce(), retry: impl Fn(O, E)) {
-        let previous = self.0.replace_value(Round::Subscribing);
-        debug_assert!(
-            matches!(previous, Round::Idle),
-            "one subscription is made at a time"
-        );
-        let _guard = on_panic(|| drop(self.0.replace_value(Round::Idle)));
-        subscribe();
-        while let Some((observer, error)) = self.take_parked() {
-            retry(observer, error);
-        }
-    }
-
-    /// Takes the observer and the error parked during the call that just returned, staying
-    /// subscribing for their retry, or goes idle if none was parked.
-    fn take_parked(&self) -> Option<(O, E)> {
-        self.0
-            .with_mut(|round| match std::mem::replace(round, Round::Idle) {
-                Round::Parked(observer, error) => {
-                    *round = Round::Subscribing;
-                    Some((observer, error))
-                }
-                Round::Subscribing => None,
-                Round::Idle => unreachable!("the trampoline was subscribing"),
-            })
-    }
-
-    /// Parks `observer` and `error` while a subscription is being made, or hands them back to be
-    /// retried at once.
-    fn park(&self, observer: O, error: E) -> Option<(O, E)> {
-        self.0.with_mut(|round| match round {
-            Round::Subscribing => {
-                *round = Round::Parked(observer, error);
-                None
-            }
-            Round::Idle => Some((observer, error)),
-            Round::Parked(..) => unreachable!("one observer at a time, so one error at a time"),
-        })
     }
 }

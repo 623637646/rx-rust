@@ -13,6 +13,9 @@ use std::convert::Infallible;
 /// Creates an observable that emits a particular item multiple times.
 /// See <https://reactivex.io/documentation/operators/repeat.html>
 ///
+/// To subscribe to a source again each time it completes, see
+/// [`ObservableExt::repeat_source`](crate::observable::ObservableExt::repeat_source).
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
