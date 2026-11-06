@@ -51,6 +51,13 @@ All notable changes to this project are documented here. The format follows
   `buffer_with_time` and `buffer_with_time_or_count`: the first window opens at the subscription
   and is completed one `time_span` later, at a fixed rate, and the second also completes a window
   as soon as it holds `count` items, which restarts the timer.
+- `operators::combining::when::When` is ReactiveX's `And` / `Then` / `When`: over a tuple of up
+  to six sources, each plan — `a.and(b).then(selector)`, up to six sources — waits until every
+  source of its pattern has an item, takes the first of each and emits what its selector makes of
+  them. Plans may share a source, and an item goes to the first plan, in the order given, that it
+  completes. A plan retires once one of its sources has completed with nothing queued; a source
+  that no remaining plan uses is then disposed, or never subscribed, and the stream completes once
+  every plan has retired. A pattern that names a source twice fails to build.
 - `scheduler::Task::from_stream_acked_then`, with `scheduler::StreamAck` and
   `StreamAckedThenContext`: the task behind the two sources, public like `from_stream_then`, for
   operators written outside the crate.

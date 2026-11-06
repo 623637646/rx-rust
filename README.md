@@ -380,15 +380,15 @@ module documentation.
 ## Operators
 
 The full list, with a doc example for each, is on [docs.rs](https://docs.rs/rx-rust). Sources are
-types in `rx_rust::operators::creating`, plus `Using`; everything else is a method of
-`ObservableExt`.
+types in `rx_rust::operators::creating`, plus `Using` in `rx_rust::operators::utility` and `When`
+in `rx_rust::operators::combining`; everything else is a method of `ObservableExt`.
 
 Category                    | Operators
 --------------------------- | ---------
 Creating                    | `Create`, `Defer`, `Empty`, `FromFuture`, `FromTryFuture`, `FromIter`, `FromResult`, `FromStream`, `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked`, `Interval`, `Just`, `Never`, `Range`, `Repeat`, `Start`, `Throw`, `Timer`
 Transforming                | `map`, `scan`, `flat_map`, `concat_map`, `switch_map`, `group_by`, `buffer`, `buffer_with_count`, `buffer_with_time`, `buffer_with_time_or_count`, `window`, `window_with_count`, `window_with_time`, `window_with_time_or_count`
 Filtering                   | `filter`, `first`, `last`, `element_at`, `take`, `take_last`, `skip`, `skip_last`, `distinct`, `distinct_with_key_selector`, `distinct_until_changed`, `distinct_until_changed_with_key_selector`, `debounce`, `throttle`, `sample`, `ignore_elements`
-Combining                   | `merge_with`, `merge_all`, `concat_with`, `concat_all`, `switch`, `zip`, `combine_latest`, `join`, `group_join`, `start_with`
+Combining                   | `merge_with`, `merge_all`, `concat_with`, `concat_all`, `switch`, `zip`, `combine_latest`, `join`, `group_join`, `start_with`, `When` (with `and` / `then`)
 Conditional and boolean     | `all`, `contains`, `sequence_equal`, `default_if_empty`, `amb_with`, `take_while`, `take_until`, `skip_while`, `skip_until`
 Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`, `collect`, `to_vec`
 Error handling              | `catch`, `map_err`, `retry`

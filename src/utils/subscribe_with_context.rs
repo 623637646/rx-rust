@@ -178,11 +178,26 @@ where
     D: Disposable,
     F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> DisposeOnDrop<D>,
 {
-    subscribe_with_context_opt(
-        |_| observer,
-        model,
-        |context| Some(builder(context.clone())),
-    )
+    subscribe_with_context_with_stop_view(|_| observer, model, builder)
+}
+
+/// [`subscribe_with_context`] with the observer that `observer_builder` builds around the
+/// [`StopView`] of the context: a delegate that runs user code before an emission sends through
+/// it, so that a disposal made by that code drops what it returns, as the selectors of `when` do.
+pub(crate) fn subscribe_with_context_with_stop_view<M, T, E, OR, D, MD, F>(
+    observer_builder: impl FnOnce(StopView<M>) -> OR,
+    model: MD,
+    builder: F,
+) -> DisposeOnDrop<Disposal<M, T, E, MD, D>>
+where
+    M: ThreadMode,
+    OR: Observer<T, E>,
+    D: Disposable,
+    F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> DisposeOnDrop<D>,
+{
+    subscribe_with_context_opt(observer_builder, model, |context| {
+        Some(builder(context.clone()))
+    })
 }
 
 /// The context handed to each step of [`subscribe_with_context_two_steps`]: it owns both steps'

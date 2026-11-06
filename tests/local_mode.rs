@@ -24,6 +24,7 @@ use rx_rust::{
     operators::{
         combining::{
             combine_latest::CombineLatest, group_join::GroupJoin, join::Join, merge::Merge,
+            when::When,
         },
         connectable::ref_count::RefCount,
         creating::{
@@ -373,6 +374,30 @@ fn test_group_join() {
     assert!(rights.on_next(Rc::new(3)).is_continue());
     lefts.on_termination(Termination::Completed);
     assert_eq!(record.values(), [12]);
+    assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+#[test]
+fn test_when() {
+    let mut subject_1: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut subject_2: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut subject_3: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let (record, _subscription) = record(When::new(
+        (subject_1.clone(), subject_2.clone(), subject_3.clone()),
+        |(a, b, c)| {
+            (
+                a.and(b).then(|a, b| *a * 10 + *b),
+                a.and(c).then(|a, c| *a * 100 + *c),
+            )
+        },
+    ));
+    assert!(subject_3.on_next(Rc::new(3)).is_continue());
+    assert!(subject_1.on_next(Rc::new(1)).is_continue());
+    assert!(subject_2.on_next(Rc::new(2)).is_continue());
+    assert!(subject_1.on_next(Rc::new(4)).is_continue());
+    subject_2.on_termination(Termination::Completed);
+    subject_3.on_termination(Termination::Completed);
+    assert_eq!(record.values(), [103, 42]);
     assert_eq!(record.termination(), Some(Termination::Completed));
 }
 
