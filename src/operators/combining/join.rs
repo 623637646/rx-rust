@@ -198,7 +198,10 @@ where
             Action::Left(id, value) => {
                 let pair = |right: &R| (self.result_selector)(&value, right);
                 let others = self.rights.values();
-                if join_core::send_each(&self.stop_view, &mut self.observer, others, pair).is_stop()
+                if self
+                    .stop_view
+                    .send_each(&mut self.observer, others, pair)
+                    .is_stop()
                 {
                     return Flow::Stop;
                 }
@@ -209,7 +212,10 @@ where
             Action::Right(id, value) => {
                 let pair = |left: &L| (self.result_selector)(left, &value);
                 let others = self.lefts.values();
-                if join_core::send_each(&self.stop_view, &mut self.observer, others, pair).is_stop()
+                if self
+                    .stop_view
+                    .send_each(&mut self.observer, others, pair)
+                    .is_stop()
                 {
                     return Flow::Stop;
                 }

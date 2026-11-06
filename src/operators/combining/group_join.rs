@@ -215,12 +215,9 @@ where
                 let (mut sender, window) = unicast_subject::new_boxed();
                 // A `Flow::Stop` ends the window's share of the right values only. When a clone
                 // disposed the subscription, the stop view stops the emission of the window below.
-                let _ = join_core::send_each(
-                    &self.stop_view,
-                    &mut sender,
-                    self.rights.values(),
-                    Clone::clone,
-                );
+                let _ = self
+                    .stop_view
+                    .send_each(&mut sender, self.rights.values(), Clone::clone);
                 match id {
                     Some(id) => {
                         self.windows.insert(id, sender);
@@ -228,7 +225,7 @@ where
                     // No right value can come any more.
                     None => sender.on_termination(Termination::Completed),
                 }
-                return join_core::send(&self.stop_view, &mut self.observer, || (value, window));
+                return self.stop_view.send(&mut self.observer, || (value, window));
             }
             Action::Right(id, value) => {
                 // A window whose consumer stopped is dropped, without a termination, and gets no
@@ -239,8 +236,7 @@ where
                 // disposal stops the delivery of: no flow has to tell it.
                 let stop_view = &self.stop_view;
                 self.windows.retain(|_, sender| {
-                    !sender.is_closed()
-                        && join_core::send(stop_view, sender, || value.clone()).is_continue()
+                    !sender.is_closed() && stop_view.send(sender, || value.clone()).is_continue()
                 });
                 if let Some(id) = id {
                     self.rights.insert(id, value);
@@ -248,7 +244,7 @@ where
             }
             Action::Close(Side::Left, id) => {
                 if let Some(sender) = self.windows.remove(&id) {
-                    join_core::terminate(&self.stop_view, sender, || Termination::Completed);
+                    self.stop_view.terminate(sender, || Termination::Completed);
                 }
             }
             Action::Close(Side::Right, id) => drop(self.rights.remove(&id)),
@@ -257,7 +253,7 @@ where
                 // The consumer of a window may dispose the subscription on its completion, which
                 // drops the rest of them without a termination.
                 for sender in std::mem::take(&mut self.windows).into_values() {
-                    join_core::terminate(&self.stop_view, sender, || Termination::Completed);
+                    self.stop_view.terminate(sender, || Termination::Completed);
                 }
             }
         }
@@ -276,8 +272,8 @@ where
             ..
         } = self;
         for sender in windows.into_values().filter(|sender| !sender.is_closed()) {
-            join_core::terminate(&stop_view, sender, || termination.clone());
+            stop_view.terminate(sender, || termination.clone());
         }
-        join_core::terminate(&stop_view, observer, || termination);
+        stop_view.terminate(observer, || termination);
     }
 }

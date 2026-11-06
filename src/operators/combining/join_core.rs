@@ -157,61 +157,9 @@ struct Model<DLD: Disposable, DRD: Disposable> {
 
 // A delegate emits several events for one action, or runs user code before an emission, while the
 // delivery checks for a stop between two actions only. So it checks the `StopView` of its context
-// before each emission, through these: a disposal from inside one of those emissions or that user
-// code, or from another thread meanwhile, reaches the rest of them only through it.
-
-/// Sends `observer` the value that `value` makes, unless the subscription is disposed before
-/// `value` runs or while it runs — user code, a selector or a `Clone`, which may dispose it.
-/// [`Flow::Stop`] when it is disposed, and the value is then not made, or dropped unsent, or when
-/// `observer` answered it.
-pub(super) fn send<M: ThreadMode, T, E>(
-    stop_view: &StopView<M>,
-    observer: &mut impl Observer<T, E>,
-    value: impl FnOnce() -> T,
-) -> Flow {
-    if stop_view.is_stopped() {
-        return Flow::Stop;
-    }
-    let value = value();
-    if stop_view.is_stopped() {
-        return Flow::Stop;
-    }
-    observer.on_next(value)
-}
-
-/// Sends the value that `value` makes for each of `items`, until the subscription is disposed or
-/// `observer` answers [`Flow::Stop`]. Each value is made inside [`send`], so a disposal before it
-/// is needed skips the user's code too.
-pub(super) fn send_each<M: ThreadMode, T, E, V>(
-    stop_view: &StopView<M>,
-    observer: &mut impl Observer<T, E>,
-    items: impl IntoIterator<Item = V>,
-    mut value: impl FnMut(V) -> T,
-) -> Flow {
-    for item in items {
-        if send(stop_view, observer, || value(item)).is_stop() {
-            return Flow::Stop;
-        }
-    }
-    Flow::Continue
-}
-
-/// [`send`] for the termination that `termination` makes: `observer` is dropped unterminated when
-/// the subscription is disposed before or while `termination` runs.
-pub(super) fn terminate<M: ThreadMode, T, E>(
-    stop_view: &StopView<M>,
-    observer: impl Observer<T, E>,
-    termination: impl FnOnce() -> Termination<E>,
-) {
-    if stop_view.is_stopped() {
-        return;
-    }
-    let termination = termination();
-    if stop_view.is_stopped() {
-        return;
-    }
-    observer.on_termination(termination);
-}
+// before each emission, through `StopView::send`, `send_each` and `terminate`: a disposal from
+// inside one of those emissions or that user code, or from another thread meanwhile, reaches the
+// rest of them only through it.
 
 /// Which source ends the stream once it has completed and the windows of its values have closed:
 /// what is left of the other source then has nothing to meet.

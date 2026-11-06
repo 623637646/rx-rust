@@ -96,24 +96,82 @@ pub(crate) struct DeliveryStop<M: ThreadMode, T, E, R> {
     core: FlaggedLock<M, Core<T, E, R>>,
 }
 
-/// Tells, without a lock, whether a delivery has been stopped other than by its termination: by a
-/// [`DeliveryStop`], or by its own loop, as its observer answers [`Flow::Stop`] or panics.
+/// Sends to an observer only while a delivery has not been stopped other than by its termination,
+/// a stop it reads without a lock: one by a [`DeliveryStop`], or by the delivery's own loop, as its
+/// observer answers [`Flow::Stop`] or panics.
 ///
-/// While the observer runs, only the first can happen, so the observer learns from it that its
-/// subscription has been disposed — from inside one of its own notifications, or from another
-/// thread meanwhile — which the delivery itself checks between two events only. An observer that
-/// emits several events for one, or runs user code before an emission, checks it before each of
-/// them. A disposal during the termination raises it too: a stop raises it whatever state it finds
-/// the core in, a termination that has already stopped it included.
+/// While the observer runs, only the first can happen, so the observer learns through this view
+/// that its subscription has been disposed — from inside one of its own notifications, or from
+/// another thread meanwhile — which the delivery itself checks between two events only. An
+/// observer that emits several events for one, or runs user code before an emission, sends each
+/// of them through [`send`](Self::send), [`send_each`](Self::send_each) or
+/// [`terminate`](Self::terminate), which check the stop before and after that code: they are the
+/// only way to read it outside this module. A disposal during the termination counts too: a stop
+/// raises its flag whatever state it finds the core in, a termination that has already stopped it
+/// included.
 ///
-/// It is raised under the lock, before the stop drops what the core held, so code that runs as the
-/// resources are dropped — the disposal of a source, and a user callback it runs — sees it raised.
+/// The flag is raised under the lock, before the stop drops what the core held, so code that runs
+/// as the resources are dropped — the disposal of a source, and a user callback it runs — sees the
+/// delivery stopped.
 pub(crate) struct StopView<M: ThreadMode>(FlagView<M>);
 
 impl<M: ThreadMode> StopView<M> {
     /// Whether the delivery has been stopped, for good, other than by its termination.
-    pub(crate) fn is_stopped(&self) -> bool {
+    fn is_stopped(&self) -> bool {
         self.0.is_raised()
+    }
+
+    /// Sends `observer` the value that `value` makes, unless the delivery is stopped before
+    /// `value` runs or while it runs — user code, a selector or a `Clone`, which may dispose the
+    /// subscription. [`Flow::Stop`] when it is stopped, and the value is then not made, or dropped
+    /// unsent, or when `observer` answered it.
+    pub(crate) fn send<T, E>(
+        &self,
+        observer: &mut impl Observer<T, E>,
+        value: impl FnOnce() -> T,
+    ) -> Flow {
+        if self.is_stopped() {
+            return Flow::Stop;
+        }
+        let value = value();
+        if self.is_stopped() {
+            return Flow::Stop;
+        }
+        observer.on_next(value)
+    }
+
+    /// Sends the value that `value` makes for each of `items`, until the delivery is stopped or
+    /// `observer` answers [`Flow::Stop`]. Each value is made inside [`send`](Self::send), so a stop
+    /// before it is needed skips the user's code too.
+    pub(crate) fn send_each<T, E, V>(
+        &self,
+        observer: &mut impl Observer<T, E>,
+        items: impl IntoIterator<Item = V>,
+        mut value: impl FnMut(V) -> T,
+    ) -> Flow {
+        for item in items {
+            if self.send(observer, || value(item)).is_stop() {
+                return Flow::Stop;
+            }
+        }
+        Flow::Continue
+    }
+
+    /// [`send`](Self::send) for the termination that `termination` makes: `observer` is dropped
+    /// unterminated when the delivery is stopped before or while `termination` runs.
+    pub(crate) fn terminate<T, E>(
+        &self,
+        observer: impl Observer<T, E>,
+        termination: impl FnOnce() -> Termination<E>,
+    ) {
+        if self.is_stopped() {
+            return;
+        }
+        let termination = termination();
+        if self.is_stopped() {
+            return;
+        }
+        observer.on_termination(termination);
     }
 }
 
@@ -803,6 +861,40 @@ mod tests {
                     .expect("the view is installed before anything can read it")
                     .is_stopped()
             })
+        }
+
+        /// Takes the view out, for a test that sends through it rather than reads it from a
+        /// callback.
+        fn take(&self) -> StopView<Shared> {
+            self.0
+                .take_value()
+                .expect("the view is installed as the delivery is built")
+        }
+    }
+
+    /// What a test sends to through a [`StopView`]: it records into its log, and runs `on_next`
+    /// on each value, after recording it.
+    struct Target<F> {
+        log: Log,
+        on_next: F,
+    }
+
+    fn target<F: FnMut(i32)>(log: &Log, on_next: F) -> Target<F> {
+        Target {
+            log: log.clone(),
+            on_next,
+        }
+    }
+
+    impl<F: FnMut(i32)> Observer<i32, TestError> for Target<F> {
+        fn on_next(&mut self, value: i32) -> Flow {
+            record(&self.log, Record::Next(value));
+            (self.on_next)(value);
+            Flow::Continue
+        }
+
+        fn on_termination(self, termination: Termination<TestError>) {
+            record(&self.log, Record::Termination(termination));
         }
     }
 
@@ -1694,6 +1786,104 @@ mod tests {
             ]
         );
         assert!(stop_view.is_stopped());
+    }
+
+    #[test]
+    fn test_a_stop_view_sends_while_the_delivery_runs() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let _delivery = builder.build();
+        let stop_view = stop_view.take();
+        let sent = new_log();
+        let mut target = target(&sent, |_| {});
+
+        assert!(stop_view.send(&mut target, || 1).is_continue());
+        assert!(
+            stop_view
+                .send_each(&mut target, [2, 3], |n| n)
+                .is_continue()
+        );
+        stop_view.terminate(target, || Termination::Completed);
+
+        assert_eq!(
+            records(&sent),
+            [
+                Record::Next(1),
+                Record::Next(2),
+                Record::Next(3),
+                Record::Termination(Termination::Completed),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_a_stopped_view_runs_no_user_code() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let delivery = builder.build();
+        let stop_view = stop_view.take();
+        delivery.stop_handle().stop();
+        let sent = new_log();
+        let mut target = target(&sent, |_| {});
+
+        assert!(stop_view.send(&mut target, || unreachable!()).is_stop());
+        let flow = stop_view.send_each(&mut target, [1], |_| -> i32 { unreachable!() });
+        assert!(flow.is_stop());
+        stop_view.terminate(target, || unreachable!());
+
+        assert!(records(&sent).is_empty());
+    }
+
+    /// The user's code that makes a value or a termination may dispose the subscription, which
+    /// drops what it made unsent.
+    #[test]
+    fn test_a_stop_while_the_event_is_made_drops_it_unsent() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let delivery = builder.build();
+        let stop_view = stop_view.take();
+        let sent = new_log();
+        let mut target = target(&sent, |_| {});
+
+        let flow = stop_view.send(&mut target, || {
+            delivery.stop_handle().stop();
+            1
+        });
+        assert!(flow.is_stop());
+        stop_view.terminate(target, || Termination::Completed);
+
+        assert!(records(&sent).is_empty());
+    }
+
+    /// An emission that disposes the subscription ends a `send_each` before it makes the next
+    /// value.
+    #[test]
+    fn test_a_stop_from_an_emission_ends_send_each() {
+        let log = new_log();
+        let builder = builder(&log);
+        let stop_view = builder.stop_view();
+        let delivery = builder.build();
+        let stop_view = stop_view.take();
+        let stop = delivery.stop_handle();
+        let sent = new_log();
+        let mut target = target(&sent, move |value| {
+            if value == 2 {
+                stop.stop();
+            }
+        });
+        let mut made = Vec::new();
+
+        let flow = stop_view.send_each(&mut target, [1, 2, 3], |n| {
+            made.push(n);
+            n
+        });
+
+        assert!(flow.is_stop());
+        assert_eq!(made, [1, 2]);
+        assert_eq!(values(&sent), [1, 2]);
     }
 
     // MARK: - Re-entrant sends

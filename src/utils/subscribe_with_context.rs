@@ -237,14 +237,13 @@ where
 }
 
 /// [`subscribe_with_context_two_steps`] with the observer that `observer_builder` builds around the
-/// [`StopView`] of the context: an observer that emits several events for one tells from it,
-/// before each of them, that the subscription has been disposed meanwhile, as `join` does.
+/// [`StopView`] of the context: a delegate checks it before each emission and around user code
+/// that runs before an emission, as `join` does.
 ///
-/// The context checks for a stop between two of its events only, which is all an observer that
-/// emits one event for each of them needs. One that would emit several splits them into several
-/// events where it can, as `window` does with the rotation of its windows; this is for one that
-/// cannot, such as `join`, whose delegate holds the values it pairs, so that the selector runs
-/// outside the lock.
+/// The context checks for a stop between two of its events only. An operator that would emit
+/// several events at once makes them several events of the context where it can, as `window`
+/// does with the rotation of its windows; this is for one that cannot, such as `join`, whose
+/// delegate holds the values it pairs so that the selector runs outside the lock.
 pub(crate) fn subscribe_with_context_two_steps_with_stop_view<M, T, E, OR, D1, D2, MD, F1, F2>(
     observer_builder: impl FnOnce(StopView<M>) -> OR,
     model: MD,
