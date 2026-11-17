@@ -120,7 +120,7 @@ impl Accumulator {
 
     /// `None` before the first item.
     fn average(&self) -> Option<f64> {
-        (self.count != 0).then(|| match self.total {
+        (self.count != 0).then_some(match self.total {
             Total::Sum(sum) => sum / self.count as f64,
             Total::Mean(mean) => mean,
         })
