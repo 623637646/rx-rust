@@ -29,7 +29,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- `with_latest_from` combines primary emissions with the latest auxiliary values.
+- `buffer_with_count_and_skip` and `window_with_count_and_skip` support overlapping groups and
+  gaps; `with_latest_from` combines primary emissions with the latest auxiliary values.
+- `buffer_with_time_and_shift` and `window_with_time_and_shift` open groups at fixed intervals.
+  Groups overlap when the interval is shorter than their duration and leave gaps when it is longer.
 - `stop_on_disposal` delivers nothing more to its observer once the subscription is disposed and
   answers `Flow::Stop` from then on. A disposal alone does not stop an operator that sends
   several notifications for one event of its source — the replay and the completion of
@@ -97,6 +100,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking for specialized schedulers:** `buffer_with_time` and `window_with_time` use the
+  task context of their time-and-shift counterparts. A custom scheduler that only implements
+  `Scheduler<PeriodicContext<C>>` needs a generic `Scheduler<C>` implementation for these operators.
 - **Breaking:** `CombineLatest::new`, `Zip::new`, `Merge::new` and `Concat::new` now take a tuple.
   Migrate `Operator::new(a, b)` to `Operator::new((a, b))` and explicit type annotations from
   `Operator<A, B>` to `Operator<(A, B)>`. For iterator-based races, use

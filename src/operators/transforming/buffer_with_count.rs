@@ -1,14 +1,17 @@
 //! The [`BufferWithCount`] operator, behind
 //! [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count).
 
+use super::{buffer_with_count_and_skip, internal::overlap::no_overlap};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
-    utils::take_leaving_room,
+    observer::Observer,
 };
 use educe::Educe;
 use std::num::NonZeroUsize;
+
+#[doc(hidden)]
+pub use super::buffer_with_count_and_skip::BufferWithCountAndSkipObserver as BufferWithCountObserver;
 
 /// Gathers the items of an observable into bundles of a specified size, emitted as `Vec<T>`; the
 /// last bundle, emitted on completion, may be smaller.
@@ -69,50 +72,14 @@ where
     OE: Observable<BufferWithCountObserver<T, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let observer = BufferWithCountObserver {
+        // A `BufferWithCountAndSkip` whose bundles start as the one before is full: a single one
+        // is ever open, so no item is cloned (decision 0014).
+        buffer_with_count_and_skip::subscribe(
+            self.source,
             observer,
-            values: Vec::with_capacity(self.count.get()),
-            count: self.count,
-        };
-        self.source.subscribe(observer)
-    }
-}
-
-#[doc(hidden)]
-pub struct BufferWithCountObserver<T, OR> {
-    observer: OR,
-    values: Vec<T>,
-    count: NonZeroUsize,
-}
-
-impl<T, E, OR> Observer<T, E> for BufferWithCountObserver<T, OR>
-where
-    OR: Observer<Vec<T>, E>,
-{
-    fn on_next(&mut self, value: T) -> Flow {
-        self.values.push(value);
-        if self.values.len() >= self.count.get() {
-            // Every bundle but the last is full, so the next one is prepared with room for all of
-            // it: it is built with a single allocation.
-            let bundle = take_leaving_room(&mut self.values, self.count.get());
-            self.observer.on_next(bundle)
-        } else {
-            Flow::Continue
-        }
-    }
-
-    fn on_termination(mut self, termination: Termination<E>) {
-        // The final value ends the stream, so a downstream that stopped on it is not completed
-        // on top of that: it has already ended itself.
-        if matches!(termination, Termination::Completed)
-            && !self.values.is_empty()
-            && self
-                .observer
-                .on_next(std::mem::take(&mut self.values))
-                .is_stop()
-        {
-            return;
-        }
-        self.observer.on_termination(termination);
+            self.count,
+            self.count,
+            no_overlap,
+        )
     }
 }

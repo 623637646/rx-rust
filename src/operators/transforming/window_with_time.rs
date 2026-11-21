@@ -1,25 +1,28 @@
 //! The [`WindowWithTime`] operator, behind
 //! [`ObservableExt::window_with_time`](crate::observable::ObservableExt::window_with_time).
 
-use super::window_core::{Action, DelegateObserver, WindowContext, rotate, terminate};
-use crate::{
-    delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
-    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
-    scheduler::{Clock, PeriodicContext, Scheduler, SchedulerTypes, Task},
-    subject::unicast_subject::BoxedUnicastObservable,
-    thread_mode::ThreadMode,
-    utils::{
-        MarkerType,
-        subscribe_with_context::{self, subscribe_with_context_two_steps},
+use super::{
+    internal::{
+        overlap::no_overlap,
+        time_shift,
+        window::{DelegateObserver, Windows},
     },
+    window_with_time_and_shift::WindowWithTimeAndShiftTask,
+};
+use crate::{
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observer::{Observer, boxed_observer::ObserverMode},
+    scheduler::{Scheduler, SchedulerTypes},
+    subject::unicast_subject::BoxedUnicastObservable,
+    utils::MarkerType,
 };
 use educe::Educe;
-use std::{
-    marker::PhantomData,
-    time::{Duration, Instant},
-};
+use std::{marker::PhantomData, time::Duration};
+
+pub use super::window_with_time_and_shift::Disposal;
+#[doc(hidden)]
+pub use super::window_with_time_and_shift::WindowWithTimeAndShiftObserver as WindowWithTimeObserver;
 
 /// Subdivides the items of an observable into observable windows, a new one every `time_span`.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -106,21 +109,6 @@ impl<OE, S> WindowWithTime<'_, OE, S> {
     }
 }
 
-/// The task of a [`WindowWithTime`] timer. It holds the context strongly, so that the windows keep
-/// being rotated after the source has let go of its observer without a termination, until the
-/// subscription is disposed. A disposal still releases the observer at once: disposing the source
-/// makes it drop its own handle, and a handle dropped once the context has stopped releases the
-/// observer.
-type WindowWithTimeTask<'a, T, E, OR, OE, S> = PeriodicContext<
-    WindowContext<'a, JoinedSchedulerModeOf<OE, S>, T, E, OR, (), ChainSchedulerDisposalOf<S, OE>>,
->;
-
-delegate_disposal!(
-    Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, Action<T, E>, E, (), ChainDisposal<SD, D>>,
-    where M: ThreadMode, SD: Disposable, D: Disposable
-);
-
 impl<'a, T, E, OE, S> ObservableTypes for WindowWithTime<'a, OE, S>
 where
     JoinedSchedulerModeOf<OE, S>: ObserverMode,
@@ -152,86 +140,19 @@ where
             Item = T,
             Error = E,
         >,
-    S: Scheduler<WindowWithTimeTask<'a, T, E, OR, OE, S>>,
+    S: Scheduler<WindowWithTimeAndShiftTask<'a, T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        assert!(!self.time_span.is_zero(), "time_span must be non-zero");
-        let deadline = self.scheduler.clock().now().checked_add(self.time_span);
-        // The windows own their buffered items, so the context needs no model of its own: it only
-        // serializes the source against the timer.
-        subscribe_with_context_two_steps(
-            DelegateObserver::new(observer),
-            (),
-            |context| {
-                // Open the first window before subscribing, so synchronous values have somewhere
-                // to go. An observer that stops on it keeps the source and timer from starting.
-                if context.send_next(Action::EmitWindow).is_stop() {
-                    return None;
-                }
-                Some(
-                    self.source
-                        .subscribe(WindowWithTimeObserver(context.clone())),
-                )
-            },
-            |context| {
-                Some(setup_rotation_timer(
-                    context,
-                    self.scheduler,
-                    self.time_span,
-                    deadline,
-                ))
-            },
+        // A `WindowWithTimeAndShift` whose windows open as the one before is completed: a single
+        // one is ever open, so no item is cloned (decision 0014).
+        time_shift::subscribe(
+            self.source,
+            self.time_span,
+            self.time_span,
+            self.scheduler,
+            Windows::new(),
+            DelegateObserver::new(observer, no_overlap),
         )
         .map_inner_into()
     }
-}
-
-#[doc(hidden)]
-pub struct WindowWithTimeObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
-    WindowContext<'a, M, T, E, OR, (), D>,
-);
-
-impl<'a, M, T, E, OR, D> Observer<T, E> for WindowWithTimeObserver<'a, M, T, E, OR, D>
-where
-    M: ObserverMode,
-    E: Clone,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-    D: Disposable,
-{
-    fn on_next(&mut self, value: T) -> Flow {
-        // The value is queued as an action, so that it reaches the window outside the lock.
-        self.0.send_next(Action::ForwardValue(value))
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        terminate(self.0, termination);
-    }
-}
-
-fn setup_rotation_timer<'a, M, T, E, OR, D, S>(
-    context: &WindowContext<'a, M, T, E, OR, (), D>,
-    scheduler: S,
-    time_span: Duration,
-    deadline: Option<Instant>,
-) -> DisposeOnDrop<S::Disposal>
-where
-    M: ObserverMode,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-    D: Disposable,
-    S: Scheduler<PeriodicContext<WindowContext<'a, M, T, E, OR, (), D>>>,
-{
-    // The context owns only the task's disposal, through its source subscription, never the task,
-    // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
-    // disposes its source subscription, which cancels the task.
-    let task = Task::periodic(
-        context.clone(),
-        // A stopped context, or an observer that stopped on the new window, ends the rotation.
-        |context, _| !rotate(context).is_stop(),
-        time_span,
-        deadline,
-    );
-    // The task waits for its absolute anchor, even if subscribing or its first poll ran late.
-    // An unrepresentable deadline keeps the task parked until disposal.
-    let delay = deadline.is_none().then_some(time_span);
-    scheduler.run_task(task, delay)
 }

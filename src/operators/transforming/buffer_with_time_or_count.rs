@@ -1,20 +1,19 @@
 //! The [`BufferWithTimeOrCount`] operator.
 
+use super::internal::{
+    overlap::no_overlap,
+    time_or_count::{self, TimeOrCountTask},
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
-    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
-    scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
+    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observer::Observer,
+    scheduler::{Scheduler, SchedulerTypes},
     thread_mode::ThreadMode,
-    utils::{
-        serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
-        take_leaving_room,
-    },
+    utils::subscribe_with_context,
 };
 use educe::Educe;
-use std::time::Instant;
 use std::{num::NonZeroUsize, time::Duration};
 
 /// Gathers items from an observable into bundles and emits these bundles as `Vec<T>`, either when
@@ -88,26 +87,18 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
     }
 }
 
-/// The context of a [`BufferWithTimeOrCount`] subscription.
-type BufferWithTimeOrCountContext<M, T, E, OR, D> =
-    SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>;
+#[doc(hidden)]
+pub use super::internal::{bundle::Bundles, time_or_count::TimeOrCountObserver};
 
-/// The source subscription a [`BufferWithTimeOrCount`] context owns: the timer, then the source.
-type BufferWithTimeOrCountSources<OE, S> =
-    ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
+/// The observer a [`BufferWithTimeOrCount`] gives its source.
+#[doc(hidden)]
+pub type BufferWithTimeOrCountObserver<M, T, E, OR, D, C> =
+    TimeOrCountObserver<M, Bundles<T>, Vec<T>, E, OR, D, C>;
 
 /// The task of a [`BufferWithTimeOrCount`] timer. It holds the context strongly, so that the
-/// buffers keep being cut after the source has let go of its observer without a termination, until
-/// the subscription is disposed. A disposal still releases the observer at once: disposing the
-/// source makes it drop its own handle, and a handle dropped once the context has stopped releases
-/// the observer.
-type BufferWithTimeOrCountTask<T, E, OR, OE, S> = BufferWithTimeOrCountContext<
-    JoinedSchedulerModeOf<OE, S>,
-    T,
-    E,
-    OR,
-    BufferWithTimeOrCountSources<OE, S>,
->;
+/// bundles keep being cut after the source has let go of its observer without a termination, until
+/// the subscription is disposed.
+type BufferWithTimeOrCountTask<T, E, OR, OE, S> = TimeOrCountTask<OE, S, Bundles<T>, Vec<T>, E, OR>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -115,7 +106,7 @@ delegate_disposal!(
         M,
         Vec<T>,
         E,
-        Model<T>,
+        time_or_count::Model<Bundles<T>>,
         ChainDisposal<SD, D>,
     >,
     where M: ThreadMode, SD: Disposable, D: Disposable
@@ -142,7 +133,7 @@ where
                 T,
                 E,
                 OR,
-                BufferWithTimeOrCountSources<OE, S>,
+                ChainSchedulerDisposalOf<S, OE>,
                 <S as SchedulerTypes>::Clock,
             >,
             Item = T,
@@ -151,145 +142,16 @@ where
     S: Scheduler<BufferWithTimeOrCountTask<T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        assert!(!self.time_span.is_zero(), "time_span must be non-zero");
-        let model = Model {
-            values: Vec::with_capacity(self.count.get()),
-            deadline: self.scheduler.clock().now().checked_add(self.time_span),
-            time_span: self.time_span,
-            count: self.count,
-        };
-        let clock = self.scheduler.clock();
-        subscribe_with_context_two_steps(
+        // One bundle at a time, so no item is cloned; the first opens with room for `count` items,
+        // each after it with room for as many as the last one emitted.
+        time_or_count::subscribe(
+            self.source,
+            self.count,
+            self.time_span,
+            self.scheduler,
+            Bundles::with_room(no_overlap, self.count.get()),
             observer,
-            model,
-            |context| {
-                Some(self.source.subscribe(BufferWithTimeOrCountObserver {
-                    context: context.clone(),
-                    clock,
-                }))
-            },
-            |context| setup_emit_timer(context, self.scheduler, self.time_span),
         )
         .map_inner_into()
     }
-}
-
-/// The state of a [`BufferWithTimeOrCount`] subscription.
-struct Model<T> {
-    values: Vec<T>,
-    /// When the next timed bundle is due: `time_span` after the subscription, then after the
-    /// bundle before, timed or full. `None` when that is too far out for an [`Instant`] to
-    /// represent: it never comes, nor does any later one, since the clock only moves forward, and
-    /// the bundles are emitted by count and by the completion only.
-    deadline: Option<Instant>,
-    /// Fixed; here for the timer task, whose handler is a plain `fn`.
-    time_span: Duration,
-    count: NonZeroUsize,
-}
-
-impl<T> Model<T> {
-    /// Takes the bundle out, leaving room for a full one.
-    fn take_bundle(&mut self) -> Vec<T> {
-        take_leaving_room(&mut self.values, self.count.get())
-    }
-}
-
-/// The observer a [`BufferWithTimeOrCount`] gives its source. It holds the scheduler's clock rather
-/// than the scheduler, which may be `Local` while the source sends from another thread.
-#[doc(hidden)]
-pub struct BufferWithTimeOrCountObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
-    context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
-    clock: C,
-}
-
-impl<M, T, E, OR, D, C> Observer<T, E> for BufferWithTimeOrCountObserver<M, T, E, OR, D, C>
-where
-    M: ThreadMode,
-    OR: Observer<Vec<T>, E>,
-    D: Disposable,
-    C: Clock,
-{
-    fn on_next(&mut self, value: T) -> Flow {
-        self.context
-            .update(|model| {
-                model.values.push(value);
-                if model.values.len() < model.count.get() {
-                    return UpdateOutcome::empty().without_events();
-                }
-                // A full bundle restarts the timer: the next timed bundle comes `time_span` after
-                // it, which is never before the one already due, itself at most `time_span` after
-                // the last tick. Out of range means never, as it already did for the deadline due.
-                model.deadline = self.clock.now().checked_add(model.time_span);
-                UpdateOutcome::empty().with_next_event(model.take_bundle())
-            })
-            .flow()
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            completion @ Termination::Completed => {
-                let _ = self.context.update(|model| {
-                    if !model.values.is_empty() {
-                        let values = std::mem::take(&mut model.values);
-                        UpdateOutcome::empty().with_next_and_termination_events(values, completion)
-                    } else {
-                        UpdateOutcome::empty().with_termination_event(completion)
-                    }
-                });
-            }
-            error @ Termination::Error(_) => {
-                self.context.send_termination(error);
-            }
-        }
-    }
-}
-
-/// Drives the timed bundles with one long-lived scheduler task, as `timeout` does.
-///
-/// A full bundle only moves `deadline` (see `BufferWithTimeOrCountObserver::on_next`): if the task
-/// wakes at an obsolete deadline, it sleeps on to the current one. No scheduler task is spawned or
-/// cancelled per full bundle, and no `Duration` is subtracted, so a tick that fires late can never
-/// panic on underflow.
-fn setup_emit_timer<M, T, E, OR, D, S>(
-    context: &BufferWithTimeOrCountContext<M, T, E, OR, D>,
-    scheduler: S,
-    time_span: Duration,
-) -> Option<DisposeOnDrop<S::Disposal>>
-where
-    M: ThreadMode,
-    OR: Observer<Vec<T>, E>,
-    D: Disposable,
-    S: Scheduler<BufferWithTimeOrCountContext<M, T, E, OR, D>>,
-{
-    // The source terminated synchronously while it was being subscribed: no bundle is left to cut.
-    let deadline = context
-        .update(|model| UpdateOutcome::new(model.deadline).without_events())
-        .result()?;
-
-    // The context owns only the task's disposal, through its source subscription, never the task,
-    // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
-    // disposes its source subscription, which cancels the task.
-    let task = Task::new(context.clone(), |context, _, _, now| {
-        context
-            .update(|model| match model.deadline {
-                Some(deadline) if now < deadline => {
-                    UpdateOutcome::new(Next::SleepUntil(deadline)).without_events()
-                }
-                Some(deadline) => {
-                    // Fixed-rate: the next deadline is counted from this one, not from `now`, so
-                    // that a late tick does not push the next ones back.
-                    model.deadline = deadline.checked_add(model.time_span);
-                    let state = model.deadline.map_or(Next::Finished, Next::SleepUntil);
-                    UpdateOutcome::new(state).with_next_event(model.take_bundle())
-                }
-                // A full bundle moved the deadline out of range: no timed bundle is left.
-                None => UpdateOutcome::new(Next::Finished).without_events(),
-            })
-            .result()
-            .unwrap_or(Next::Finished)
-    });
-    // Let the handler wait for the absolute deadline, rather than starting a relative delay
-    // on its first poll. An unrepresentable deadline keeps the task parked until disposal.
-    let delay = deadline.is_none().then_some(time_span);
-    Some(scheduler.run_task(task, delay))
 }

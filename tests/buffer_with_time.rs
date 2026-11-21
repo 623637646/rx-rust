@@ -184,7 +184,7 @@ fn test_time_span_too_long_never_comes_due() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(time.pending_tasks(), 1);
+    assert_eq!(time.pending_tasks(), 0);
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![111]]);
@@ -193,8 +193,8 @@ fn test_time_span_too_long_never_comes_due() {
     assert_eq!(time.pending_tasks(), 0);
 }
 
-/// A timer that never comes due still holds the observer, as a timer that ticks does: the source
-/// dropping its observer releases nothing, the disposal does (decision 0004).
+/// A timer that never comes due finishes at once: nothing more can come, so the source dropping
+/// its observer drops downstream, with what it holds (decision 0004).
 #[test]
 fn test_time_span_too_long_abandon_after_next() {
     let time = VirtualTime::new();
@@ -206,17 +206,18 @@ fn test_time_span_too_long_abandon_after_next() {
 
     let subscription = observable.subscribe(observer);
     assert!(sender.on_next(111).is_continue());
-    sender.abandon();
     time.advance_by(DURATION_1_YEAR);
-    assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(time.pending_tasks(), 0);
+
+    sender.abandon();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Abandoned);
-    assert_eq!(time.pending_tasks(), 1);
 
     subscription.dispose();
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Dropped);
-    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]

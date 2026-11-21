@@ -94,11 +94,14 @@ use crate::{
             with_item_type::WithItemType,
         },
         transforming::{
-            buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
+            buffer::Buffer, buffer_with_count::BufferWithCount,
+            buffer_with_count_and_skip::BufferWithCountAndSkip, buffer_with_time::BufferWithTime,
+            buffer_with_time_and_shift::BufferWithTimeAndShift,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_eager_map::ConcatEagerMap,
             concat_map::ConcatMap, exhaust_map::ExhaustMap, flat_map::FlatMap, group_by::GroupBy,
             map::Map, scan::Scan, switch_map::SwitchMap, window::Window,
-            window_with_count::WindowWithCount, window_with_time::WindowWithTime,
+            window_with_count::WindowWithCount, window_with_count_and_skip::WindowWithCountAndSkip,
+            window_with_time::WindowWithTime, window_with_time_and_shift::WindowWithTimeAndShift,
             window_with_time_or_count::WindowWithTimeOrCount,
         },
         utility::{
@@ -269,10 +272,44 @@ pub trait ObservableExt: ObservableTypes + Sized {
         BufferWithCount::new(self, count)
     }
 
+    /// Gathers items into bundles of `count`, starting a new bundle every `skip` items: overlapping
+    /// bundles for a `skip` below `count`, gaps for one above.
+    fn buffer_with_count_and_skip(
+        self,
+        count: NonZeroUsize,
+        skip: NonZeroUsize,
+    ) -> BufferWithCountAndSkip<Self>
+    where
+        Self::Item: Clone,
+    {
+        BufferWithCountAndSkip::new(self, count, skip)
+    }
+
     /// Collects items into a buffer emitted every `time_span`, the first one `time_span` after the
     /// subscription, on the provided scheduler.
     fn buffer_with_time<S>(self, time_span: Duration, scheduler: S) -> BufferWithTime<Self, S> {
         BufferWithTime::new(self, time_span, scheduler)
+    }
+
+    /// Opens a bundle at subscription and every `time_shift` thereafter on the provided
+    /// scheduler. Each lasts `time_span`. A shorter shift creates overlap. A longer shift
+    /// leaves gaps.
+    ///
+    /// See [`BufferWithTimeAndShift`] for completion and error behavior.
+    ///
+    /// # Panics
+    ///
+    /// Subscribing panics if `time_span` or `time_shift` is zero.
+    fn buffer_with_time_and_shift<S>(
+        self,
+        time_span: Duration,
+        time_shift: Duration,
+        scheduler: S,
+    ) -> BufferWithTimeAndShift<Self, S>
+    where
+        Self::Item: Clone,
+    {
+        BufferWithTimeAndShift::new(self, time_span, time_shift, scheduler)
     }
 
     /// Collects items into buffers emitted when they reach `count` items or every `time_span`,
@@ -1470,6 +1507,20 @@ pub trait ObservableExt: ObservableTypes + Sized {
         WindowWithCount::new(self, count)
     }
 
+    /// Splits the items into windows of `count`, starting a new window every `skip` items:
+    /// overlapping windows for a `skip` below `count`, gaps for one above.
+    fn window_with_count_and_skip<'a>(
+        self,
+        count: NonZeroUsize,
+        skip: NonZeroUsize,
+    ) -> WindowWithCountAndSkip<'a, Self>
+    where
+        Self::Mode: ObserverMode,
+        Self::Item: Clone,
+    {
+        WindowWithCountAndSkip::new(self, count, skip)
+    }
+
     /// Collects items into windows that each last `time_span`, on the provided scheduler: the
     /// first one opens at the subscription, and each following one as the one before is
     /// completed.
@@ -1479,6 +1530,27 @@ pub trait ObservableExt: ObservableTypes + Sized {
         scheduler: S,
     ) -> WindowWithTime<'a, Self, S> {
         WindowWithTime::new(self, time_span, scheduler)
+    }
+
+    /// Opens a window at subscription and every `time_shift` thereafter on the provided
+    /// scheduler. Each lasts `time_span`. A shorter shift creates overlap. A longer shift
+    /// leaves gaps.
+    ///
+    /// See [`WindowWithTimeAndShift`] for how to subscribe to the windows.
+    ///
+    /// # Panics
+    ///
+    /// Subscribing panics if `time_span` or `time_shift` is zero.
+    fn window_with_time_and_shift<'a, S>(
+        self,
+        time_span: Duration,
+        time_shift: Duration,
+        scheduler: S,
+    ) -> WindowWithTimeAndShift<'a, Self, S>
+    where
+        Self::Item: Clone,
+    {
+        WindowWithTimeAndShift::new(self, time_span, time_shift, scheduler)
     }
 
     /// Collects items into windows completed when they reach `count` items or every `time_span`,

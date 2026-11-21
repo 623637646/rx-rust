@@ -1,27 +1,22 @@
 //! The [`WindowWithTimeOrCount`] operator, behind
 //! [`ObservableExt::window_with_time_or_count`](crate::observable::ObservableExt::window_with_time_or_count).
 
-use super::window_core::{Action, DelegateObserver, WindowContext, terminate};
+use super::internal::{
+    overlap::no_overlap,
+    time_or_count::{self, TimeOrCountTask},
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
-    observer::{EventBatch, Flow, Observer, Termination, boxed_observer::ObserverMode},
-    scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
+    observer::{Observer, boxed_observer::ObserverMode},
+    scheduler::{Scheduler, SchedulerTypes},
     subject::unicast_subject::BoxedUnicastObservable,
     thread_mode::ThreadMode,
-    utils::{
-        MarkerType,
-        serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, subscribe_with_context_two_steps},
-    },
+    utils::{MarkerType, subscribe_with_context},
 };
 use educe::Educe;
-use std::{
-    marker::PhantomData,
-    num::NonZeroUsize,
-    time::{Duration, Instant},
-};
+use std::{marker::PhantomData, num::NonZeroUsize, time::Duration};
 
 /// Subdivides the items of an observable into observable windows, a new one either when the
 /// current window reaches `count` items or every `time_span`, whichever happens first.
@@ -115,24 +110,38 @@ impl<OE, S> WindowWithTimeOrCount<'_, OE, S> {
     }
 }
 
+#[doc(hidden)]
+pub use super::internal::{
+    time_or_count::TimeOrCountObserver,
+    window::{Action, DelegateObserver, Windows},
+};
+
+/// The observer a [`WindowWithTimeOrCount`] gives its source.
+#[doc(hidden)]
+pub type WindowWithTimeOrCountObserver<'a, M, T, E, OR, D, C> =
+    TimeOrCountObserver<M, Windows<T>, Action<T, E>, E, DelegateObserver<'a, M, T, E, OR>, D, C>;
+
 /// The task of a [`WindowWithTimeOrCount`] timer. It holds the context strongly, so that the
 /// windows keep being rotated after the source has let go of its observer without a termination,
-/// until the subscription is disposed. A disposal still releases the observer at once: disposing
-/// the source makes it drop its own handle, and a handle dropped once the context has stopped
-/// releases the observer.
-type WindowWithTimeOrCountTask<'a, T, E, OR, OE, S> = WindowContext<
-    'a,
-    JoinedSchedulerModeOf<OE, S>,
-    T,
+/// until the subscription is disposed.
+type WindowWithTimeOrCountTask<'a, T, E, OR, OE, S> = TimeOrCountTask<
+    OE,
+    S,
+    Windows<T>,
+    Action<T, E>,
     E,
-    OR,
-    Model,
-    ChainSchedulerDisposalOf<S, OE>,
+    DelegateObserver<'a, JoinedSchedulerModeOf<OE, S>, T, E, OR>,
 >;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, Action<T, E>, E, Model, ChainDisposal<SD, D>>,
+    subscribe_with_context::Disposal<
+        M,
+        Action<T, E>,
+        E,
+        time_or_count::Model<Windows<T>>,
+        ChainDisposal<SD, D>,
+    >,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -170,145 +179,15 @@ where
     S: Scheduler<WindowWithTimeOrCountTask<'a, T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        assert!(!self.time_span.is_zero(), "time_span must be non-zero");
-        let model = Model {
-            sent_count: 0,
-            deadline: self.scheduler.clock().now().checked_add(self.time_span),
-            time_span: self.time_span,
-            count: self.count,
-        };
-        let clock = self.scheduler.clock();
-        subscribe_with_context_two_steps(
-            DelegateObserver::new(observer),
-            model,
-            |context| {
-                // Open the first window before subscribing, so synchronous values have somewhere
-                // to go. An observer that stops on it keeps the source and timer from starting.
-                if context.send_next(Action::EmitWindow).is_stop() {
-                    return None;
-                }
-                Some(self.source.subscribe(WindowWithTimeOrCountObserver {
-                    context: context.clone(),
-                    clock,
-                }))
-            },
-            |context| setup_rotation_timer(context, self.scheduler, self.time_span),
+        // One window at a time, so no item is cloned.
+        time_or_count::subscribe(
+            self.source,
+            self.count,
+            self.time_span,
+            self.scheduler,
+            Windows::new(),
+            DelegateObserver::new(observer, no_overlap),
         )
         .map_inner_into()
     }
-}
-
-/// The state of a [`WindowWithTimeOrCount`] subscription. The windows own their buffered items, so
-/// the model only counts them.
-struct Model {
-    /// How many values the current window has received.
-    sent_count: usize,
-    /// When the next timed rotation is due: `time_span` after the subscription, then after the
-    /// rotation before, timed or full. `None` when that is too far out for an [`Instant`] to
-    /// represent: it never comes, nor does any later one, since the clock only moves forward, and
-    /// the windows are rotated by count only.
-    deadline: Option<Instant>,
-    /// Fixed; here for the timer task, whose handler is a plain `fn`, and for the source's
-    /// observer, which restarts the timer.
-    time_span: Duration,
-    count: NonZeroUsize,
-}
-
-/// The observer a [`WindowWithTimeOrCount`] gives its source. It holds the scheduler's clock rather
-/// than the scheduler, which may be `Local` while the source sends from another thread.
-#[doc(hidden)]
-pub struct WindowWithTimeOrCountObserver<'a, M: ObserverMode, T, E, OR, D: Disposable, C> {
-    context: WindowContext<'a, M, T, E, OR, Model, D>,
-    clock: C,
-}
-
-impl<'a, M, T, E, OR, D, C> Observer<T, E> for WindowWithTimeOrCountObserver<'a, M, T, E, OR, D, C>
-where
-    M: ObserverMode,
-    E: Clone,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-    D: Disposable,
-    C: Clock,
-{
-    fn on_next(&mut self, value: T) -> Flow {
-        // The value is queued as an action, so that it reaches the window outside the lock.
-        self.context
-            .update(|model| {
-                model.sent_count += 1;
-                if model.sent_count < model.count.get() {
-                    return UpdateOutcome::empty().with_next_event(Action::ForwardValue(value));
-                }
-                // This value fills the window: it is completed, and the next one opened. A full
-                // window restarts the timer: the next timed rotation comes `time_span` after it,
-                // which is never before the one already due, itself at most `time_span` after the
-                // last tick. Out of range means never, as it already did for the deadline due.
-                model.sent_count = 0;
-                model.deadline = self.clock.now().checked_add(model.time_span);
-                let [complete, open] = Action::rotation();
-                UpdateOutcome::empty().with_events(EventBatch::NextBatch(vec![
-                    Action::ForwardValue(value),
-                    complete,
-                    open,
-                ]))
-            })
-            .flow()
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        terminate(self.context, termination);
-    }
-}
-
-/// Drives the timed rotations with one long-lived scheduler task, as `buffer_with_time_or_count`
-/// does.
-///
-/// A full window only moves `deadline` (see `WindowWithTimeOrCountObserver::on_next`): if the task
-/// wakes at an obsolete deadline, it sleeps on to the current one. No scheduler task is spawned or
-/// cancelled per full window, and no `Duration` is subtracted, so a tick that fires late can never
-/// panic on underflow.
-fn setup_rotation_timer<'a, M, T, E, OR, D, S>(
-    context: &WindowContext<'a, M, T, E, OR, Model, D>,
-    scheduler: S,
-    time_span: Duration,
-) -> Option<DisposeOnDrop<S::Disposal>>
-where
-    M: ObserverMode,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-    D: Disposable,
-    S: Scheduler<WindowContext<'a, M, T, E, OR, Model, D>>,
-{
-    // The source terminated synchronously while it was being subscribed: no window is left to
-    // rotate.
-    let deadline = context
-        .update(|model| UpdateOutcome::new(model.deadline).without_events())
-        .result()?;
-
-    // The context owns only the task's disposal, through its source subscription, never the task,
-    // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
-    // disposes its source subscription, which cancels the task.
-    let task = Task::new(context.clone(), |context, _, _, now| {
-        context
-            .update(|model| match model.deadline {
-                Some(deadline) if now < deadline => {
-                    UpdateOutcome::new(Next::SleepUntil(deadline)).without_events()
-                }
-                Some(deadline) => {
-                    // Fixed-rate: the next deadline is counted from this one, not from `now`, so
-                    // that a late tick does not push the next ones back.
-                    model.deadline = deadline.checked_add(model.time_span);
-                    model.sent_count = 0;
-                    let state = model.deadline.map_or(Next::Finished, Next::SleepUntil);
-                    UpdateOutcome::new(state)
-                        .with_events(EventBatch::NextBatch(Action::rotation().into()))
-                }
-                // A full window moved the deadline out of range: no timed rotation is left.
-                None => UpdateOutcome::new(Next::Finished).without_events(),
-            })
-            .result()
-            .unwrap_or(Next::Finished)
-    });
-    // Let the handler wait for the absolute deadline, rather than starting a relative delay
-    // on its first poll. An unrepresentable deadline keeps the task parked until disposal.
-    let delay = deadline.is_none().then_some(time_span);
-    Some(scheduler.run_task(task, delay))
 }

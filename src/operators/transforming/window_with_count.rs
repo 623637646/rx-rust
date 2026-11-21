@@ -1,18 +1,20 @@
 //! The [`WindowWithCount`] operator, behind
 //! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
 
+use super::{internal::overlap::no_overlap, window_with_count_and_skip};
 use crate::{
-    delegate_disposal,
-    disposable::{
-        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
-    },
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
-    subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
+    observer::{Observer, boxed_observer::ObserverMode},
+    subject::unicast_subject::BoxedUnicastObservable,
     utils::MarkerType,
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
+
+pub use super::window_with_count_and_skip::Disposal;
+#[doc(hidden)]
+pub use super::window_with_count_and_skip::WindowWithCountAndSkipObserver as WindowWithCountObserver;
 
 /// Subdivides the items of an observable into observable windows of a specified number of items.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -68,12 +70,6 @@ impl<OE> WindowWithCount<'_, OE> {
     }
 }
 
-delegate_disposal!(
-    Disposal<D>,
-    OptionDisposal<D>,
-    where D: Disposable
-);
-
 impl<'a, T, E, OE> ObservableTypes for WindowWithCount<'a, OE>
 where
     <OE as ObservableTypes>::Mode: ObserverMode,
@@ -96,59 +92,15 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let (sender, window) = unicast_subject::new_boxed();
-        if observer.on_next(window).is_stop() {
-            // The first window ended the stream, so the source is never subscribed to.
-            return OptionDisposal::none().into_dispose_on_drop();
-        }
-
-        let observer = WindowWithCountObserver {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        // A `WindowWithCountAndSkip` whose windows open as the one before is full: a single one is
+        // ever open, so no item is cloned (decision 0014).
+        window_with_count_and_skip::subscribe(
+            self.source,
             observer,
-            sender,
-            count: self.count,
-            sent_count: 0,
-        };
-        self.source
-            .subscribe(observer)
-            .map_inner(OptionDisposal::some)
-            .map_inner_into()
-    }
-}
-
-#[doc(hidden)]
-pub struct WindowWithCountObserver<'a, M: ObserverMode, T, E, OR> {
-    observer: OR,
-    sender: BoxedUnicastSender<'a, T, E, M>,
-    count: NonZeroUsize,
-    sent_count: usize,
-}
-
-impl<'a, M, T, E, OR> Observer<T, E> for WindowWithCountObserver<'a, M, T, E, OR>
-where
-    M: ObserverMode,
-    E: Clone,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-{
-    fn on_next(&mut self, value: T) -> Flow {
-        // The consumer of one window stops that window, not the operator: only what the observer
-        // of the windows themselves answers can stop the source.
-        self.sent_count += 1;
-        if self.sent_count < self.count.get() {
-            let _ = self.sender.on_next(value);
-            return Flow::Continue;
-        }
-        // This value fills the window: it is completed, and the next one opened.
-        let (new_sender, new_window) = unicast_subject::new_boxed();
-        let mut old_sender = std::mem::replace(&mut self.sender, new_sender);
-        let _ = old_sender.on_next(value);
-        old_sender.on_termination(Termination::Completed);
-        self.sent_count = 0;
-        self.observer.on_next(new_window)
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        self.sender.on_termination(termination.clone());
-        self.observer.on_termination(termination);
+            self.count,
+            self.count,
+            no_overlap,
+        )
     }
 }

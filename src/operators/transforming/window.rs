@@ -1,18 +1,15 @@
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 
-use super::window_core::{Action, DelegateObserver, WindowContext, rotate, terminate};
+use super::internal::{boundary, overlap::no_overlap};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
+    observer::{Observer, boxed_observer::ObserverMode},
     subject::unicast_subject::BoxedUnicastObservable,
     thread_mode::ThreadMode,
-    utils::{
-        MarkerType,
-        subscribe_with_context::{self, subscribe_with_context_two_steps},
-    },
+    utils::{MarkerType, subscribe_with_context},
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -98,9 +95,26 @@ impl<OE, OE1> Window<'_, OE, OE1> {
     }
 }
 
+#[doc(hidden)]
+pub use super::internal::{
+    boundary::{BoundaryObserver as BoundaryObserver_, SourceObserver as SourceObserver_},
+    window::{Action, DelegateObserver, Windows},
+};
+
+/// The observer a [`Window`] gives its source.
+#[doc(hidden)]
+pub type SourceObserver<'a, M, T, E, OR, D> =
+    SourceObserver_<M, Windows<T>, Action<T, E>, E, DelegateObserver<'a, M, T, E, OR>, D>;
+
+/// The observer a [`Window`] gives its boundary, whose completion only stops the rotation
+/// (`false`).
+#[doc(hidden)]
+pub type BoundaryObserver<'a, M, T, E, OR, D> =
+    BoundaryObserver_<M, Windows<T>, Action<T, E>, E, DelegateObserver<'a, M, T, E, OR>, D, false>;
+
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
-    subscribe_with_context::Disposal<M, Action<T, E>, E, (), ChainDisposal<D, D1>>,
+    subscribe_with_context::Disposal<M, Action<T, E>, E, Windows<T>, ChainDisposal<D, D1>>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -132,73 +146,13 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let observer = DelegateObserver::new(observer);
-        // The windows own their buffered items, so the context needs no model of its own: it only
-        // serializes the actions below and owns the source and boundary subscriptions.
-        subscribe_with_context_two_steps(
-            observer,
-            (),
-            |context| {
-                // Open the first window before subscribing, so synchronous values have somewhere
-                // to go. An observer that stops on it keeps both sources from being subscribed.
-                if context.send_next(Action::EmitWindow).is_stop() {
-                    return None;
-                }
-                Some(self.boundary.subscribe(BoundaryObserver(context.clone())))
-            },
-            |context| Some(self.source.subscribe(SourceObserver(context.clone()))),
+        // One window at a time, so no item is cloned.
+        boundary::subscribe(
+            self.source,
+            self.boundary,
+            Windows::new(),
+            DelegateObserver::new(observer, no_overlap),
         )
         .map_inner_into()
-    }
-}
-
-#[doc(hidden)]
-pub struct SourceObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
-    WindowContext<'a, M, T, E, OR, (), D>,
-);
-
-impl<'a, M, T, E, OR, D> Observer<T, E> for SourceObserver<'a, M, T, E, OR, D>
-where
-    M: ObserverMode,
-    E: Clone,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-    D: Disposable,
-{
-    fn on_next(&mut self, value: T) -> Flow {
-        // The value is queued as an action, so that it reaches the window outside the lock.
-        self.0.send_next(Action::ForwardValue(value))
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        terminate(self.0, termination);
-    }
-}
-
-#[doc(hidden)]
-pub struct BoundaryObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
-    WindowContext<'a, M, T, E, OR, (), D>,
-);
-
-impl<'a, M, T, T1, E, OR, D> Observer<T1, E> for BoundaryObserver<'a, M, T, E, OR, D>
-where
-    M: ObserverMode,
-    E: Clone,
-    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
-    D: Disposable,
-{
-    fn on_next(&mut self, value: T1) -> Flow {
-        let flow = rotate(&self.0);
-        // Only the arrival of a boundary matters, never its value, which is dropped here, after
-        // the window rotation and outside its lock, since dropping it can run arbitrary code.
-        drop(value);
-        flow
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        // Completing the boundary only stops the rotation: the current window and the outer
-        // observable keep going.
-        if let error @ Termination::Error(_) = termination {
-            terminate(self.0, error);
-        }
     }
 }

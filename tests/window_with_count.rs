@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::drop_probe::DropCount;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
@@ -24,6 +25,27 @@ use rx_rust::{
 use std::sync::{Arc, Mutex};
 use std::{convert::Infallible, num::NonZeroUsize};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
+
+#[test]
+fn test_clones_error_once_for_inner_window() {
+    struct Error(DropCount);
+
+    impl Clone for Error {
+        fn clone(&self) -> Self {
+            self.0.increment();
+            Self(self.0.clone())
+        }
+    }
+
+    let clones = DropCount::new();
+    let (_checker, observer) = WindowChecker::new();
+    let _subscription = Throw::new(Error(clones.clone()))
+        .into_shared()
+        .window_with_count(NonZeroUsize::new(2).unwrap())
+        .subscribe(observer);
+
+    assert_eq!(clones.get(), 1);
+}
 
 #[test]
 fn test_completed() {
