@@ -12,7 +12,7 @@ use crate::{
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
     utils::{
-        serialized_delivery::{UpdateOutcome, Updated},
+        serialized_delivery::UpdateOutcome,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
@@ -145,9 +145,8 @@ where
     S: Scheduler<TimeoutTask<T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let model = Model {
-            deadline: self.scheduler.clock().now().checked_add(self.duration),
-        };
+        let deadline = self.scheduler.clock().now().checked_add(self.duration);
+        let model = Model { deadline };
         subscribe_with_context_two_steps(
             observer,
             model,
@@ -158,7 +157,7 @@ where
                     clock: self.scheduler.clock(),
                 }))
             },
-            |context| setup_timer(context, &self.scheduler),
+            |context| Some(setup_timer(context, &self.scheduler, deadline)),
         )
         .map_inner_into()
     }
@@ -204,33 +203,29 @@ where
     }
 }
 
-/// Drives the timeout with one long-lived scheduler task.
+/// Drives the timeout with one long-lived scheduler task, first waking at `deadline`, the one
+/// counted from the subscription.
 ///
 /// Source values only move `deadline` forward. If the task wakes at an obsolete deadline, it
-/// continues at the latest one; no scheduler task needs to be cancelled or spawned per value.
+/// continues at the latest one; no scheduler task needs to be cancelled or spawned per value. So
+/// the first deadline, known without a lock, is enough to start it, even after values the source
+/// sent while being subscribed.
 fn setup_timer<M, T, E, OR, S, D>(
     context: &SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     scheduler: &S,
-) -> Option<DisposeOnDrop<OptionDisposal<S::Disposal>>>
+    deadline: Option<Instant>,
+) -> DisposeOnDrop<OptionDisposal<S::Disposal>>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
     S: Scheduler<SubscriptionContext<M, T, Error<E>, OR, Model, D>>,
     D: Disposable,
 {
-    let deadline = match context.update(|model| UpdateOutcome::new(model.deadline).without_events())
-    {
-        Updated::Ran {
-            result: Some(deadline),
-            ..
-        } => deadline,
-        // The timeout never fires, so there is no timer to install — but the source stays
-        // subscribed, so this step is not the one to end the assembly.
-        Updated::Ran { result: None, .. } => {
-            return Some(DisposeOnDrop::new(OptionDisposal::none()));
-        }
-        // The source terminated synchronously while it was being subscribed.
-        Updated::Stopped => return None,
+    // The clock only moves forward, so a deadline that is `None` stays so: the timeout never
+    // fires, and there is no timer to install. The source stays subscribed, so this step is not
+    // the one to end the assembly.
+    let Some(deadline) = deadline else {
+        return DisposeOnDrop::new(OptionDisposal::none());
     };
 
     // The context owns only the task's disposal, never the task, which its runtime owns: holding
@@ -250,12 +245,10 @@ where
             .result()
             .unwrap_or(Next::Finished)
     });
-    Some(
-        scheduler
-            .run_task(
-                task,
-                Some(deadline.saturating_duration_since(scheduler.clock().now())),
-            )
-            .map_inner(OptionDisposal::some),
-    )
+    scheduler
+        .run_task(
+            task,
+            Some(deadline.saturating_duration_since(scheduler.clock().now())),
+        )
+        .map_inner(OptionDisposal::some)
 }
