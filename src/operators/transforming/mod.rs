@@ -5,6 +5,7 @@ pub mod buffer;
 pub mod buffer_with_count;
 pub mod buffer_with_time;
 pub mod buffer_with_time_or_count;
+pub mod concat_eager_map;
 pub mod concat_map;
 pub mod exhaust_map;
 pub mod flat_map;

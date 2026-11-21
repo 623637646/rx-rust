@@ -33,6 +33,9 @@ All notable changes to this project are documented here. The format follows
 - `CombineLatest`, `Zip`, `Merge` and `Concat` accept tuples of one to eight sources and expose
   `new_from_iter` for runtime-sized inputs. `Concat` pulls from an iterator one source at a time.
 - `max_concurrency(n)` limits concurrent subscriptions in `Merge`, `MergeAll` and `FlatMap`.
+- `concat_eager`, `concat_eager_all` and `concat_eager_map` subscribe to sources concurrently
+  and emit their values in source order. Values from a later source are buffered without a size
+  limit while they wait for their turn. Each operator supports `max_concurrency(n)`.
 - `exhaust_all` ignores inner observables that arrive while one is active. `exhaust_map`
   also skips the selector for those emissions.
 - `ForkJoin` emits the last value from each source once all sources complete with at least one

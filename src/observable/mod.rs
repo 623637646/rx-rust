@@ -58,8 +58,9 @@ use crate::{
     operators::{
         combining::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll,
-            exhaust_all::ExhaustAll, fork_join::ForkJoin, group_join::GroupJoin, join::Join,
-            merge::Merge, merge_all::MergeAll, start_with::StartWith, switch::Switch,
+            concat_eager::ConcatEager, concat_eager_all::ConcatEagerAll, exhaust_all::ExhaustAll,
+            fork_join::ForkJoin, group_join::GroupJoin, join::Join, merge::Merge,
+            merge_all::MergeAll, start_with::StartWith, switch::Switch,
             with_latest_from::WithLatestFrom, zip::Zip,
         },
         conditional_boolean::{
@@ -94,10 +95,11 @@ use crate::{
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
-            buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
-            exhaust_map::ExhaustMap, flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan,
-            switch_map::SwitchMap, window::Window, window_with_count::WindowWithCount,
-            window_with_time::WindowWithTime, window_with_time_or_count::WindowWithTimeOrCount,
+            buffer_with_time_or_count::BufferWithTimeOrCount, concat_eager_map::ConcatEagerMap,
+            concat_map::ConcatMap, exhaust_map::ExhaustMap, flat_map::FlatMap, group_by::GroupBy,
+            map::Map, scan::Scan, switch_map::SwitchMap, window::Window,
+            window_with_count::WindowWithCount, window_with_time::WindowWithTime,
+            window_with_time_or_count::WindowWithTimeOrCount,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_after_disposal::DoAfterDisposal,
@@ -319,6 +321,37 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Self::Item: ObservableTypes<Error = Self::Error>,
     {
         ConcatAll::new(self)
+    }
+
+    /// Concatenates the source with another observable, subscribing both at once and keeping the
+    /// values of the other until the source has completed.
+    /// [`ConcatEager::max_concurrency`] bounds how many are subscribed at a time.
+    fn concat_eager<OE2>(self, source_2: OE2) -> ConcatEager<(Self, OE2)>
+    where
+        OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
+    {
+        ConcatEager::new((self, source_2))
+    }
+
+    /// Flattens an observable-of-observables by subscribing each inner observable as it arrives,
+    /// and emitting their values one inner observable after the other.
+    /// [`ConcatEagerAll::max_concurrency`] bounds how many are subscribed at a time.
+    fn concat_eager_all(self) -> ConcatEagerAll<Self, Self::Item>
+    where
+        Self::Item: ObservableTypes<Error = Self::Error>,
+    {
+        ConcatEagerAll::new(self)
+    }
+
+    /// Maps each item to an observable, subscribes it at once, and emits the values of the
+    /// resulting inner sequences one after the other.
+    /// [`ConcatEagerMap::max_concurrency`] bounds how many are subscribed at a time.
+    fn concat_eager_map<OE1, F>(self, callback: F) -> ConcatEagerMap<Self::Item, Self, OE1, F>
+    where
+        OE1: ObservableTypes<Error = Self::Error>,
+        F: FnMut(Self::Item) -> OE1,
+    {
+        ConcatEagerMap::new(self, callback)
     }
 
     /// Maps each item to an observable and concatenates the resulting inner sequences.

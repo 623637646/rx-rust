@@ -5,3 +5,4 @@
 pub(crate) mod flatten;
 pub(super) mod join;
 pub(super) mod merge;
+pub(crate) mod reorder;

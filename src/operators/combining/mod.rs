@@ -4,6 +4,8 @@
 pub mod combine_latest;
 pub mod concat;
 pub mod concat_all;
+pub mod concat_eager;
+pub mod concat_eager_all;
 pub mod exhaust_all;
 pub mod fork_join;
 pub mod group_join;
