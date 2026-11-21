@@ -6,6 +6,8 @@
 //! a task on drop. Operators build their disposals out of the small types here:
 //!
 //! - `()` disposes nothing;
+//! - tuples of one to eight disposals dispose their elements from last to first, continuing in
+//!   that order during unwinding if an element's disposal panics;
 //! - [`CallbackDisposal`](callback_disposal::CallbackDisposal) runs a closure;
 //! - [`ChainDisposal`] disposes two in order, [`EitherDisposal`] one of two;
 //! - [`OptionDisposal`] disposes a value that may be absent;
@@ -37,6 +39,7 @@ pub mod dispose_on_drop;
 pub mod either_disposal;
 pub mod option_disposal;
 pub mod replaceable_disposal;
+mod tuple_disposal;
 
 pub use crate::delegate_disposal;
 use crate::disposable::{

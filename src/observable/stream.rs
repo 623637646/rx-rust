@@ -98,7 +98,7 @@ struct ObservableTryStreamContext<E, B> {
 ///
 ///     let source = FromIter::new([1, 2])
 ///         .with_error_type()
-///         .concat_with(Throw::new("boom").with_item_type());
+///         .concat(Throw::new("boom").with_item_type());
 ///     let values: Result<Vec<_>, _> = source.into_try_stream().try_collect().await;
 ///     assert_eq!(values, Err("boom"));
 /// });

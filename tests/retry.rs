@@ -178,7 +178,7 @@ fn test_completed_different_retry_observable() {
             Just::new(222)
                 .into_shared()
                 .with_error_type()
-                .concat_with(Throw::new(0).into_shared().with_item_type())
+                .concat(Throw::new(0).into_shared().with_item_type())
                 .into_send_boxed(),
         ),
         0 => RetryAction::Retry(

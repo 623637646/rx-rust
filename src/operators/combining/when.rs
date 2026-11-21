@@ -4,11 +4,18 @@
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableTypes},
+    observable::{
+        Observable, ObservableTypes, SourceSet,
+        sources::{SourceOps, SourceSubscriber, SubscribeEach},
+    },
     observer::{Flow, Observer, Termination},
-    thread_mode::{Joined, ThreadMode},
+    thread_mode::ThreadMode,
     utils::{
         MarkerType,
+        positional::{
+            position::{AtPosition, TupleIndex},
+            tuple::{IntoReversed, for_each_arity},
+        },
         serialized_delivery::{StopView, UpdateOutcome, Updated},
         subscribe_with_context::{
             self, SubscriptionContext, subscribe_with_context_with_stop_view,
@@ -16,7 +23,7 @@ use crate::{
     },
 };
 use educe::Educe;
-use std::{collections::VecDeque, marker::PhantomData};
+use std::{collections::VecDeque, convert::Infallible, marker::PhantomData, ops::ControlFlow};
 
 /// Combines several observables through join patterns: each [`Plan`] waits until every source of
 /// its [`Pattern`] has an item, takes the first item of each, and emits what its selector makes of
@@ -24,10 +31,10 @@ use std::{collections::VecDeque, marker::PhantomData};
 /// completes.
 /// See <https://reactivex.io/documentation/operators/and-then-when.html>
 ///
-/// The sources are a tuple of one to six observables with one error type. `build` receives a
+/// The sources are a tuple of one to eight observables with one error type. `build` receives a
 /// tuple of [`SourceHandle`]s, one per source and in the same order, which
 /// [`and`](SourceHandle::and) joins into a pattern and [`then`](Pattern::then) turns into a plan.
-/// It returns one plan, or a tuple of up to six plans with one output type.
+/// It returns one plan, or a tuple of up to eight plans with one output type.
 ///
 /// Each source is subscribed once, in order, and its items wait in a queue of its own until a plan
 /// takes them. A plan retires once it can no longer match, because one of its sources has
@@ -128,9 +135,10 @@ impl<const INDEX: usize, T> SourceHandle<INDEX, T> {
     /// ```
     pub fn and<const OTHER: usize, U>(
         self,
-        other: SourceHandle<OTHER, U>,
+        _other: SourceHandle<OTHER, U>,
     ) -> Pattern<(Self, SourceHandle<OTHER, U>)> {
-        Pattern::<(Self,)>::new().and(other)
+        const { assert!(OTHER != INDEX, "a pattern names each source once") };
+        Pattern::new()
     }
 
     /// A [`Plan`] of this source alone, which passes each of its items through `selector`.
@@ -138,12 +146,12 @@ impl<const INDEX: usize, T> SourceHandle<INDEX, T> {
     where
         F: FnMut(T) -> R,
     {
-        Pattern::<(Self,)>::new().then(selector)
+        Plan::new(selector)
     }
 }
 
 /// The sources a [`Plan`] waits on, all of them at once: made by [`SourceHandle::and`], extended
-/// by [`and`](Pattern::and) up to six sources, and turned into a plan by
+/// by [`and`](Pattern::and) up to eight sources, and turned into a plan by
 /// [`then`](Pattern::then). `H` is the tuple of their [`SourceHandle`]s.
 ///
 /// Every added source must differ from all the sources already in the pattern:
@@ -194,22 +202,55 @@ impl<H, F> Plan<H, F> {
     }
 }
 
-/// The sources of a [`When`]: a tuple of one to six observables with one error type.
-pub trait Sources {
+mod sealed {
+    pub trait Sealed {}
+}
+
+impl<H, F> sealed::Sealed for Plan<H, F> {}
+
+/// The sources of a [`When`]: a tuple of one to eight observables with one error type.
+pub trait Sources: SourceSet {
     /// The tuple of the [`SourceHandle`]s of the sources, in their order.
     type Handles;
+
+    /// The queue and subscription of each source, as a subscription keeps them.
+    #[doc(hidden)]
+    type Inputs;
 
     #[doc(hidden)]
     fn handles() -> Self::Handles;
 }
 
-/// The plans of a [`When`]: a [`Plan`], or a tuple of one to six plans with one output type.
-pub trait Plans {
+/// The plans of a [`When`]: a [`Plan`], or a tuple of one to eight plans with one output type.
+///
+/// It is sealed: a [`When`] matches its plans against the queues of its sources through a
+/// crate-private trait that only these implement.
+///
+// No twin compiles here, so nothing proves that the sealing is what fails it: keep every item of
+// `Plans` implemented as the trait changes, or a missing one would fail the example too, and it
+// would pass with the sealing gone.
+/// ```compile_fail
+/// use rx_rust::operators::combining::when::Plans;
+///
+/// struct Custom;
+///
+/// impl Plans for Custom {
+///     type Output = i32;
+///     type Matched = i32;
+///
+///     fn select(&mut self, matched: i32) -> i32 {
+///         matched
+///     }
+/// }
+/// ```
+pub trait Plans: sealed::Sealed {
     /// What the selectors return: the items of the [`When`].
     type Output;
 
     /// What a match hands from under the lock to have its selector run outside it: the items it
-    /// took, tagged with the plan that matched for a tuple.
+    /// took, which a tuple of plans records with the path its search took: one
+    /// [`ControlFlow::Continue`] per plan passed over, then the [`ControlFlow::Break`] of the one
+    /// that matched. The last plan's is not wrapped.
     #[doc(hidden)]
     type Matched;
 
@@ -224,7 +265,7 @@ pub trait Plans {
 /// has been released: that lasts, as a completed source queues nothing more and a released one
 /// stays released, so whether a plan can still match is read from the queues each time, never
 /// stored.
-pub(crate) trait PlansOver<Q>: Plans {
+trait PlansOver<Q>: Plans {
     /// Takes the items of the first plan that can match.
     ///
     /// Called each time a source queues an item, it finds one plan at most: none could match
@@ -241,28 +282,14 @@ pub(crate) trait PlansOver<Q>: Plans {
 /// The queues of the sources of a [`When`]: a tuple of one [`Input`] per source, `None` once the
 /// source is released — no plan waits on it any more, or none ever did. Its subscription is then
 /// disposed, or never made, and its items are rejected.
-#[doc(hidden)]
-pub trait Inputs {
-    /// What [`release_unused`](Self::release_unused) takes out, to drop outside the lock: a tuple
-    /// of the last source first, which is the order it drops them in, as a disposal does.
-    type Released;
-
+trait Inputs: IntoReversed {
     /// The inputs of a new subscription, none released.
     fn new() -> Self;
 
     /// Releases every input not released yet that is not `needed` any more: bit `i` keeps the
-    /// source at `i`.
-    fn release_unused(&mut self, needed: u8) -> Self::Released;
-}
-
-/// The [`Input`] of the source at `INDEX`.
-pub(crate) trait InputAt<const INDEX: usize>: Inputs {
-    type Item;
-    type Disposal: Disposable;
-
-    fn input(&mut self) -> &mut Option<Input<Self::Item, Self::Disposal>>;
-
-    fn input_ref(&self) -> &Option<Input<Self::Item, Self::Disposal>>;
+    /// source at `i`. What it takes out is to drop outside the lock, reversed, so that it drops
+    /// the last source first, as a disposal does.
+    fn release_unused(&mut self, needed: u8) -> Self::Reversed;
 }
 
 /// What a [`When`] keeps of one source still in use: its queue, and its subscription. Released,
@@ -291,23 +318,41 @@ impl<T, D: Disposable> Input<T, D> {
     fn has_item(input: &Option<Self>) -> bool {
         input.as_ref().is_some_and(|input| !input.items.is_empty())
     }
+
+    /// Takes the first item queued by a source that [`has_item`](Self::has_item) accepted.
+    fn pop_item(input: &mut Option<Self>) -> T {
+        input
+            .as_mut()
+            .and_then(|input| input.items.pop_front())
+            .expect("a matched source has a queued item")
+    }
 }
 
 delegate_disposal!(
     Disposal<M, MT, E, Q>,
     subscribe_with_context::Disposal<M, MT, E, Model<Q>, ()>,
-    where M: ThreadMode, Q: Inputs
+    where M: ThreadMode
 );
 
-struct Model<Q: Inputs> {
+/// The model of the context: the inputs of the sources.
+///
+/// It takes no [`Inputs`] bound, which its `Drop` would then need too, and so would the public
+/// [`Disposal`] naming it, making [`Inputs`] public: what `Drop` runs is a function `new` picks,
+/// where the bound holds.
+struct Model<Q> {
     inputs: Q,
+    /// Releases every input, the last source first.
+    release_all: fn(&mut Q),
 }
 
 impl<Q: Inputs> Model<Q> {
     /// The model of a new subscription, whose sources that no plan names are released already,
     /// never to be subscribed.
     fn new<P: PlansOver<Q>>() -> Self {
-        let mut model = Self { inputs: Q::new() };
+        let mut model = Self {
+            inputs: Q::new(),
+            release_all: |inputs| drop(inputs.release_unused(0)),
+        };
         // Nothing is queued or subscribed yet, so the release has nothing to drop, and every plan
         // waits on some source, so none has retired.
         let _ = model.settle::<P>();
@@ -316,17 +361,17 @@ impl<Q: Inputs> Model<Q> {
 
     /// Releases the sources that no plan still able to match waits on. Returns what to drop
     /// outside the lock, and whether every plan has retired.
-    fn settle<P: PlansOver<Q>>(&mut self) -> (Q::Released, bool) {
+    fn settle<P: PlansOver<Q>>(&mut self) -> (Q::Reversed, bool) {
         let needed = P::needed(&self.inputs);
         (self.inputs.release_unused(needed), needed == 0)
     }
 }
 
-impl<Q: Inputs> Drop for Model<Q> {
+impl<Q> Drop for Model<Q> {
     fn drop(&mut self) {
         // Disposes what is still subscribed, the last source first, as a release does: a plain
         // drop of the tuple would dispose the first source first.
-        drop(self.inputs.release_unused(0));
+        (self.release_all)(&mut self.inputs);
     }
 }
 
@@ -358,21 +403,23 @@ type Context<M, E, OR, Q, P> =
     SubscriptionContext<M, <P as Plans>::Matched, E, SelectObserver<M, OR, P>, Model<Q>, ()>;
 
 #[doc(hidden)]
-pub struct WhenObserver<const INDEX: usize, M: ThreadMode, E, OR, Q: Inputs, P: Plans>(
+pub struct WhenObserver<const INDEX: usize, M: ThreadMode, E, OR, Q, P: Plans>(
     Context<M, E, OR, Q, P>,
 );
 
-impl<const INDEX: usize, M, T, E, OR, Q, P> Observer<T, E> for WhenObserver<INDEX, M, E, OR, Q, P>
+impl<const INDEX: usize, M, T, E, OR, Q, D, P> Observer<T, E>
+    for WhenObserver<INDEX, M, E, OR, Q, P>
 where
     M: ThreadMode,
     OR: Observer<P::Output, E>,
-    Q: InputAt<INDEX, Item = T>,
+    Q: Inputs + AtPosition<TupleIndex<INDEX>, Element = Option<Input<T, D>>>,
+    D: Disposable,
     P: PlansOver<Q>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.0
             .update(|model| {
-                let Some(input) = <Q as InputAt<INDEX>>::input(&mut model.inputs) else {
+                let Some(input) = model.inputs.at_mut(TupleIndex::<INDEX>) else {
                     return UpdateOutcome::empty()
                         .without_events()
                         .with_drop_outside((Some(value), None))
@@ -395,7 +442,7 @@ where
                 }
                 .with_drop_outside((None, Some(released)));
                 // The plans that waited on this source have retired: it must send nothing more.
-                if <Q as InputAt<INDEX>>::input_ref(&model.inputs).is_none() {
+                if model.inputs.at(TupleIndex::<INDEX>).is_none() {
                     outcome.answering_stop()
                 } else {
                     outcome
@@ -406,7 +453,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         let _ = self.0.update(|model| {
-            let Some(input) = <Q as InputAt<INDEX>>::input(&mut model.inputs) else {
+            let Some(input) = model.inputs.at_mut(TupleIndex::<INDEX>) else {
                 return UpdateOutcome::empty()
                     .without_events()
                     .with_drop_outside((Some(termination), None));
@@ -431,204 +478,155 @@ where
 }
 
 /// Subscribes the source at `INDEX`, unless the stream is over or no plan waits on it any more.
-fn subscribe_input<const INDEX: usize, OE, M, E, OR, Q, P>(
-    context: &Context<M, E, OR, Q, P>,
-    source: OE,
-) where
+impl<const INDEX: usize, OE, M, T, E, OR, Q, D, P> SourceSubscriber<TupleIndex<INDEX>, OE>
+    for Context<M, E, OR, Q, P>
+where
     M: ThreadMode,
     OR: Observer<P::Output, E>,
-    Q: InputAt<INDEX>,
+    Q: Inputs + AtPosition<TupleIndex<INDEX>, Element = Option<Input<T, D>>>,
+    D: Disposable,
     P: PlansOver<Q>,
-    OE: Observable<
-            WhenObserver<INDEX, M, E, OR, Q, P>,
-            Item = <Q as InputAt<INDEX>>::Item,
-            Error = E,
-            Disposal = <Q as InputAt<INDEX>>::Disposal,
-        >,
+    OE: ObservableTypes<Item = T, Error = E, Disposal = D>,
 {
-    // An update that queues nothing answers `Stop` once a termination is queued, so it tells that
-    // the stream is over as well.
-    let Updated::Ran {
-        result: true,
-        flow: Flow::Continue,
-    } = context.update(|model| {
-        UpdateOutcome::new(<Q as InputAt<INDEX>>::input_ref(&model.inputs).is_some())
-    })
-    else {
-        return;
-    };
-    let subscription = source.subscribe(WhenObserver(context.clone()));
-    let _ = context.update(|model| {
-        // Dropped when no plan waits on the source any more, whatever it did while being
-        // subscribed. Otherwise the slot is still empty, as the source is subscribed once.
-        let rejected = match <Q as InputAt<INDEX>>::input(&mut model.inputs) {
-            Some(input) => {
-                input.subscription = Some(subscription);
-                None
+    type Observer = WhenObserver<INDEX, M, E, OR, Q, P>;
+
+    fn still_running(&self) -> ControlFlow<Infallible> {
+        // Not asked: the sources are a tuple. `observer` looks at the stream for each of them.
+        ControlFlow::Continue(())
+    }
+
+    fn observer(&mut self, _: TupleIndex<INDEX>) -> Option<Self::Observer> {
+        // An update that queues nothing answers `Stop` once a termination is queued, so it tells
+        // that the stream is over as well.
+        let wanted = matches!(
+            self.update(|model| {
+                UpdateOutcome::new(model.inputs.at(TupleIndex::<INDEX>).is_some())
+            }),
+            Updated::Ran {
+                result: true,
+                flow: Flow::Continue,
             }
-            None => Some(subscription),
-        };
-        UpdateOutcome::empty()
-            .without_events()
-            .with_drop_outside(rejected)
-    });
-}
-
-/// The thread mode of the sources, joined.
-macro_rules! joined_mode {
-    ($source:ident) => { <$source as ObservableTypes>::Mode };
-    ($source:ident, $($rest:ident),+) => {
-        Joined<<$source as ObservableTypes>::Mode, joined_mode!($($rest),+)>
-    };
-}
-
-/// [`Sources`], [`Inputs`], [`InputAt`], [`ObservableTypes`] and [`Observable`] for a tuple of
-/// sources.
-macro_rules! impl_when {
-    (
-        $(($position:tt, $source:ident, $item:ident, $disposal:ident)),+;
-        reversed: $(($reversed:tt, $reversed_item:ident, $reversed_disposal:ident)),+
-    ) => {
-        impl_when!(
-            @impl
-            [joined_mode!($($source),+)]
-            [($(Option<Input<$item, <$source as ObservableTypes>::Disposal>>,)+)]
-            [$(($item, $disposal)),+]
-            $(($position, $source, $item, $disposal)),+;
-            reversed: $(($reversed, $reversed_item, $reversed_disposal)),+
         );
-    };
+        wanted.then(|| WhenObserver(self.clone()))
+    }
+
+    fn store(
+        &mut self,
+        _: TupleIndex<INDEX>,
+        subscription: DisposeOnDrop<D>,
+    ) -> ControlFlow<Infallible> {
+        let _ = self.update(|model| {
+            // Dropped when no plan waits on the source any more, whatever it did while being
+            // subscribed. Otherwise it fills the slot, still empty as the source is subscribed once.
+            let rejected = match model.inputs.at_mut(TupleIndex::<INDEX>) {
+                Some(input) => input.subscription.replace(subscription),
+                None => Some(subscription),
+            };
+            UpdateOutcome::empty()
+                .without_events()
+                .with_drop_outside(rejected)
+        });
+        ControlFlow::Continue(())
+    }
+}
+
+impl<S, P> ObservableTypes for When<S, P>
+where
+    S: Sources,
+    P: Plans,
+{
+    type Item = P::Output;
+    type Error = S::Error;
+    type Mode = S::Mode;
+    type Disposal = Disposal<S::Mode, P::Matched, S::Error, S::Inputs>;
+}
+
+impl<S, P, OR> Observable<OR> for When<S, P>
+where
+    S: Sources + SourceOps,
+    <S as SourceSet>::Cursor: SubscribeEach<
+        Context<<S as SourceSet>::Mode, <S as SourceSet>::Error, OR, <S as Sources>::Inputs, P>,
+    >,
+    <S as Sources>::Inputs: Inputs,
+    P: PlansOver<<S as Sources>::Inputs>,
+    OR: Observer<P::Output, S::Error>,
+{
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        subscribe_with_context_with_stop_view(
+            |stop_view| SelectObserver {
+                observer,
+                plans: self.plans,
+                stop_view,
+            },
+            Model::new::<P>(),
+            |mut context| {
+                // The context never breaks: every source is handed to it.
+                let ControlFlow::Continue(()) =
+                    self.sources.into_cursor().subscribe_each(&mut context);
+                DisposeOnDrop::new(())
+            },
+        )
+        .map_inner_into()
+    }
+}
+
+/// [`Sources`] for a tuple of sources, called by [`for_each_arity!`] once per arity.
+macro_rules! impl_sources {
     (
-        @impl [$mode:ty] [$inputs:ty] $all:tt
-        $(($position:tt, $source:ident, $item:ident, $disposal:ident)),+;
-        reversed: $(($reversed:tt, $reversed_item:ident, $reversed_disposal:ident)),+
+        $(($position:tt, $source:ident, $item:ident, $($_names:tt)*)),+
     ) => {
-        impl<E, $($source),+> Sources for ($($source,)+)
+        impl<E, $($source, $item),+> Sources for ($($source,)+)
         where
-            $($source: ObservableTypes<Error = E>,)+
+            $($source: ObservableTypes<Item = $item, Error = E>,)+
         {
-            type Handles = ($(SourceHandle<$position, <$source as ObservableTypes>::Item>,)+);
+            type Handles = ($(SourceHandle<$position, $item>,)+);
+            type Inputs = ($(Option<Input<$item, <$source as ObservableTypes>::Disposal>>,)+);
 
             fn handles() -> Self::Handles {
                 ($(SourceHandle::<$position, _>::new(),)+)
             }
         }
+    };
+}
+
+for_each_arity!(impl_sources);
+
+/// [`Inputs`] for a tuple of inputs, the [`Sources::Inputs`] of as many sources, called by
+/// [`for_each_arity!`] once per arity.
+macro_rules! impl_inputs {
+    ($(($position:tt, $item:ident, $disposal:ident, $($_names:tt)*)),+) => {
+        // `needed` and `release_unused` hold a set of sources in a `u8`, bit `i` for the source at
+        // `i`.
+        const _: () = assert!($($position < u8::BITS)&&+, "a set of sources is a `u8` of bits");
 
         impl<$($item, $disposal: Disposable),+> Inputs for ($(Option<Input<$item, $disposal>>,)+) {
-            type Released = ($(Option<Input<$reversed_item, $reversed_disposal>>,)+);
-
             fn new() -> Self {
                 ($(Some(Input::<$item, $disposal>::default()),)+)
             }
 
-            fn release_unused(&mut self, needed: u8) -> Self::Released {
+            fn release_unused(&mut self, needed: u8) -> Self::Reversed {
                 ($(
-                    if needed & (1 << $reversed) == 0 {
-                        self.$reversed.take()
+                    if needed & (1 << $position) == 0 {
+                        self.$position.take()
                     } else {
                         None
                     },
                 )+)
-            }
-        }
-
-        $(impl_when!(@input_at $all $position, $item, $disposal);)+
-
-        impl<E, P, $($source, $item),+> ObservableTypes for When<($($source,)+), P>
-        where
-            $($source: ObservableTypes<Item = $item, Error = E>,)+
-            P: Plans,
-        {
-            type Item = P::Output;
-            type Error = E;
-            type Mode = $mode;
-            type Disposal = Disposal<$mode, P::Matched, E, $inputs>;
-        }
-
-        impl<E, P, OR, $($source, $item),+> Observable<OR> for When<($($source,)+), P>
-        where
-            OR: Observer<<P as Plans>::Output, E>,
-            P: PlansOver<$inputs>,
-            $(
-                $source: Observable<
-                    WhenObserver<$position, $mode, E, OR, $inputs, P>,
-                    Item = $item,
-                    Error = E,
-                >,
-            )+
-        {
-            fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-                let sources = self.sources;
-                subscribe_with_context_with_stop_view(
-                    |stop_view| SelectObserver {
-                        observer,
-                        plans: self.plans,
-                        stop_view,
-                    },
-                    Model::new::<P>(),
-                    |context| {
-                        $(subscribe_input::<$position, _, _, _, _, _, _>(&context, sources.$position);)+
-                        DisposeOnDrop::new(())
-                    },
-                )
-                .map_inner_into()
-            }
-        }
-    };
-    (
-        @input_at [$(($all_item:ident, $all_disposal:ident)),+]
-        $position:tt, $item:ident, $disposal:ident
-    ) => {
-        impl<$($all_item, $all_disposal: Disposable),+> InputAt<$position>
-            for ($(Option<Input<$all_item, $all_disposal>>,)+)
-        {
-            type Item = $item;
-            type Disposal = $disposal;
-
-            fn input(&mut self) -> &mut Option<Input<$item, $disposal>> {
-                &mut self.$position
-            }
-
-            fn input_ref(&self) -> &Option<Input<$item, $disposal>> {
-                &self.$position
+                    .into_reversed()
             }
         }
     };
 }
 
-impl_when!((0, OE0, T0, D0); reversed: (0, T0, D0));
-impl_when!((0, OE0, T0, D0), (1, OE1, T1, D1); reversed: (1, T1, D1), (0, T0, D0));
-impl_when!(
-    (0, OE0, T0, D0), (1, OE1, T1, D1), (2, OE2, T2, D2);
-    reversed: (2, T2, D2), (1, T1, D1), (0, T0, D0)
-);
-impl_when!(
-    (0, OE0, T0, D0), (1, OE1, T1, D1), (2, OE2, T2, D2), (3, OE3, T3, D3);
-    reversed: (3, T3, D3), (2, T2, D2), (1, T1, D1), (0, T0, D0)
-);
-impl_when!(
-    (0, OE0, T0, D0), (1, OE1, T1, D1), (2, OE2, T2, D2), (3, OE3, T3, D3),
-    (4, OE4, T4, D4);
-    reversed: (4, T4, D4), (3, T3, D3), (2, T2, D2), (1, T1, D1), (0, T0, D0)
-);
-impl_when!(
-    (0, OE0, T0, D0), (1, OE1, T1, D1), (2, OE2, T2, D2), (3, OE3, T3, D3),
-    (4, OE4, T4, D4), (5, OE5, T5, D5);
-    reversed: (5, T5, D5), (4, T4, D4), (3, T3, D3), (2, T2, D2), (1, T1, D1), (0, T0, D0)
-);
+for_each_arity!(impl_inputs);
 
-/// [`Plans`] and [`PlansOver`] for a plan of as many sources, and the [`Pattern`] of as many:
-/// its [`then`](Pattern::then), and its [`and`](Pattern::and) below six sources. A single source
-/// delegates to the same pattern operations through [`SourceHandle`]; no user can make a pattern
-/// of one source, so the attributes given, `#[doc(hidden)]`, keep its methods out of the docs.
+/// [`Plans`] and [`PlansOver`] for the [`Plan`] of a pattern of as many sources as the arity,
+/// called by [`for_each_arity!`] once per arity: a pattern names each source once, so it has no
+/// more sources than the [`When`]. The first arity is the plan of a single source, which
+/// [`SourceHandle::then`] makes.
 macro_rules! impl_plan {
-    ($(#[$attr:meta])* pattern: $($source:tt),+) => {
-        impl_plan!($(#[$attr])* largest pattern: $($source),+);
-        impl_plan!($(#[$attr])* @and $($source),+);
-    };
     (
-        $(#[$attr:meta])*
-        largest pattern: $(($index:ident, $item:ident, $value:ident)),+
+        $(($position:tt, $index:ident, $item:ident, $disposal:ident)),+
     ) => {
         impl<$(const $index: usize, $item,)+ R, F> Plans
             for Plan<($(SourceHandle<$index, $item>,)+), F>
@@ -638,34 +636,52 @@ macro_rules! impl_plan {
             type Matched = ($($item,)+);
             type Output = R;
 
-            fn select(&mut self, ($($value,)+): Self::Matched) -> R {
-                (self.selector)($($value),+)
+            fn select(&mut self, matched: Self::Matched) -> R {
+                (self.selector)($(matched.$position),+)
             }
         }
 
-        impl<Q, $(const $index: usize, $item,)+ R, F> PlansOver<Q>
+        impl<Q, $(const $index: usize, $item, $disposal: Disposable,)+ R, F> PlansOver<Q>
             for Plan<($(SourceHandle<$index, $item>,)+), F>
         where
             F: FnMut($($item),+) -> R,
-            Q: Inputs $(+ InputAt<$index, Item = $item>)+,
+            $(Q: AtPosition<TupleIndex<$index>, Element = Option<Input<$item, $disposal>>>,)+
         {
             fn take(inputs: &mut Q) -> Option<Self::Matched> {
-                if !($(Input::has_item(<Q as InputAt<$index>>::input_ref(inputs)))&&+) {
+                if !($(Input::has_item(inputs.at(TupleIndex::<$index>)))&&+) {
                     return None;
                 }
-                Some(($(<Q as InputAt<$index>>::input(inputs).as_mut()?.items.pop_front()?,)+))
+                // Every slot was checked above, and a pattern names each source once.
+                Some(($(Input::pop_item(inputs.at_mut(TupleIndex::<$index>)),)+))
             }
 
             fn needed(inputs: &Q) -> u8 {
-                if $(Input::is_exhausted(<Q as InputAt<$index>>::input_ref(inputs)))||+ {
+                if $(Input::is_exhausted(inputs.at(TupleIndex::<$index>)))||+ {
                     0
                 } else {
                     $(1 << $index)|+
                 }
             }
         }
+    };
+}
 
-        $(#[$attr])*
+for_each_arity!(impl_plan);
+
+/// The methods of a [`Pattern`] of as many sources as the arity, called by [`for_each_arity!`]
+/// once per arity: the [`then`](Pattern::then) that makes its [`Plan`], and the
+/// [`and`](Pattern::and) that makes it from the pattern of a source fewer.
+///
+/// A single source has no pattern: its [`SourceHandle`] makes its plan ([`SourceHandle::then`])
+/// and joins it to a second source ([`SourceHandle::and`]), so the first arity generates nothing,
+/// and the second no `and`.
+macro_rules! impl_pattern {
+    ($_source:tt) => {};
+    ($($source:tt),+) => {
+        impl_pattern!(@then $($source),+);
+        impl_pattern!(@and []; $($source),+);
+    };
+    (@then $(($_position:tt, $index:ident, $item:ident, $($_names:tt)*)),+) => {
         impl<$(const $index: usize, $item),+> Pattern<($(SourceHandle<$index, $item>,)+)> {
             /// The [`Plan`] that passes each match of this pattern, one item of each source in
             /// the order of the pattern, through `selector`.
@@ -677,8 +693,17 @@ macro_rules! impl_plan {
             }
         }
     };
-    ($(#[$attr:meta])* @and $(($index:ident, $item:ident, $value:ident)),+) => {
-        $(#[$attr])*
+    // Moves the sources into the brackets until the last is left: `and` goes on the pattern of
+    // the others, and adds a source of any position, not that one in particular. With one other,
+    // there is no such pattern: `SourceHandle::and` is that `and`.
+    (@and [$_first:tt]; $_last:tt) => {};
+    (@and [$($init:tt)+]; $_last:tt) => {
+        impl_pattern!(@and_on $($init),+);
+    };
+    (@and [$($init:tt)*]; $next:tt, $($rest:tt),+) => {
+        impl_pattern!(@and [$($init)* $next]; $($rest),+);
+    };
+    (@and_on $(($_position:tt, $index:ident, $item:ident, $($_names:tt)*)),+) => {
         impl<$(const $index: usize, $item),+> Pattern<($(SourceHandle<$index, $item>,)+)> {
             /// Adds `other` to the sources of this pattern, which then matches once each has an
             /// item. A pattern names each source once, as [`SourceHandle::and`] says.
@@ -693,35 +718,25 @@ macro_rules! impl_plan {
     };
 }
 
-impl_plan!(#[doc(hidden)] pattern: (I0, T0, v0));
-impl_plan!(pattern: (I0, T0, v0), (I1, T1, v1));
-impl_plan!(pattern: (I0, T0, v0), (I1, T1, v1), (I2, T2, v2));
-impl_plan!(pattern: (I0, T0, v0), (I1, T1, v1), (I2, T2, v2), (I3, T3, v3));
-impl_plan!(pattern: (I0, T0, v0), (I1, T1, v1), (I2, T2, v2), (I3, T3, v3), (I4, T4, v4));
-impl_plan!(
-    largest pattern: (I0, T0, v0), (I1, T1, v1), (I2, T2, v2), (I3, T3, v3), (I4, T4, v4),
-    (I5, T5, v5)
-);
+for_each_arity!(impl_pattern);
 
-/// [`Plans`] and [`PlansOver`] for a tuple of as many plans.
-macro_rules! impl_plans {
-    ($matched:ident; $(($plan:ident, $position:tt, $variant:ident)),+) => {
-        #[doc(hidden)]
-        pub enum $matched<$($plan),+> {
-            $($variant($plan),)+
-        }
+/// [`Plans`] and [`PlansOver`] for a tuple of plans, called by [`for_each_arity!`] once per arity.
+/// The recursive arms nest a [`ControlFlow`] per plan but the last — `Break` with what the first
+/// plan took, `Continue` with what the plans after it hand — then take and select through it in
+/// the same order, the first plan first.
+macro_rules! impl_plan_tuple {
+    ($(($position:tt, $plan:ident, $($_names:tt)*)),+) => {
+        impl<$($plan),+> sealed::Sealed for ($($plan,)+) {}
 
         impl<R, $($plan),+> Plans for ($($plan,)+)
         where
             $($plan: Plans<Output = R>,)+
         {
             type Output = R;
-            type Matched = $matched<$(<$plan as Plans>::Matched),+>;
+            type Matched = impl_plan_tuple!(@matched $($plan),+);
 
             fn select(&mut self, matched: Self::Matched) -> R {
-                match matched {
-                    $($matched::$variant(args) => self.$position.select(args),)+
-                }
+                impl_plan_tuple!(@select self, matched; $($position),+)
             }
         }
 
@@ -730,12 +745,7 @@ macro_rules! impl_plans {
             $($plan: PlansOver<Q, Output = R>,)+
         {
             fn take(inputs: &mut Q) -> Option<Self::Matched> {
-                $(
-                    if let Some(args) = <$plan as PlansOver<Q>>::take(inputs) {
-                        return Some($matched::$variant(args));
-                    }
-                )+
-                None
+                impl_plan_tuple!(@take inputs, Q; $($plan),+)
             }
 
             fn needed(inputs: &Q) -> u8 {
@@ -743,16 +753,30 @@ macro_rules! impl_plans {
             }
         }
     };
+    (@matched $last:ident) => {
+        <$last as Plans>::Matched
+    };
+    (@matched $first:ident, $($rest:ident),+) => {
+        ControlFlow<<$first as Plans>::Matched, impl_plan_tuple!(@matched $($rest),+)>
+    };
+    (@select $self:ident, $matched:ident; $last:tt) => {
+        $self.$last.select($matched)
+    };
+    (@select $self:ident, $matched:ident; $first:tt, $($rest:tt),+) => {
+        match $matched {
+            ControlFlow::Break(args) => $self.$first.select(args),
+            ControlFlow::Continue(rest) => impl_plan_tuple!(@select $self, rest; $($rest),+),
+        }
+    };
+    (@take $inputs:ident, $q:ident; $last:ident) => {
+        <$last as PlansOver<$q>>::take($inputs)
+    };
+    (@take $inputs:ident, $q:ident; $first:ident, $($rest:ident),+) => {
+        match <$first as PlansOver<$q>>::take($inputs) {
+            Some(args) => Some(ControlFlow::Break(args)),
+            None => impl_plan_tuple!(@take $inputs, $q; $($rest),+).map(ControlFlow::Continue),
+        }
+    };
 }
 
-impl_plans!(Matched1; (P0, 0, Plan0));
-impl_plans!(Matched2; (P0, 0, Plan0), (P1, 1, Plan1));
-impl_plans!(Matched3; (P0, 0, Plan0), (P1, 1, Plan1), (P2, 2, Plan2));
-impl_plans!(Matched4; (P0, 0, Plan0), (P1, 1, Plan1), (P2, 2, Plan2), (P3, 3, Plan3));
-impl_plans!(Matched5;
-    (P0, 0, Plan0), (P1, 1, Plan1), (P2, 2, Plan2), (P3, 3, Plan3), (P4, 4, Plan4)
-);
-impl_plans!(Matched6;
-    (P0, 0, Plan0), (P1, 1, Plan1), (P2, 2, Plan2), (P3, 3, Plan3), (P4, 4, Plan4),
-    (P5, 5, Plan5)
-);
+for_each_arity!(impl_plan_tuple);

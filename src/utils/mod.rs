@@ -29,6 +29,7 @@ pub(crate) mod id_generator;
 pub(crate) mod lazy_subscription;
 pub(crate) mod on_panic;
 pub(crate) mod pending_events;
+pub(crate) mod positional;
 pub(crate) mod reservation_map;
 pub(crate) mod reservation_slot;
 pub(crate) mod serialized_delivery;

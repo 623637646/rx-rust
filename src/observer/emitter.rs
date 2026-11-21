@@ -24,7 +24,7 @@ pub struct Emitter<M: ThreadMode, OR> {
     observer: OR,
     /// Enforces the `local` declaration; memory safety does not need it. Without it, a `Local`
     /// builder that moves the emitter to another thread compiles as long as nothing downstream is
-    /// `!Send` (`.map(..)` into a callback), and fails once something is (`.merge_with(..)`, whose
+    /// `!Send` (`.map(..)` into a callback), and fails once something is (`.merge(..)`, whose
     /// `Rc` state is `!Send`). That failure would point into the operator's internals instead of at
     /// the declaration, and whether the builder compiles would depend on how the operators
     /// downstream keep their state, which they may change. With it, the builder never compiles, and

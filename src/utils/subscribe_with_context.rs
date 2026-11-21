@@ -10,9 +10,10 @@
 //! whatever stopped it: a disposal, a termination — from the source, a notifier, a scheduler task
 //! or another source — or a downstream that answered [`Flow::Stop`].
 //!
-//! An operator with two of them — two sources, or a source and a scheduler task — is written
-//! with [`subscribe_with_context_two_steps`], which subscribes them in order, skips the second
-//! one once the stream is already over, and disposes them in the opposite order.
+//! [`subscribe_with_context_two_steps`] subscribes two sources, or a source and a scheduler task,
+//! in order. It skips the second step if the first ended the stream and disposes the steps in
+//! reverse order. For other forms of assembly, an operator can use [`subscribe_with_context`] and
+//! check [`SubscriptionContext::is_active`] before starting each subsequent step.
 //!
 //! # Examples
 //! An operator that emits the running total of two sources and completes on its own once it
@@ -26,7 +27,7 @@
 //!     subject::publish_subject::PublishSubject,
 //!     thread_mode::ThreadMode,
 //!     utils::subscribe_with_context::{
-//!         self, SubscriptionContext, UpdateOutcome, subscribe_with_context,
+//!         SubscriptionContext, TwoStepsDisposal, UpdateOutcome, subscribe_with_context_two_steps,
 //!     },
 //! };
 //! use std::convert::Infallible;
@@ -43,8 +44,7 @@
 //!     type Item = i32;
 //!     type Error = E;
 //!     type Mode = JoinedModeOf<A, B>;
-//!     type Disposal =
-//!         subscribe_with_context::Disposal<JoinedModeOf<A, B>, i32, E, i32, ChainDisposalOf<A, B>>;
+//!     type Disposal = TwoStepsDisposal<JoinedModeOf<A, B>, i32, E, i32, A::Disposal, B::Disposal>;
 //! }
 //!
 //! // Both sources are subscribed with the operator's own observer, which is named here.
@@ -52,23 +52,24 @@
 //! where
 //!     OR: Observer<i32, E>,
 //!     A: Observable<
-//!             TotalObserver<JoinedModeOf<A, B>, OR, E, ChainDisposalOf<A, B>>,
+//!             TotalObserver<JoinedModeOf<A, B>, OR, E, ChainDisposalOf<B, A>>,
 //!             Item = i32,
 //!             Error = E,
 //!         >,
 //!     B: Observable<
-//!             TotalObserver<JoinedModeOf<A, B>, OR, E, ChainDisposalOf<A, B>>,
+//!             TotalObserver<JoinedModeOf<A, B>, OR, E, ChainDisposalOf<B, A>>,
 //!             Item = i32,
 //!             Error = E,
 //!         >,
 //! {
 //!     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
 //!         let limit = self.limit;
-//!         subscribe_with_context(observer, 0, |context| {
-//!             let first = self.first.subscribe(TotalObserver { context: context.clone(), limit });
-//!             let second = self.second.subscribe(TotalObserver { context, limit });
-//!             second.preceded_by_wrapped(first)
-//!         })
+//!         subscribe_with_context_two_steps(
+//!             observer,
+//!             0,
+//!             |context| Some(self.first.subscribe(TotalObserver { context: context.clone(), limit })),
+//!             |context| Some(self.second.subscribe(TotalObserver { context: context.clone(), limit })),
+//!         )
 //!     }
 //! }
 //!
@@ -308,7 +309,10 @@ where
          subscribe_with_context handles \"auto dispose on termination\" itself."
     );
     let context = SubscriptionContext::new(observer_builder, model);
-    let disposal = context.disposal();
+    // A builder can store subscriptions in the model before it returns, as `when` does.
+    // Guard them now too: if the builder panics, those subscriptions may retain the context,
+    // so dropping its local handle alone would leave both them and the observer alive.
+    let disposal = context.disposal().into_dispose_on_drop();
     if let Some(subscription) = builder(&context) {
         // The context owns the source subscription from here on. The field is private and set only
         // here, so it is still `None` and nothing is dropped under the lock. A context that already
@@ -319,7 +323,7 @@ where
             UpdateOutcome::new(())
         });
     }
-    disposal.into_dispose_on_drop()
+    disposal
 }
 
 /// What a context owns besides its observer and its queued events.
@@ -379,13 +383,20 @@ impl<M: ThreadMode, T, E, OR, MD, D: Disposable> SubscriptionContext<M, T, E, OR
         Disposal(self.delivery.stop_handle())
     }
 
+    /// Stops this context, as its disposal does: for an operator that must give up on a stream
+    /// whose state a panic left half updated, as [`subscribe_with_context`] does when its builder
+    /// panics.
+    pub(crate) fn stop(&self) {
+        self.disposal().dispose();
+    }
+
     /// Whether the stream is still running: the context has not stopped, and no termination is
     /// queued behind a delivery running elsewhere.
     ///
     /// An operator that assembles its subscription in several steps asks this before a step whose
     /// side effects a stream that is already over has no use for — subscribing another source,
-    /// starting a scheduler task, opening a file — as
-    /// [`subscribe_with_context_two_steps`] does between its two. A stop concurrent with the
+    /// starting a scheduler task, opening a file — as [`subscribe_with_context_two_steps`] does
+    /// between its two steps. A stop concurrent with the
     /// check may land right after it, so it says what is pointless to start, never that what is
     /// started next outlives the check: that is what the context owning the subscription is for,
     /// as it disposes whatever it was handed once it has stopped.
@@ -463,9 +474,79 @@ mod tests {
         thread,
     };
 
+    /// Raises its flag as it is dropped: what tells an observer that was released from one that
+    /// was terminated.
+    struct DropFlag(Arc<AtomicBool>);
+
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    // A step that ends the stream while the subscription is still being assembled keeps the step
+    // after it from subscribing at all, and what it did subscribe is released at once.
+    #[test]
+    fn test_termination_in_the_first_step_skips_the_second_and_releases_the_first() {
+        let disposed = Arc::new(AtomicBool::new(false));
+        let disposed_first = disposed.clone();
+        let completed = Arc::new(AtomicBool::new(false));
+        let completed_observer = completed.clone();
+        let observer = CallbackObserver::new(
+            |_: i32| {},
+            move |termination: Termination<Infallible>| {
+                assert_eq!(termination, Termination::Completed);
+                completed_observer.store(true, Ordering::SeqCst);
+            },
+        );
+
+        let _subscription = subscribe_with_context_two_steps::<Shared, _, _, _, _, _, _, _, _>(
+            observer,
+            (),
+            |context| {
+                let subscription = DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    disposed_first.store(true, Ordering::SeqCst)
+                }));
+                context.send_termination(Termination::Completed);
+                Some(subscription)
+            },
+            |_| -> Option<DisposeOnDrop<()>> {
+                panic!("a stream that is over must not subscribe the step after it")
+            },
+        );
+
+        assert!(disposed.load(Ordering::SeqCst));
+        assert!(completed.load(Ordering::SeqCst));
+    }
+
+    // `None` ends the assembly: the step after it does not run. With no step left holding a clone
+    // of the context, the observer is released as the subscription is handed back — without a
+    // termination, the way a source letting go of it would end the stream.
+    #[test]
+    fn test_a_first_step_that_subscribes_nothing_skips_the_second() {
+        let released = Arc::new(AtomicBool::new(false));
+        let flag = DropFlag(released.clone());
+        let observer = CallbackObserver::new(
+            move |_: i32| {
+                let _ = &flag;
+            },
+            |_: Termination<Infallible>| panic!("the observer must be released, not terminated"),
+        );
+
+        let _subscription = subscribe_with_context_two_steps::<Shared, _, _, _, _, _, _, _, _>(
+            observer,
+            (),
+            |_| -> Option<DisposeOnDrop<()>> { None },
+            |_| -> Option<DisposeOnDrop<()>> {
+                panic!("the step after one that subscribed nothing must not run")
+            },
+        );
+
+        assert!(released.load(Ordering::SeqCst));
+    }
+
     // A stop concurrent with a step, which needs the context's own disposal: the public surface
-    // only hands one out once the assembly has returned. The rest is covered from outside, in
-    // `tests/subscribe_with_context.rs`.
+    // only hands one out once the assembly has returned.
     #[test]
     fn test_disposes_steps_started_before_a_concurrent_stop() {
         let disposed = Arc::new(AtomicBool::new(false));

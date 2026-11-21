@@ -398,7 +398,7 @@ fn test_try_stream_ext() {
 
         let stream = FromIter::new([111, 222])
             .with_error_type()
-            .concat_with(Throw::new("error").with_item_type())
+            .concat(Throw::new("error").with_item_type())
             .into_try_stream();
         assert_eq!(stream.try_collect::<Vec<_>>().await, Err("error"));
 

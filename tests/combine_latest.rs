@@ -13,12 +13,14 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::combining::combine_latest::CombineLatest,
+    operators::{combining::combine_latest::CombineLatest, creating::just::Just},
 };
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -1145,7 +1147,7 @@ fn test_without_convenient_api() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = CombineLatest::new(observable, observable_1);
+    let observable = CombineLatest::new((observable, observable_1));
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1505,6 +1507,19 @@ fn test_type_inference_without_subscribe() {
     observable.filter(|_| true);
 }
 
+#[test]
+fn test_observable_types_without_clone() {
+    use rx_rust::observable::ObservableTypes;
+
+    struct NotClone;
+
+    fn inspect_tuple<OE: ObservableTypes<Item = (NotClone, bool)>>(_: OE) {}
+    fn inspect_list<OE: ObservableTypes<Item = Vec<NotClone>>>(_: OE) {}
+
+    inspect_tuple(CombineLatest::new((Just::new(NotClone), Just::new(true))));
+    inspect_list(CombineLatest::new_from_iter([Just::new(NotClone)]));
+}
+
 /// A source that drops its observer without a termination (decision 0004) sends nothing more, but
 /// its latest value still combines with those of the other one. Once the other lets go too,
 /// nothing more can come, and the observer is dropped, never terminated.
@@ -1533,4 +1548,595 @@ fn test_abandon_after_next() {
     assert_eq!(checker.values(), [(1, 10), (1, 20)]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker_2.state(), ChannelState::Abandoned);
+}
+
+#[test]
+fn test_completed_three_sources() {
+    let (mut sender_1, observable_1, _) = test_channel::<'_, i32, Infallible>();
+    let (mut sender_2, observable_2, _) = test_channel::<'_, &str, Infallible>();
+    let (mut sender_3, observable_3, _) = test_channel::<'_, f64, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let _subscription =
+        CombineLatest::new((observable_1, observable_2, observable_3)).subscribe(observer);
+    assert!(sender_1.on_next(1).is_continue());
+    assert!(sender_2.on_next("a").is_continue());
+    assert!(checker.values().is_empty());
+
+    assert!(sender_3.on_next(0.5).is_continue());
+    assert!(sender_2.on_next("b").is_continue());
+    assert_eq!(checker.values(), [(1, "a", 0.5), (1, "b", 0.5)]);
+
+    sender_1.on_termination(Termination::Completed);
+    sender_2.on_termination(Termination::Completed);
+    assert_eq!(checker.state(), State::Active);
+    assert!(sender_3.on_next(1.5).is_continue());
+    sender_3.on_termination(Termination::Completed);
+    assert_eq!(checker.values().last(), Some(&(1, "b", 1.5)));
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_completed_eight_sources() {
+    let (checker, observer) = Checker::<_, Infallible>::new();
+
+    let _subscription = CombineLatest::new((
+        Just::new(1),
+        Just::new("two"),
+        Just::new(3.0),
+        Just::new('4'),
+        Just::new(5u8),
+        Just::new(String::from("six")),
+        Just::new(7_i64),
+        Just::new(true),
+    ))
+    .subscribe(observer);
+    assert_eq!(
+        checker.values(),
+        [(1, "two", 3.0, '4', 5u8, String::from("six"), 7_i64, true)]
+    );
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_unsubscribe_order_three_sources() {
+    let order = Arc::new(Mutex::new(Vec::new()));
+    let source = |index: usize| {
+        let order = order.clone();
+        Create::shared_boxed(move |_observer: SendBoxedObserver<'_, i32, Infallible>| {
+            let order = order.clone();
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
+                order.with_mut(|order| order.push(index));
+            }))
+        })
+    };
+
+    let subscription = CombineLatest::new((source(0), source(1), source(2)))
+        .subscribe_with_callback(|_| {}, |_| {});
+    subscription.dispose();
+    // The last subscribed first.
+    assert_eq!(order.clone_value(), [2, 1, 0]);
+}
+
+#[test]
+fn test_error_on_sub_skips_later_sources() {
+    let (_, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::<_, &str>::new();
+
+    // The first one fails as it is subscribed: the others are not subscribed at all.
+    let _subscription = CombineLatest::new((
+        Throw::new("error").with_item_type::<i32>().into_shared(),
+        observable,
+    ))
+    .subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
+}
+
+#[test]
+fn test_completed_from_iter() {
+    let (checker, observer) = Checker::new();
+    // The filter gives no exact size, and the result exceeds the tuple arity limit.
+    let sources = (0..16)
+        .filter(|value| value % 2 == 0)
+        .map(|value| Just::new(value).into_shared());
+    let _subscription = CombineLatest::new_from_iter(sources).subscribe(observer);
+    assert_eq!(checker.values(), [vec![0, 2, 4, 6, 8, 10, 12, 14]]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+/// The list form, [`CombineLatest::new_from_iter`].
+mod from_iter {
+    use crate::tests_utils::DURATION_10_MS;
+    use crate::tests_utils::checker::State;
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
+    use crate::tests_utils::test_channel::ChannelState;
+    use crate::tests_utils::test_channel::test_channel;
+    use crate::tests_utils::test_channel::test_channels;
+    use crate::tests_utils::test_scheduler::block_on;
+    use crate::tests_utils::{checker::Checker, test_struct::TestStruct};
+    use rx_rust::disposable::Disposable;
+    use rx_rust::disposable::callback_disposal::CallbackDisposal;
+    use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
+    use rx_rust::observer::boxed_observer::SendBoxedObserver;
+    use rx_rust::operators::creating::create::Create;
+    use rx_rust::operators::creating::empty::Empty;
+    use rx_rust::operators::creating::just::Just;
+    use rx_rust::operators::creating::throw::Throw;
+    use rx_rust::subject::publish_subject::PublishSubject;
+    use rx_rust::{
+        observable::{Observable, ObservableExt},
+        observer::{Observer, Termination},
+        operators::combining::combine_latest::CombineLatest,
+    };
+    use std::convert::Infallible;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn test_completed() {
+        let (channels, observable) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = CombineLatest::new_from_iter(vec![observable; 3]);
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(channels.len(), 3);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        assert!(channels.on_next(0, 1).is_continue());
+        assert!(channels.on_next(2, 3).is_continue());
+        assert!(checker.values().is_empty());
+
+        // Every source has emitted: the first combination, in the order of the list.
+        assert!(channels.on_next(1, 2).is_continue());
+        assert_eq!(checker.values(), [vec![1, 2, 3]]);
+
+        assert!(channels.on_next(0, 10).is_continue());
+        assert!(channels.on_next(2, 30).is_continue());
+        assert_eq!(
+            checker.values(),
+            [vec![1, 2, 3], vec![10, 2, 3], vec![10, 2, 30]]
+        );
+
+        channels.on_termination(0, Termination::Completed);
+        channels.on_termination(1, Termination::Completed);
+        assert_eq!(checker.state(), State::Active);
+        // A completed source keeps its latest item.
+        assert!(channels.on_next(2, 300).is_continue());
+        assert_eq!(checker.values().last(), Some(&vec![10, 2, 300]));
+
+        channels.on_termination(2, Termination::Completed);
+        assert_eq!(checker.values().len(), 4);
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_completed_without_value() {
+        let (channels, observable) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = CombineLatest::new_from_iter(vec![observable; 2]).subscribe(observer);
+        assert!(channels.on_next(0, 1).is_continue());
+
+        // No combination can ever be made: the stream ends at once.
+        channels.on_termination(1, Termination::Completed);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+    }
+
+    #[test]
+    fn test_completed_empty() {
+        let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
+
+        let _subscription =
+            CombineLatest::new_from_iter(Vec::<Just<i32>>::new()).subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_completed_single() {
+        let (channels, observable) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = CombineLatest::new_from_iter([observable]).subscribe(observer);
+        assert!(channels.on_next(0, 1).is_continue());
+        assert!(channels.on_next(0, 2).is_continue());
+        channels.on_termination(0, Termination::Completed);
+        assert_eq!(checker.values(), [vec![1], vec![2]]);
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_completed_sources_are_same() {
+        let mut subject = PublishSubject::<_, Infallible, _>::shared();
+        let (checker, observer) = Checker::new();
+
+        let _subscription =
+            CombineLatest::new_from_iter(vec![subject.clone(); 2]).subscribe(observer);
+        assert!(subject.on_next(1).is_continue());
+        assert!(subject.on_next(2).is_continue());
+        assert_eq!(checker.values(), [vec![1, 1], vec![2, 1], vec![2, 2]]);
+
+        subject.on_termination(Termination::Completed);
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_error() {
+        let (channels, observable) = test_channels::<'_, i32, _>();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = CombineLatest::new_from_iter(vec![observable; 3]).subscribe(observer);
+        for index in 0..3 {
+            assert!(channels.on_next(index, index as i32).is_continue());
+        }
+        channels.on_termination(1, Termination::Error("error"));
+        assert_eq!(checker.values(), [vec![0, 1, 2]]);
+        assert_eq!(checker.state(), State::Error("error"));
+        assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+        assert_eq!(channels.state(1), ChannelState::Error("error"));
+        assert_eq!(channels.state(2), ChannelState::Unsubscribed);
+    }
+
+    #[test]
+    fn test_unsubscribe() {
+        let (channels, observable) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let subscription = CombineLatest::new_from_iter(vec![observable; 2]).subscribe(observer);
+        assert!(channels.on_next(0, 1).is_continue());
+        assert!(channels.on_next(1, 2).is_continue());
+
+        subscription.dispose();
+        assert_eq!(checker.values(), [vec![1, 2]]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+        assert_eq!(channels.state(1), ChannelState::Unsubscribed);
+    }
+
+    #[test]
+    fn test_unsubscribe_order() {
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let sources: Vec<_> = (0..3)
+            .map(|index| {
+                let order = order.clone();
+                Create::shared_boxed(move |_observer: SendBoxedObserver<'_, i32, Infallible>| {
+                    let order = order.clone();
+                    DisposeOnDrop::new(CallbackDisposal::new(move || {
+                        order.lock().unwrap().push(index);
+                    }))
+                })
+            })
+            .collect();
+
+        let subscription =
+            CombineLatest::new_from_iter(sources).subscribe_with_callback(|_| {}, |_| {});
+        subscription.dispose();
+        // The last subscribed first.
+        assert_eq!(*order.lock().unwrap(), [2, 1, 0]);
+    }
+
+    #[test]
+    fn test_ref() {
+        let values = [111, 222];
+        let error = 333;
+
+        let (channels, observable) = test_channels();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = CombineLatest::new_from_iter(vec![observable; 2]).subscribe(observer);
+        assert!(channels.on_next(0, &values[0]).is_continue());
+        assert!(channels.on_next(1, &values[1]).is_continue());
+        channels.on_termination(0, Termination::Error(&error));
+        assert_eq!(checker.values(), [vec![&values[0], &values[1]]]);
+        assert_eq!(checker.state(), State::Error(&error));
+    }
+
+    #[test]
+    fn test_async() {
+        block_on(|scheduler| async move {
+            let (channels, observable) = test_channels::<'_, i32, Infallible>();
+            let (checker, observer) = Checker::new();
+
+            let observable = CombineLatest::new_from_iter(vec![observable; 2]);
+
+            let subscription = scheduler
+                .spawn(async move { observable.subscribe(observer) })
+                .await;
+
+            let channels_sender = channels.clone();
+            scheduler
+                .spawn(async move {
+                    assert!(channels_sender.on_next(0, 1).is_continue());
+                    assert!(channels_sender.on_next(1, 2).is_continue());
+                })
+                .await;
+            assert_eq!(checker.values(), [vec![1, 2]]);
+            assert_eq!(checker.state(), State::Active);
+
+            scheduler.spawn(async { subscription.dispose() }).await;
+            scheduler.sleep(DURATION_10_MS).await;
+            assert_eq!(checker.values(), [vec![1, 2]]);
+            assert_eq!(checker.state(), State::Dropped);
+            assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+            assert_eq!(channels.state(1), ChannelState::Unsubscribed);
+        });
+    }
+
+    #[test]
+    fn test_subscribe_by_different_observer() {
+        let (channels, observable) = test_channels::<'_, i32, &str>();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
+
+        let observable_1 = CombineLatest::new_from_iter(vec![observable; 2]);
+        let observable_2 = observable_1.clone();
+
+        let _subscription_1 = observable_1.subscribe(observer_1);
+        let (on_next, on_termination) = observer_2.into_callbacks();
+        let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
+        assert_eq!(channels.len(), 4);
+
+        for index in 0..4 {
+            assert!(channels.on_next(index, 1).is_continue());
+        }
+        channels.on_termination(0, Termination::Error("error"));
+        channels.on_termination(2, Termination::Error("error"));
+        assert_eq!(checker_1.values(), [vec![1, 1]]);
+        assert_eq!(checker_1.state(), State::Error("error"));
+        assert_eq!(checker_2.values(), [vec![1, 1]]);
+        assert_eq!(checker_2.state(), State::Error("error"));
+    }
+
+    #[test]
+    fn test_unsub_on_next_by_take() {
+        let (channels, observable) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = CombineLatest::new_from_iter(vec![observable; 2]).take(1);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(channels.on_next(0, 1).is_continue());
+        assert!(channels.on_next(1, 2).is_stop());
+        assert_eq!(checker.values(), [vec![1, 2]]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+        assert_eq!(channels.state(1), ChannelState::Unsubscribed);
+    }
+
+    #[test]
+    fn test_multiple_operation() {
+        let (channels, observable) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let combined = CombineLatest::new_from_iter(vec![observable; 2])
+            .map(|values| values.iter().sum::<i32>());
+        let observable = CombineLatest::new_from_iter([combined]);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(channels.on_next(0, 1).is_continue());
+        assert!(channels.on_next(1, 2).is_continue());
+        assert_eq!(checker.values(), [vec![3]]);
+    }
+
+    #[test]
+    fn test_next_on_sub() {
+        let (checker, observer) = Checker::<_, Infallible>::new();
+
+        let observable = CombineLatest::new_from_iter([Just::new(1), Just::new(2), Just::new(3)]);
+
+        // Each emits and completes as it is subscribed: the last one completes the combination, and
+        // its completion is the last of all.
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), [vec![1, 2, 3]]);
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_next_on_sub_with_start_with() {
+        let (channels, observable) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = CombineLatest::new_from_iter(vec![observable.start_with([0]); 2]);
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), [vec![0, 0]]);
+
+        assert!(channels.on_next(1, 1).is_continue());
+        assert_eq!(checker.values(), [vec![0, 0], vec![0, 1]]);
+    }
+
+    #[test]
+    fn test_complete_on_sub() {
+        let (checker, observer) = Checker::<Vec<Infallible>, Infallible>::new();
+
+        let _subscription = CombineLatest::new_from_iter([Empty, Empty]).subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_error_on_sub() {
+        let (channels, observable) = test_channels::<'_, i32, &str>();
+        let (checker, observer) = Checker::new();
+
+        let sources = [
+            Throw::new("error")
+                .with_item_type()
+                .into_shared()
+                .into_send_boxed(),
+            observable.into_send_boxed(),
+        ];
+
+        // The first one fails as it is subscribed: the second is not subscribed at all.
+        let _subscription = CombineLatest::new_from_iter(sources).subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Error("error"));
+        assert_eq!(channels.len(), 0);
+    }
+
+    #[test]
+    fn test_next_on_unsub() {
+        let (checker, observer) = Checker::new();
+
+        let observable =
+            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    let mut observer = observer;
+                    assert!(observer.on_next(111).is_stop());
+                }))
+            });
+
+        let subscription = CombineLatest::new_from_iter([observable]).subscribe(observer);
+        subscription.dispose();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+    }
+
+    #[test]
+    fn test_abandon_after_next() {
+        let (mut sender_1, observable_1, channel_checker_1) = test_channel::<'_, i32, Infallible>();
+        let (mut sender_2, observable_2, _channel_checker_2) =
+            test_channel::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let _subscription =
+            CombineLatest::new_from_iter([observable_1, observable_2]).subscribe(observer);
+        assert!(sender_1.on_next(1).is_continue());
+        sender_1.abandon();
+        assert_eq!(channel_checker_1.state(), ChannelState::Abandoned);
+        assert_eq!(checker.state(), State::Active);
+
+        // The other one goes on, combined with the latest item of the one that let go.
+        assert!(sender_2.on_next(2).is_continue());
+        assert_eq!(checker.values(), [vec![1, 2]]);
+
+        sender_2.abandon();
+        assert_eq!(checker.values(), [vec![1, 2]]);
+        assert_eq!(checker.state(), State::Dropped);
+    }
+
+    #[test]
+    fn test_drop_replaced_value_outside_lock() {
+        let (channels, observable) = test_channels::<'_, Arc<Mutex<DropProbe>>, Infallible>();
+        let (checker, observer) = Checker::new();
+        let channels_probe = channels.clone();
+
+        let _subscription = CombineLatest::new_from_iter(vec![observable; 2])
+            .map(|values| values.len())
+            .subscribe(observer);
+        assert!(
+            channels
+                .on_next(1, Arc::new(Mutex::new(DropProbe::new())))
+                .is_continue()
+        );
+
+        // The item a newer one replaces is dropped outside the lock: a drop that re-enters the operator
+        // would deadlock otherwise, or panic on the re-entrancy check of a debug build.
+        let drops = DropCount::new();
+        let probe = DropProbe::new()
+            .on_drop(drops.callback())
+            .on_drop(Box::new(move || {
+                assert!(
+                    channels_probe
+                        .on_next(1, Arc::new(Mutex::new(DropProbe::new())))
+                        .is_continue()
+                );
+            }));
+        assert!(
+            channels
+                .on_next(0, Arc::new(Mutex::new(probe)))
+                .is_continue()
+        );
+        assert_eq!(checker.values(), [2]);
+        assert!(
+            channels
+                .on_next(0, Arc::new(Mutex::new(DropProbe::new())))
+                .is_continue()
+        );
+        // The combinations are gone, so the replaced item was the last owner of the probe. Its drop
+        // sent a new item, which made one more combination.
+        assert_eq!(drops.get(), 1);
+        assert_eq!(checker.values(), [2, 2, 2]);
+    }
+
+    #[test]
+    fn test_lifetime_sub() {
+        // OK
+        let life_marker = TestStruct;
+        let _subscription;
+
+        // Error
+        // let _subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let observable = Create::shared_boxed(|mut observer| {
+                assert!(observer.on_next(1).is_continue());
+                observer.on_termination(Termination::<String>::Completed);
+                DisposeOnDrop::new(CallbackDisposal::new(|| {
+                    life_marker.consume_ref();
+                }))
+            });
+
+            let observable = CombineLatest::new_from_iter([observable]);
+
+            let (_, observer) = Checker::new();
+            _subscription = observable.subscribe(observer);
+        }
+    }
+
+    #[test]
+    fn test_lifetime_or() {
+        // OK
+        let life_marker_2 = TestStruct;
+        let mut life_marker_1 = None;
+
+        // Error
+        // let mut life_marker_1 = None;
+        // let life_marker_2 = TestStruct;
+
+        {
+            let observable = Create::shared_boxed(|observer| {
+                life_marker_1 = Some(observer);
+                DisposeOnDrop::default()
+            });
+            let observable = CombineLatest::new_from_iter([observable]);
+
+            let (_, mut observer) = Checker::<_, Infallible>::new();
+            assert!(observer.on_next(vec![Some(&life_marker_2)]).is_continue());
+            let _subscription = observable.subscribe(observer);
+        }
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = Create::shared_boxed(|mut observer| {
+            assert!(observer.on_next(1).is_continue());
+            observer.on_termination(Termination::Error(TestStruct));
+            DisposeOnDrop::default()
+        });
+        let observable = CombineLatest::new_from_iter(vec![observable]);
+        _ = observable.clone(); // Make sure it's Clone when E is not Clone.
+    }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        let observable = CombineLatest::new_from_iter([Just::new(1)]);
+
+        let observable = CombineLatest::new_from_iter([observable]);
+        let (_, observer) = Checker::new();
+        let _ = observable.subscribe(observer);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        let observable = CombineLatest::new_from_iter([Just::new(1)]);
+
+        CombineLatest::new_from_iter([observable]);
+    }
 }

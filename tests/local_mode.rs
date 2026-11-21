@@ -23,8 +23,8 @@ use rx_rust::{
     },
     operators::{
         combining::{
-            combine_latest::CombineLatest, group_join::GroupJoin, join::Join, merge::Merge,
-            when::When,
+            combine_latest::CombineLatest, concat::Concat, group_join::GroupJoin, join::Join,
+            merge::Merge, when::When,
         },
         connectable::ref_count::RefCount,
         creating::{
@@ -303,7 +303,7 @@ fn test_share_behavior() {
 fn test_merge() {
     let mut subject_1: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
     let mut subject_2: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
-    let (record, _subscription) = record(Merge::new(subject_1.clone(), subject_2.clone()));
+    let (record, _subscription) = record(Merge::new((subject_1.clone(), subject_2.clone())));
     assert!(subject_1.on_next(Rc::new(1)).is_continue());
     assert!(subject_2.on_next(Rc::new(2)).is_continue());
     subject_1.on_termination(Termination::Completed);
@@ -314,11 +314,85 @@ fn test_merge() {
 }
 
 #[test]
+fn test_concat() {
+    let mut subject_1: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut subject_2: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let mut subject_3: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
+    let (record, _subscription) = record(Concat::new((
+        subject_1.clone(),
+        subject_2.clone(),
+        subject_3.clone(),
+    )));
+    assert!(subject_1.on_next(Rc::new(1)).is_continue());
+    // Not subscribed yet: its value is missed.
+    let _ = subject_2.on_next(Rc::new(-1));
+    subject_1.on_termination(Termination::Completed);
+    assert!(subject_2.on_next(Rc::new(2)).is_continue());
+    subject_2.on_termination(Termination::Completed);
+    assert!(subject_3.on_next(Rc::new(3)).is_continue());
+    assert!(record.termination().is_none());
+    subject_3.on_termination(Termination::Completed);
+    assert_eq!(record.values(), rcs([1, 2, 3]));
+    assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+#[test]
+fn test_concat_new_from_iter() {
+    // Neither the iterator, which holds an `Rc`, nor the sources it makes are `Send`.
+    let subjects = Rc::new(RefCell::new(Vec::new()));
+    let sources = {
+        let subjects = subjects.clone();
+        (0..2).map(move |_| {
+            let subject = PublishSubject::<_, Infallible, _>::local();
+            subjects.with_mut(|subjects| subjects.push(subject.clone()));
+            subject
+        })
+    };
+    let (record, _subscription) = record(Concat::new_from_iter(sources));
+    assert_eq!(subjects.with_ref(Vec::len), 1);
+
+    let mut first = subjects.with_ref(|subjects| subjects[0].clone());
+    assert!(first.on_next(Rc::new(1)).is_continue());
+    first.on_termination(Termination::Completed); // Pulls the second one.
+    assert_eq!(subjects.with_ref(Vec::len), 2);
+
+    let mut second = subjects.with_ref(|subjects| subjects[1].clone());
+    assert!(second.on_next(Rc::new(2)).is_continue());
+    second.on_termination(Termination::Completed);
+    assert_eq!(record.values(), rcs([1, 2]));
+    assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+#[test]
+fn test_merge_max_concurrency() {
+    // Neither the iterator, which holds an `Rc`, nor the sources it makes are `Send`.
+    let subjects = Rc::new(RefCell::new(Vec::new()));
+    let sources = {
+        let subjects = subjects.clone();
+        (0..).map(move |_| {
+            let subject = PublishSubject::<_, Infallible, _>::local();
+            subjects.with_mut(|subjects| subjects.push(subject.clone()));
+            subject
+        })
+    };
+    let (record, _subscription) =
+        record(Merge::new_from_iter(sources).max_concurrency(NonZeroUsize::new(1).unwrap()));
+    assert_eq!(subjects.with_ref(Vec::len), 1);
+
+    let mut first = subjects.with_ref(|subjects| subjects[0].clone());
+    assert!(first.on_next(Rc::new(1)).is_continue());
+    first.on_termination(Termination::Completed); // Pulls the second one.
+    assert_eq!(subjects.with_ref(Vec::len), 2);
+    assert_eq!(record.values(), rcs([1]));
+    assert!(record.termination().is_none());
+}
+
+#[test]
 fn test_combine_latest() {
     let mut subject_1: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
     let mut subject_2: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
     let (record, _subscription) = record(
-        CombineLatest::new(subject_1.clone(), subject_2.clone())
+        CombineLatest::new((subject_1.clone(), subject_2.clone()))
             .map(|(value_1, value_2)| *value_1 * 10 + *value_2),
     );
     assert!(subject_1.on_next(Rc::new(1)).is_continue());
@@ -1034,4 +1108,74 @@ fn test_observe_on_panic_on_sub() {
     assert_eq!(drops.clone_value(), 0);
     pool.run_until_stalled();
     assert_eq!(drops.clone_value(), 1);
+}
+
+#[test]
+fn test_fork_join_with_non_clone_items() {
+    use rx_rust::operators::{combining::fork_join::ForkJoin, creating::just::Just};
+
+    struct NotClone(Rc<i32>);
+
+    let mut values = Vec::new();
+    let subscription = ForkJoin::new((Just::new(NotClone(Rc::new(7))), Just::new("a")))
+        .subscribe_with_callback(
+            |(first, second)| values.push((*first.0, second)),
+            |termination| assert_eq!(termination, Termination::Completed),
+        );
+    drop(subscription);
+    assert_eq!(values, [(7, "a")]);
+}
+
+#[test]
+fn test_zip_with_non_clone_items() {
+    use rx_rust::operators::{combining::zip::Zip, creating::just::Just};
+
+    struct NotClone(Rc<i32>);
+
+    let mut tuple_values = Vec::new();
+    let subscription = Zip::new((Just::new(NotClone(Rc::new(7))), Just::new("a")))
+        .subscribe_with_callback(
+            |(first, second)| tuple_values.push((*first.0, second)),
+            |termination| assert_eq!(termination, Termination::Completed),
+        );
+    drop(subscription);
+    assert_eq!(tuple_values, [(7, "a")]);
+
+    let mut list_values = Vec::new();
+    let subscription = Zip::new_from_iter([
+        Just::new(NotClone(Rc::new(7))),
+        Just::new(NotClone(Rc::new(8))),
+    ])
+    .subscribe_with_callback(
+        |items| list_values.push(items.into_iter().map(|item| *item.0).collect::<Vec<_>>()),
+        |termination| assert_eq!(termination, Termination::Completed),
+    );
+    drop(subscription);
+    assert_eq!(list_values, [vec![7, 8]]);
+}
+
+#[test]
+fn test_source_sets_with_non_send_items() {
+    use rx_rust::operators::{
+        combining::{fork_join::ForkJoin, with_latest_from::WithLatestFrom, zip::Zip},
+        conditional_boolean::amb::Amb,
+        creating::just::Just,
+    };
+    let item = Rc::new(7);
+    let sources = || (0..12).map(|_| Just::new(item.clone()));
+    let (seen, _subscription) = record(CombineLatest::new_from_iter(sources()));
+    assert_eq!(seen.values(), [vec![item.clone(); 12]]);
+    let (seen, _subscription) = record(Zip::new_from_iter(sources()));
+    assert_eq!(seen.values(), [vec![item.clone(); 12]]);
+    let (seen, _subscription) = record(ForkJoin::new_from_iter(sources()));
+    assert_eq!(seen.values(), [vec![item.clone(); 12]]);
+    let (seen, _subscription) = record(Merge::new_from_iter(sources()));
+    assert_eq!(seen.values(), vec![item.clone(); 12]);
+    let (seen, _subscription) = record(Amb::new_from_iter(sources()));
+    assert_eq!(seen.values().as_slice(), std::slice::from_ref(&item));
+    let (seen, _subscription) = record(WithLatestFrom::new_from_iter(
+        Just::new(item.clone()),
+        sources(),
+    ));
+    assert_eq!(seen.values(), [(item.clone(), vec![item; 12])]);
 }

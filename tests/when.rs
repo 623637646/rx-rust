@@ -304,9 +304,9 @@ fn test_completed_3_sources() {
     assert_eq!(channel_checker_2.state(), ChannelState::Unsubscribed);
 }
 
-/// The largest shapes: six sources, a pattern of six, and six plans.
+/// The largest shapes: eight sources, a pattern of eight, and eight plans.
 #[test]
-fn test_completed_6_sources_and_6_plans() {
+fn test_completed_8_sources_and_8_plans() {
     let (checker, observer) = Checker::new();
 
     let observable = When::new(
@@ -317,31 +317,37 @@ fn test_completed_6_sources_and_6_plans() {
             Just::new(4),
             Just::new(5),
             Just::new(6),
+            Just::new(7),
+            Just::new(8),
         ),
-        |(a, b, c, d, e, f)| {
+        |(a, b, c, d, e, f, g, h)| {
             (
                 a.and(b)
                     .and(c)
                     .and(d)
                     .and(e)
                     .and(f)
-                    .then(|a, b, c, d, e, f| a + b + c + d + e + f),
-                f.then(|f| f * 100),
-                e.and(f).then(|e, f| e * f),
-                d.and(f).then(|d, f| d * f),
-                c.and(f).then(|c, f| c * f),
-                b.and(f).then(|b, f| b * f),
+                    .and(g)
+                    .and(h)
+                    .then(|a, b, c, d, e, f, g, h| a + b + c + d + e + f + g + h),
+                h.then(|h| h * 100),
+                g.and(h).then(|g, h| g * h),
+                f.and(h).then(|f, h| f * h),
+                e.and(h).then(|e, h| e * h),
+                d.and(h).then(|d, h| d * h),
+                c.and(h).then(|c, h| c * h),
+                b.and(h).then(|b, h| b * h),
             )
         },
     );
 
     let _subscription = observable.subscribe(observer);
-    assert_eq!(checker.values(), [21]);
+    assert_eq!(checker.values(), [36]);
     assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
-fn test_completed_6_plans_of_a_source_each() {
+fn test_completed_8_plans_of_a_source_each() {
     let [
         (sender_0, source_0, _),
         (sender_1, source_1, _),
@@ -349,11 +355,15 @@ fn test_completed_6_plans_of_a_source_each() {
         (sender_3, source_3, _),
         (sender_4, source_4, _),
         (sender_5, source_5, _),
+        (sender_6, source_6, _),
+        (sender_7, source_7, _),
     ] = std::array::from_fn(|_| test_channel::<'_, _, Infallible>());
     let (checker, observer) = Checker::new();
     let observable = When::new(
-        (source_0, source_1, source_2, source_3, source_4, source_5),
-        |(a, b, c, d, e, f)| {
+        (
+            source_0, source_1, source_2, source_3, source_4, source_5, source_6, source_7,
+        ),
+        |(a, b, c, d, e, f, g, h)| {
             (
                 a.then(|value| value + 10),
                 b.then(|value| value + 20),
@@ -361,12 +371,16 @@ fn test_completed_6_plans_of_a_source_each() {
                 d.then(|value| value + 40),
                 e.then(|value| value + 50),
                 f.then(|value| value + 60),
+                g.then(|value| value + 70),
+                h.then(|value| value + 80),
             )
         },
     );
     let _subscription = observable.subscribe(observer);
-    let mut senders = [sender_0, sender_1, sender_2, sender_3, sender_4, sender_5];
-    let expected = [11, 21, 31, 41, 51, 61];
+    let mut senders = [
+        sender_0, sender_1, sender_2, sender_3, sender_4, sender_5, sender_6, sender_7,
+    ];
+    let expected = [11, 21, 31, 41, 51, 61, 71, 81];
     for (index, sender) in senders.iter_mut().enumerate() {
         assert!(sender.on_next(1).is_continue());
         assert_eq!(checker.values(), expected[..=index]);
@@ -378,11 +392,11 @@ fn test_completed_6_plans_of_a_source_each() {
     assert_eq!(checker.state(), State::Completed);
 }
 
-/// A queued match carries only one plan's arguments, even with six plans of large items.
+/// A queued match carries only one plan's arguments, even with eight plans of large items.
 #[test]
 fn test_matched_size() {
     fn check<P: Plans>(_: &P) {
-        // Each plan takes 2 KiB. Leave room for a tag and alignment, but not six payloads.
+        // Each plan takes 2 KiB. Leave room for a tag and alignment, but not eight payloads.
         assert!(std::mem::size_of::<P::Matched>() <= 4096);
     }
 
@@ -390,6 +404,8 @@ fn test_matched_size() {
         (Just::new([0_u8; 1024]), Just::new([0_u8; 1024])),
         |(a, b)| {
             let plans = (
+                a.and(b).then(|_, _| ()),
+                a.and(b).then(|_, _| ()),
                 a.and(b).then(|_, _| ()),
                 a.and(b).then(|_, _| ()),
                 a.and(b).then(|_, _| ()),
@@ -516,6 +532,42 @@ fn test_unsubscribe_last_source_first() {
     let subscription = observable.subscribe(observer);
     subscription.dispose();
     assert_eq!(disposed.with_ref(|disposed| disposed.clone()), [2, 1, 0]);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_unsubscribe_order_on_sub_panic() {
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+
+    let order = Arc::new(Mutex::new(Vec::new()));
+    let source = |index, panic_on_drop: Option<PanicOnDrop>| {
+        let order = order.clone();
+        Create::shared_boxed(move |observer| {
+            drop(panic_on_drop);
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
+                drop(observer);
+                order.with_mut(|order| order.push(index));
+            }))
+        })
+        .with_item_type::<i32>()
+        .with_error_type::<Infallible>()
+    };
+    let (checker, observer) = Checker::new();
+    expect_panic_on_drop(|panic_on_drop| {
+        let _subscription = When::new(
+            (
+                source(0, None),
+                source(1, None),
+                source(2, None),
+                source(3, Some(panic_on_drop)),
+            ),
+            |(a, b, c, d)| a.and(b).and(c).and(d).then(|a, b, c, d| a + b + c + d),
+        )
+        .subscribe(observer);
+    });
+    assert_eq!(order.clone_value(), [2, 1, 0]);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 /// The sources released as the last plan is gone are disposed in the same order as by a disposal,

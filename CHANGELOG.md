@@ -25,6 +25,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `with_latest_from` combines primary emissions with the latest auxiliary values.
+- `CombineLatest`, `Zip`, `Merge` and `Concat` accept tuples of one to eight sources and expose
+  `new_from_iter` for runtime-sized inputs. `Concat` pulls from an iterator one source at a time.
+- `max_concurrency(n)` limits concurrent subscriptions in `Merge`.
+- `ForkJoin` emits the last value from each source once all sources complete with at least one
+  value. Use `ForkJoin::new((a, b, ...))` or `ForkJoin::new_from_iter(list)`, and
+  `a.fork_join(b)` for two sources.
 - `operators::creating::from_stream_acked::FromStreamAcked` and
   `from_try_stream_acked::FromTryStreamAcked` convert a stream as `FromStream` and `FromTryStream`
   do, but send each item with a `StreamAck`, and poll the stream only while they hold a permit:
@@ -52,8 +59,8 @@ All notable changes to this project are documented here. The format follows
   and is completed one `time_span` later, at a fixed rate, and the second also completes a window
   as soon as it holds `count` items, which restarts the timer.
 - `operators::combining::when::When` is ReactiveX's `And` / `Then` / `When`: over a tuple of up
-  to six sources, each plan — `a.and(b).then(selector)`, up to six sources — waits until every
-  source of its pattern has an item, takes the first of each and emits what its selector makes of
+  to eight sources, each of up to eight plans — `a.and(b).then(selector)`, up to eight sources —
+  waits until every source of its pattern has an item, takes the first of each and emits what its selector makes of
   them. Plans may share a source, and an item goes to the first plan, in the order given, that it
   completes. A plan retires once one of its sources has completed with nothing queued; a source
   that no remaining plan uses is then disposed, or never subscribed, and the stream completes once
@@ -74,6 +81,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `CombineLatest::new`, `Zip::new`, `Merge::new` and `Concat::new` now take a tuple.
+  Migrate `Operator::new(a, b)` to `Operator::new((a, b))` and explicit type annotations from
+  `Operator<A, B>` to `Operator<(A, B)>`. For iterator-based races, use
+  `Amb::new_from_iter(list)` in place of `Amb::new(list)`.
+- **Breaking:** `ObservableExt::merge_with`, `amb_with` and `concat_with` are renamed `merge`,
+  `amb` and `concat`, as `zip` and `combine_latest` are named: no method that combines `self` with
+  another observable has a `_with` suffix.
 - **Breaking:** `ThreadMode::Flag` can only be raised. It is `thread_mode::mutable::LocalFlag` or
   `SharedFlag` instead of `Rc<Cell<bool>>` / `Arc<AtomicBool>`, reached through the new
   `RaiseOnlyFlag` trait — `raise()` and `is_raised()` — so a flag seen raised stays raised. The

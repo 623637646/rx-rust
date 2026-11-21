@@ -4,7 +4,9 @@
 pub mod combine_latest;
 pub mod concat;
 pub mod concat_all;
+pub mod fork_join;
 pub mod group_join;
+pub(crate) mod internal;
 pub mod join;
 mod join_core;
 pub mod merge;
@@ -12,4 +14,5 @@ pub mod merge_all;
 pub mod start_with;
 pub mod switch;
 pub mod when;
+pub mod with_latest_from;
 pub mod zip;

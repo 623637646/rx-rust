@@ -18,7 +18,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::{
         conditional_boolean::amb::Amb,
-        creating::{empty::Empty, throw::Throw},
+        creating::{empty::Empty, just::Just, throw::Throw},
     },
 };
 use std::{
@@ -33,7 +33,7 @@ fn test_completed() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2);
+    let observable = observable_1.amb(observable_2);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -66,7 +66,7 @@ fn test_completed_without_next() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2);
+    let observable = observable_1.amb(observable_2);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -87,7 +87,7 @@ fn test_error() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2);
+    let observable = observable_1.amb(observable_2);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -120,7 +120,7 @@ fn test_error_without_next() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2);
+    let observable = observable_1.amb(observable_2);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -141,7 +141,7 @@ fn test_unsubscribe() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2);
+    let observable = observable_1.amb(observable_2);
 
     let subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -177,7 +177,7 @@ fn test_ref() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2);
+    let observable = observable_1.amb(observable_2);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -213,7 +213,7 @@ fn test_mut_ref() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2).map(|e| {
+    let observable = observable_1.amb(observable_2).map(|e| {
         let result = *e;
         *e *= 2;
         result
@@ -257,7 +257,7 @@ fn test_async() {
         let (_, observable_2, channel_checker_2) = test_channel();
         let (checker, observer) = Checker::new();
 
-        let observable = observable_1.amb_with(observable_2);
+        let observable = observable_1.amb(observable_2);
 
         let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -308,7 +308,7 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable = source_1.amb_with(source_2);
+    let observable = source_1.amb(source_2);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -364,7 +364,7 @@ fn test_unsub_on_next_by_take() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable_1.amb_with(observable_2).take(1);
+    let observable = observable_1.amb(observable_2).take(1);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -388,8 +388,8 @@ fn test_multiple_operation() {
     let (checker, observer) = Checker::new();
 
     let observable = observable_1
-        .amb_with(observable_2)
-        .amb_with(observable_3.amb_with(observable_4));
+        .amb(observable_2)
+        .amb(observable_3.amb(observable_4));
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -431,7 +431,7 @@ fn test_without_convenient_api() {
     let (_, observable, _) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Amb::new([
+    let observable = Amb::new_from_iter([
         observable_1.into_send_boxed(),
         observable_2.into_send_boxed(),
         observable.into_send_boxed(),
@@ -466,7 +466,7 @@ fn test_without_convenient_api() {
 fn test_empty_sources() {
     let (checker, observer) = Checker::<Infallible, Infallible>::new();
 
-    let observable = Amb::new(Vec::<Empty>::new());
+    let observable = Amb::new_from_iter(Vec::<Empty>::new());
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -480,7 +480,7 @@ fn test_three_sources() {
     let (_, observable_3, channel_checker_3) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Amb::new([observable_1, observable_2, observable_3]);
+    let observable = Amb::new_from_iter([observable_1, observable_2, observable_3]);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -521,7 +521,7 @@ fn test_three_sources_unsubscribe_last_first() {
     };
     let (checker, observer) = Checker::new();
 
-    let subscription = Amb::new([source(1), source(2), source(3)]).subscribe(observer);
+    let subscription = Amb::new_from_iter([source(1), source(2), source(3)]).subscribe(observer);
     assert!(log.clone_value().is_empty());
     assert_eq!(checker.state(), State::Active);
 
@@ -538,7 +538,7 @@ fn test_three_sources_next_on_sub() {
     let (_, observable_3, channel_checker_3) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Amb::new([
+    let observable = Amb::new_from_iter([
         source.into_send_boxed(),
         observable_2.into_send_boxed(),
         observable_3.into_send_boxed(),
@@ -563,13 +563,105 @@ fn test_three_sources_next_on_sub() {
 }
 
 #[test]
+fn test_three_sources_tuple() {
+    let (_, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+    let (_, observable_3, channel_checker_3) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Sources of different types, raced without boxing.
+    let observable = Amb::new((
+        observable_1,
+        observable_2.map(|value| value * 10),
+        observable_3.filter(|value| *value > 0),
+    ));
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
+
+    assert!(sender_2.on_next(1).is_continue());
+    assert_eq!(checker.values(), vec![10]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+
+    assert!(sender_2.on_next(2).is_continue());
+    assert_eq!(checker.values(), vec![10, 20]);
+    assert_eq!(checker.state(), State::Active);
+
+    sender_2.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), vec![10, 20]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+}
+
+/// The tuple form disposes the racing sources the last subscribed first, as the list form does.
+#[test]
+fn test_three_sources_tuple_unsubscribe_last_first() {
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let source = |index: usize| {
+        let log = log.clone();
+        Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
+            let log = log.clone();
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
+                drop(observer);
+                log.with_mut(|log| log.push(index));
+            }))
+        })
+    };
+    let (checker, observer) = Checker::new();
+
+    let subscription =
+        Amb::new((source(1), source(2).map(|value| value * 10), source(3))).subscribe(observer);
+    assert!(log.clone_value().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert_eq!(log.clone_value(), [3, 2, 1]);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[test]
+fn test_three_sources_tuple_next_on_sub() {
+    let (mut sender, source, _) = test_channel();
+    let source = source.start_with([111]);
+    let (_, observable_2, channel_checker_2) = test_channel::<'_, i32, _>();
+    let (checker, observer) = Checker::new();
+
+    let observable = Amb::new((source, observable_2.map(|value| value * 10), Just::new(333)));
+
+    // The first source wins while it is being subscribed to, so the others are never subscribed:
+    // `Just` would otherwise win as it is subscribed.
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    assert!(sender.on_next(222).is_continue());
+    assert_eq!(checker.values(), vec![111, 222]);
+    assert_eq!(checker.state(), State::Active);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), vec![111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+}
+
+#[test]
 fn test_next_on_sub() {
     let (mut sender, source, _) = test_channel();
     let source = source.start_with([111]);
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = source.amb_with(observable);
+    let observable = source.amb(observable);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![111]);
@@ -594,7 +686,7 @@ fn test_next_on_later_sub() {
     let source = source.start_with([111]);
     let (checker, observer) = Checker::new();
 
-    let observable = observable.amb_with(source);
+    let observable = observable.amb(source);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![111]);
@@ -611,11 +703,39 @@ fn test_next_on_later_sub() {
 }
 
 #[test]
+fn test_next_on_later_sub_disposes_earlier_first() {
+    // A source subscribed before the one that wins as it is subscribed is disposed at the win,
+    // before the winner's first value is delivered.
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let earlier = {
+        let log = log.clone();
+        Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
+            let log = log.clone();
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
+                drop(observer);
+                log.with_mut(|log| log.push(String::from("disposed")));
+            }))
+        })
+    };
+    let (_sender, source, _) = test_channel();
+    let source = source.start_with([111]);
+
+    let _subscription = {
+        let log = log.clone();
+        earlier.amb(source).subscribe_with_callback(
+            move |value| log.with_mut(|log| log.push(value.to_string())),
+            |_| {},
+        )
+    };
+    assert_eq!(log.clone_value(), ["disposed", "111"]);
+}
+
+#[test]
 fn test_complete_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Empty.amb_with(observable);
+    let observable = Empty.amb(observable);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -628,7 +748,7 @@ fn test_complete_on_later_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, Infallible, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.amb_with(Empty);
+    let observable = observable.amb(Empty);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -641,7 +761,7 @@ fn test_error_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Throw::new("error").amb_with(observable);
+    let observable = Throw::new("error").amb(observable);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -663,7 +783,7 @@ fn test_next_on_unsub() {
         }))
     });
 
-    let observable = observable.amb_with(observable_1);
+    let observable = observable.amb(observable_1);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -689,7 +809,7 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    let observable = observable.amb_with(observable_1);
+    let observable = observable.amb(observable_1);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -715,7 +835,7 @@ fn test_error_on_unsub() {
         }))
     });
 
-    let observable = observable.amb_with(observable_1);
+    let observable = observable.amb(observable_1);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -733,7 +853,7 @@ fn test_error_on_later_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, Infallible, &str>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.amb_with(Throw::new("error"));
+    let observable = observable.amb(Throw::new("error"));
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -760,7 +880,7 @@ fn test_lifetime_sub() {
             }))
         });
 
-        let observable = observable.amb_with(PublishSubject::shared());
+        let observable = observable.amb(PublishSubject::shared());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -782,7 +902,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             DisposeOnDrop::default()
         });
-        let observable = observable.amb_with(PublishSubject::shared());
+        let observable = observable.amb(PublishSubject::shared());
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(
@@ -813,7 +933,7 @@ fn test_lifetime_or_sub() {
                 }))
             });
 
-        let observable = observable.amb_with(PublishSubject::shared());
+        let observable = observable.amb(PublishSubject::shared());
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -828,7 +948,7 @@ fn test_clone() {
         DisposeOnDrop::default()
     };
     let observable = Create::shared_boxed(closure);
-    let observable = observable.amb_with(Create::shared_boxed(closure));
+    let observable = observable.amb(Create::shared_boxed(closure));
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -836,7 +956,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-    let observable = observable.amb_with(test_channel::<'_, i32, Infallible>().1);
+    let observable = observable.amb(test_channel::<'_, i32, Infallible>().1);
     let (_, observer) = Checker::new();
     let _ = observable.subscribe(observer);
 }
@@ -845,5 +965,21 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-    observable.amb_with(test_channel::<'_, i32, Infallible>().1);
+    observable.amb(test_channel::<'_, i32, Infallible>().1);
+}
+
+#[test]
+fn test_next_on_sub_from_iter() {
+    use rx_rust::operators::creating::just::Just;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let generated = AtomicUsize::new(0);
+    let sources = (0..).map(|value| {
+        generated.fetch_add(1, Ordering::SeqCst);
+        Just::new(value).into_shared()
+    });
+    let (checker, observer) = Checker::new();
+    let _subscription = Amb::new_from_iter(sources).subscribe(observer);
+    assert_eq!(generated.load(Ordering::SeqCst), 1);
+    assert_eq!(checker.values(), [0]);
+    assert_eq!(checker.state(), State::Completed);
 }

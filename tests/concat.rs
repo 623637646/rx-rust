@@ -27,7 +27,7 @@ fn test_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -65,7 +65,7 @@ fn test_completed_source_and_another_source_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    let observable = subject.clone().concat_with(subject.clone());
+    let observable = subject.clone().concat(subject.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -90,7 +90,7 @@ fn test_error() {
     let (mut _sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -117,7 +117,7 @@ fn test_error_from_another_source() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -155,7 +155,7 @@ fn test_error_source_and_another_source_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    let observable = subject.clone().concat_with(subject.clone());
+    let observable = subject.clone().concat(subject.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -181,7 +181,7 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable = observable.concat_with(source_1);
+    let observable = observable.concat(source_1);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -261,7 +261,7 @@ fn test_ref() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -303,7 +303,7 @@ fn test_mut_ref() {
     let (mut sender, observable, _) = test_channel::<'_, &mut i32, Infallible>();
     let (mut sender_1, observable_1, _) = test_channel();
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let subscription = observable.subscribe_with_callback(
         |value| {
@@ -332,7 +332,7 @@ fn test_async() {
         let (mut sender_1, observable_1, channel_checker_1) = test_channel();
         let (checker, observer) = Checker::new();
 
-        let observable = observable.concat_with(observable_1);
+        let observable = observable.concat(observable_1);
 
         let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -390,7 +390,7 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable = observable.concat_with(another_source_observable);
+    let observable = observable.concat(another_source_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -458,7 +458,7 @@ fn test_unsub_on_next_by_take() {
     let (_sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.concat_with(observable_1).take(1);
+    let observable = observable.concat(observable_1).take(1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -482,9 +482,9 @@ fn test_multiple_operation() {
     let (checker, observer) = Checker::new();
 
     let observable = observable
-        .concat_with(observable_1)
-        .concat_with(observable_2)
-        .concat_with(observable_3);
+        .concat(observable_1)
+        .concat(observable_2)
+        .concat(observable_3);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -566,8 +566,8 @@ fn test_multiple_operation_same_another_source() {
     let (checker, observer) = Checker::new();
 
     let observable = observable
-        .concat_with(another_source_subject.clone())
-        .concat_with(another_source_subject.clone());
+        .concat(another_source_subject.clone())
+        .concat(another_source_subject.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -601,7 +601,7 @@ fn test_without_convenient_api() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Concat::new(observable, observable_1);
+    let observable = Concat::new((observable, observable_1));
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -642,7 +642,7 @@ fn test_next_on_sub() {
     let source_1 = source_1.start_with([333]);
     let (checker, observer) = Checker::new();
 
-    let observable = source.concat_with(source_1);
+    let observable = source.concat(source_1);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);
@@ -669,7 +669,7 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    let observable = Empty.concat_with(Empty);
+    let observable = Empty.concat(Empty);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -681,7 +681,7 @@ fn test_error_on_sub() {
     let (_, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Throw::new("error").concat_with(observable_1);
+    let observable = Throw::new("error").concat(observable_1);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -702,7 +702,7 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -730,7 +730,7 @@ fn test_next_on_unsub() {
         }))
     });
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -757,7 +757,7 @@ fn test_error_on_unsub() {
         }))
     });
 
-    let observable = observable.concat_with(observable_1);
+    let observable = observable.concat(observable_1);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -795,7 +795,7 @@ fn test_lifetime_sub() {
                 life_marker_2.consume_ref();
             }))
         });
-        let observable = observable.concat_with(another_source_subject);
+        let observable = observable.concat(another_source_subject);
 
         let (_, observer) = Checker::<_, ()>::new();
         _subscription = observable.subscribe(observer);
@@ -818,7 +818,7 @@ fn test_lifetime_or() {
             DisposeOnDrop::default()
         });
         let another_source_subject = Create::shared_boxed(|_| DisposeOnDrop::default());
-        let observable = observable.concat_with(another_source_subject);
+        let observable = observable.concat(another_source_subject);
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(
@@ -859,7 +859,7 @@ fn test_lifetime_or_sub() {
             }))
         });
 
-        let observable = observable.concat_with(boundary);
+        let observable = observable.concat(boundary);
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -874,7 +874,7 @@ fn test_clone() {
         DisposeOnDrop::default()
     });
     let another_source_subject = Create::shared_boxed(|_| DisposeOnDrop::default());
-    let observable = observable.concat_with(another_source_subject);
+    let observable = observable.concat(another_source_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -882,7 +882,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, another_source_observable, _) = test_channel();
-    let observable = observable.concat_with(another_source_observable);
+    let observable = observable.concat(another_source_observable);
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -893,7 +893,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, another_source_observable, _) = test_channel();
-    let observable = observable.concat_with(another_source_observable);
+    let observable = observable.concat(another_source_observable);
 
     observable.filter(|_| true);
 }
@@ -907,7 +907,7 @@ fn test_abandon_after_next() {
     let (_sender_2, observable_2, channel_checker_2) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let _subscription = observable_1.concat_with(observable_2).subscribe(observer);
+    let _subscription = observable_1.concat(observable_2).subscribe(observer);
     assert!(sender_1.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
@@ -917,4 +917,300 @@ fn test_abandon_after_next() {
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker_1.state(), ChannelState::Abandoned);
     assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+}
+
+mod tuple {
+    use crate::tests_utils::checker::{Checker, State};
+    use crate::tests_utils::test_channel::{ChannelState, test_channel};
+    use crate::tests_utils::test_struct::TestStruct;
+    use rx_rust::{
+        disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+        observable::{Observable, ObservableExt},
+        observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+        operators::{
+            combining::concat::Concat,
+            creating::{create::Create, from_iter::FromIter, just::Just},
+        },
+    };
+    use std::convert::Infallible;
+
+    #[test]
+    fn test_completed() {
+        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+        let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+        let (mut sender_3, observable_3, channel_checker_3) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let observable = Concat::new((observable_1, observable_2, observable_3));
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+        assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+        assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+
+        assert!(sender_1.on_next(111).is_continue());
+        sender_1.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+        assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+
+        assert!(sender_2.on_next(222).is_continue());
+        sender_2.on_termination(Termination::Completed);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
+
+        assert!(sender_3.on_next(333).is_continue());
+        sender_3.on_termination(Termination::Completed);
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_completed_one_source() {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = Concat::new((observable,)).subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+    }
+
+    #[test]
+    fn test_completed_sources_of_different_types() {
+        let (checker, observer) = Checker::new();
+
+        let observable = Concat::new((
+            Just::new(1),
+            FromIter::new([2, 3]),
+            Just::new(4).map(|value| value * 10),
+            FromIter::new(vec![5]),
+        ));
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), [1, 2, 3, 40, 5]);
+        assert_eq!(checker.state(), State::Completed::<Infallible>);
+    }
+
+    #[test]
+    fn test_error() {
+        let (mut sender_1, observable_1, _channel_checker_1) = test_channel();
+        let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+        let (_sender_3, observable_3, channel_checker_3) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let _subscription =
+            Concat::new((observable_1, observable_2, observable_3)).subscribe(observer);
+        assert!(sender_1.on_next(111).is_continue());
+        sender_1.on_termination(Termination::Completed);
+
+        // The error of the second source ends the stream: the third is never subscribed.
+        assert!(sender_2.on_next(222).is_continue());
+        sender_2.on_termination(Termination::Error("error"));
+        assert_eq!(checker.values(), [111, 222]);
+        assert_eq!(checker.state(), State::Error("error"));
+        assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
+        assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+    }
+
+    #[test]
+    fn test_unsubscribe() {
+        let (sender_1, observable_1, channel_checker_1) = test_channel();
+        let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+        let (_sender_3, observable_3, channel_checker_3) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let subscription =
+            Concat::new((observable_1, observable_2, observable_3)).subscribe(observer);
+        sender_1.on_termination(Termination::<Infallible>::Completed);
+        assert!(sender_2.on_next(222).is_continue());
+
+        subscription.dispose();
+        assert_eq!(checker.values(), [222]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+        assert_eq!(channel_checker_2.state(), ChannelState::Unsubscribed);
+        assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+    }
+
+    #[test]
+    fn test_unsub_on_next_by_take() {
+        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+        let (_sender_2, observable_2, channel_checker_2) = test_channel();
+        let (_sender_3, observable_3, channel_checker_3) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = Concat::new((observable_1, observable_2, observable_3))
+            .take(1)
+            .subscribe(observer);
+        assert!(sender_1.on_next(111).is_stop());
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed::<Infallible>);
+        assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+        assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+        assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+    }
+
+    /// A source in the middle keeps its observer in a variable it borrows: its observer names only
+    /// the sources after it, not the source itself, which would borrow that variable from inside it.
+    #[test]
+    fn test_lifetime_or() {
+        // OK
+        let life_marker_3 = TestStruct;
+        let mut life_marker_2 = None;
+
+        // Error
+        // let mut life_marker_2 = None;
+        // let life_marker_3 = TestStruct;
+
+        {
+            let observable_1 =
+                Create::shared_boxed(|observer: SendBoxedObserver<'_, _, Infallible>| {
+                    observer.on_termination(Termination::Completed);
+                    DisposeOnDrop::default()
+                });
+            let observable_2 = Create::shared_boxed(|observer| {
+                life_marker_2 = Some(observer);
+                DisposeOnDrop::default()
+            });
+            let observable_3 = Create::shared_boxed(|_| DisposeOnDrop::default());
+            let observable = Concat::new((observable_1, observable_2, observable_3));
+
+            let (checker, mut observer) = Checker::new();
+            assert!(
+                observer
+                    .on_next((&life_marker_3, &life_marker_3))
+                    .is_continue()
+            );
+            let _subscription = observable.subscribe(observer);
+            assert_eq!(checker.state(), State::Active);
+        }
+        assert!(life_marker_2.is_some());
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = Concat::new((Just::new(1), FromIter::new([2]), Just::new(3)));
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
+
+        let _subscription_1 = observable.clone().subscribe(observer_1);
+        let _subscription_2 = observable.subscribe(observer_2);
+        assert_eq!(checker_1.values(), [1, 2, 3]);
+        assert_eq!(checker_1.state(), State::Completed::<Infallible>);
+        assert_eq!(checker_2.values(), [1, 2, 3]);
+        assert_eq!(checker_2.state(), State::Completed::<Infallible>);
+    }
+}
+
+mod list {
+    use crate::tests_utils::checker::{Checker, State};
+    use crate::tests_utils::test_channel::{ChannelState, test_channel};
+    use rx_rust::{
+        disposable::Disposable,
+        observable::{Observable, ObservableExt},
+        observer::{Observer, Termination},
+        operators::{
+            combining::concat::Concat,
+            creating::{from_iter::FromIter, just::Just},
+        },
+    };
+    use std::{
+        convert::Infallible,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+
+    #[test]
+    fn test_completed() {
+        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+        let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let observable = Concat::new_from_iter([observable_1, observable_2]);
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+        assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+        assert!(sender_1.on_next(111).is_continue());
+        sender_1.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+        assert!(sender_2.on_next(222).is_continue());
+        sender_2.on_termination(Termination::Completed);
+        assert_eq!(checker.values(), [111, 222]);
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_completed_empty() {
+        let (checker, observer) = Checker::<i32, Infallible>::new();
+
+        let _subscription = Concat::new_from_iter(Vec::<Just<i32>>::new()).subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_completed_pulls_one_source_at_a_time() {
+        let pulled = Arc::new(AtomicUsize::new(0));
+        let pulled_iter = pulled.clone();
+        let (checker, observer) = Checker::new();
+
+        // An iterator that never ends: each source is pulled only once the one before it has
+        // completed, so the stream goes on until downstream stops.
+        let observable = Concat::new_from_iter((0..).map(move |index| {
+            pulled_iter.fetch_add(1, Ordering::SeqCst);
+            FromIter::new([index * 10, index * 10 + 1])
+        }))
+        .take(5);
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), [0, 1, 10, 11, 20]);
+        assert_eq!(checker.state(), State::Completed::<Infallible>);
+        assert_eq!(pulled.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn test_error() {
+        let (mut sender_1, observable_1, _channel_checker_1) = test_channel();
+        let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+        let (_sender_3, observable_3, channel_checker_3) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let _subscription =
+            Concat::new_from_iter([observable_1, observable_2, observable_3]).subscribe(observer);
+        assert!(sender_1.on_next(111).is_continue());
+        sender_1.on_termination(Termination::Completed);
+
+        // The error of the second source ends the stream: the third is never subscribed.
+        assert!(sender_2.on_next(222).is_continue());
+        sender_2.on_termination(Termination::Error("error"));
+        assert_eq!(checker.values(), [111, 222]);
+        assert_eq!(checker.state(), State::Error("error"));
+        assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
+        assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+    }
+
+    #[test]
+    fn test_unsubscribe() {
+        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+        let (_sender_2, observable_2, channel_checker_2) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let subscription = Concat::new_from_iter([observable_1, observable_2]).subscribe(observer);
+        assert!(sender_1.on_next(111).is_continue());
+
+        subscription.dispose();
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::<Infallible>::Dropped);
+        assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+        assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+    }
 }

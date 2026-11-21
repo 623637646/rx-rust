@@ -7,9 +7,10 @@
 //! calls.
 //!
 //! [`BoxedObservable`] and [`CloneableBoxedObservable`] erase an observable's type;
-//! [`EitherObservable`] picks one of two types without boxing. [`future`] and `stream` (with the
-//! `futures` feature) hold what an observable becomes as a `Future` or a `Stream`, through
-//! [`into_future`](ObservableExt::into_future), `into_stream` and their siblings.
+//! [`EitherObservable`](either_observable::EitherObservable) picks one of two types without
+//! boxing. [`future`] and `stream` (with the `futures` feature) hold what an observable becomes as
+//! a `Future` or a `Stream`, through [`into_future`](ObservableExt::into_future), `into_stream` and
+//! their siblings.
 //!
 //! # Examples
 //! ```rust
@@ -32,6 +33,7 @@
 pub mod boxed_observable;
 pub mod either_observable;
 pub mod future;
+pub(crate) mod sources;
 #[cfg(feature = "futures")]
 pub mod stream;
 
@@ -45,7 +47,6 @@ use crate::{
             CloneableBoxedObservableFor, SendBoxedObservable, SendBoxedObservableFor,
             SendCloneableBoxedObservable, SendCloneableBoxedObservableFor,
         },
-        either_observable::EitherObservable,
         future::{ObservableFuture, ObservableTryFuture},
     },
     observer::{
@@ -57,8 +58,9 @@ use crate::{
     operators::{
         combining::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll,
-            group_join::GroupJoin, join::Join, merge::Merge, merge_all::MergeAll,
-            start_with::StartWith, switch::Switch, zip::Zip,
+            fork_join::ForkJoin, group_join::GroupJoin, join::Join, merge::Merge,
+            merge_all::MergeAll, start_with::StartWith, switch::Switch,
+            with_latest_from::WithLatestFrom, zip::Zip,
         },
         conditional_boolean::{
             all::All, amb::Amb, contains::Contains, default_if_empty::DefaultIfEmpty,
@@ -116,6 +118,15 @@ use crate::{
     thread_mode::ThreadMode,
 };
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
+
+pub use crate::utils::positional::combination::Combination;
+#[doc(hidden)]
+pub use crate::utils::positional::position::TupleIndex;
+#[doc(hidden)]
+pub use crate::utils::positional::slots::{ListSlots, ReservationSlot, TupleSlots};
+#[doc(hidden)]
+pub use crate::utils::positional::tuple::IntoReversed;
+pub use sources::{CollectedCursor, IterSources, SameItemSources, SourceSet};
 
 /// The thread mode of an operator with the two sources `A` and `B`: their modes
 /// [`Joined`](crate::thread_mode::Joined), `Shared` as soon as one of them is.
@@ -225,14 +236,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Races two observables and mirrors whichever one emits an item or terminates first.
-    fn amb_with<OE2>(self, source_2: OE2) -> Amb<[EitherObservable<Self, OE2>; 2]>
+    fn amb<OE2>(self, source_2: OE2) -> Amb<(Self, OE2)>
     where
         OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
     {
-        Amb::new([
-            EitherObservable::Left(self),
-            EitherObservable::Right(source_2),
-        ])
+        Amb::new((self, source_2))
     }
 
     /// Calculates the arithmetic mean of all numeric items emitted by the source.
@@ -290,11 +298,19 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Combines the latest values from both observables whenever either produces a new item.
-    fn combine_latest<OE2>(self, source_2: OE2) -> CombineLatest<Self, OE2>
+    fn combine_latest<OE2>(self, source_2: OE2) -> CombineLatest<(Self, OE2)>
     where
         OE2: ObservableTypes<Error = Self::Error>,
     {
-        CombineLatest::new(self, source_2)
+        CombineLatest::new((self, source_2))
+    }
+
+    /// Concatenates the source with another observable, waiting for the first to complete.
+    fn concat<OE2>(self, source_2: OE2) -> Concat<(Self, OE2)>
+    where
+        OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
+    {
+        Concat::new((self, source_2))
     }
 
     /// Flattens an observable-of-observables by concatenating each inner observable sequentially.
@@ -312,14 +328,6 @@ pub trait ObservableExt: ObservableTypes + Sized {
         F: FnMut(Self::Item) -> OE1,
     {
         ConcatMap::new(self, callback)
-    }
-
-    /// Concatenates the source with another observable, waiting for the first to complete.
-    fn concat_with<OE2>(self, source_2: OE2) -> Concat<Self, OE2>
-    where
-        OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
-    {
-        Concat::new(self, source_2)
     }
 
     /// Emits `true` if the sequence contains the provided item, `false` otherwise.
@@ -501,6 +509,15 @@ pub trait ObservableExt: ObservableTypes + Sized {
         F: FnMut(Self::Item) -> OE1,
     {
         FlatMap::new(self, callback)
+    }
+
+    /// Waits for both observables to complete, then emits the last item of each as a pair and
+    /// completes.
+    fn fork_join<OE2>(self, source_2: OE2) -> ForkJoin<(Self, OE2)>
+    where
+        OE2: ObservableTypes<Error = Self::Error>,
+    {
+        ForkJoin::new((self, source_2))
     }
 
     /// Groups items by key into multiple observable sequences.
@@ -981,20 +998,20 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Max::new(self)
     }
 
+    /// Merges the source with another observable, interleaving both streams concurrently.
+    fn merge<OE2>(self, source_2: OE2) -> Merge<(Self, OE2)>
+    where
+        OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
+    {
+        Merge::new((self, source_2))
+    }
+
     /// Merges an observable-of-observables by interleaving items from inner streams.
     fn merge_all(self) -> MergeAll<Self, Self::Item>
     where
         Self::Item: ObservableTypes<Error = Self::Error>,
     {
         MergeAll::new(self)
-    }
-
-    /// Merges the source with another observable, interleaving both streams concurrently.
-    fn merge_with<OE2>(self, source_2: OE2) -> Merge<Self, OE2>
-    where
-        OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
-    {
-        Merge::new(self, source_2)
     }
 
     /// Emits the minimum item produced by the source according to the natural order.
@@ -1403,12 +1420,20 @@ pub trait ObservableExt: ObservableTypes + Sized {
         WithItemType::new(self)
     }
 
+    /// Pairs each item with the latest item of `other`, emitting only when the source emits.
+    fn with_latest_from<OE1>(self, other: OE1) -> WithLatestFrom<Self, (OE1,)>
+    where
+        OE1: ObservableTypes<Error = Self::Error>,
+    {
+        WithLatestFrom::new(self, (other,))
+    }
+
     /// Pairs items from both observables by index and emits tuples of corresponding values.
-    fn zip<OE2>(self, source_2: OE2) -> Zip<Self, OE2>
+    fn zip<OE2>(self, source_2: OE2) -> Zip<(Self, OE2)>
     where
         OE2: ObservableTypes<Error = Self::Error>,
     {
-        Zip::new(self, source_2)
+        Zip::new((self, source_2))
     }
 }
 

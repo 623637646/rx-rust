@@ -100,7 +100,7 @@ A stream read only as fast as operators handle it: `FromStreamAcked` + `hold` | 
 I/O that ends in a framework taking a `Stream`, such as `axum` or `tonic`     | `Stream`
 Events from a UI, a sensor or a message bus, read by several consumers        | rx-rust
 Logic shaped by time: `debounce`, `throttle`, `sample`, `timeout`             | rx-rust
-Several sources combined: `switch_map`, `combine_latest`, `zip`, `merge_with` | rx-rust
+Several sources combined: `switch_map`, `combine_latest`, `zip`, `merge` | rx-rust
 Synchronous code with no async runtime                                        | rx-rust
 
 Both can be tested without waiting for real time. Tokio's paused clock (`start_paused`,

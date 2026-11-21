@@ -331,7 +331,7 @@ fn test_send_boxed_local_chain() {
     let observable = Just::new(111)
         .into_shared()
         .with_error_type()
-        .concat_with(Throw::new("error").with_item_type())
+        .concat(Throw::new("error").with_item_type())
         .into_send_boxed();
 
     let _subscription = observable.subscribe(observer);

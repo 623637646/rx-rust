@@ -222,7 +222,7 @@ fn test_single_by_operators() {
 
         let all = FromIter::new([111, 222])
             .with_error_type()
-            .concat_with(Throw::new("error").with_item_type())
+            .concat(Throw::new("error").with_item_type())
             .collect::<Vec<_>>()
             .into_try_future()
             .await;

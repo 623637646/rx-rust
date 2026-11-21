@@ -1,21 +1,49 @@
 //! The [`Merge`] operator, behind
-//! [`ObservableExt::merge_with`](crate::observable::ObservableExt::merge_with).
+//! [`ObservableExt::merge`](crate::observable::ObservableExt::merge).
 
+use super::internal::merge::{
+    ContextDisposal, DriverOf, Pause, subscribe_limited, subscribe_unlimited,
+};
+pub use super::internal::merge::{MergeObserver, Unlimited};
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
-    observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
-    thread_mode::ThreadMode,
-    utils::{
-        serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{
+        IterSources, Observable, ObservableTypes, SameItemSources, SourceSet,
+        sources::{SourceOps, SubscribeEach},
     },
+    observer::Observer,
+    thread_mode::ThreadMode,
 };
 use educe::Educe;
+use std::{convert::Infallible, num::NonZeroUsize};
 
 /// Combines multiple observables into a single observable that emits all of their emissions.
 /// See <https://reactivex.io/documentation/operators/merge.html>
+///
+/// The sources are a tuple of one to eight observables of one item type and one error type, which
+/// may be observables of different types: no boxing is needed to merge them.
+/// [`ObservableExt::merge`](crate::observable::ObservableExt::merge) is the form for two;
+/// [`Merge::new_from_iter`] is the one for any number of observables of one type, decided as the
+/// program runs: any iterator of them, with no tuple arity limit. The stream completes once every
+/// source has completed; an error of any of them ends it. The tuple and iterator forms share one
+/// state machine.
+///
+/// [`Merge::max_concurrency`] makes either form subscribe at most `max_concurrency` sources at a
+/// time, in order: the next one is pulled — from the tuple, or from the iterator, which is user
+/// code — only once one of them has completed, so nothing waits in a queue, and an iterator that
+/// never ends still works. The usual use is to bound work: at most so many requests in flight,
+/// however many are asked for. With a `max_concurrency` of one it concatenates the sources, one
+/// after the other, which [`Concat`](super::concat::Concat) does for a tuple without a lock. An
+/// observable of observables, which pushes them rather than being pulled, goes to
+/// [`MergeAll::max_concurrency`](super::merge_all::MergeAll::max_concurrency).
+///
+/// The limit is in the type: [`Merge`] has none and subscribes every source as it is subscribed
+/// itself, while `Merge<S, NonZeroUsize>` holds the sources it has not pulled yet, so its
+/// observers and its subscription name their types — they are `Send` in the `Shared` mode only
+/// when those sources are, the iterator included, and a value the iterator borrows outlives the
+/// subscription. Both release the subscription of a source as it completes, so that a long list
+/// holds only those of the sources still running.
 ///
 /// # Examples
 /// ```rust
@@ -30,19 +58,54 @@ use educe::Educe;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = Merge::new(
+/// let observable = Merge::new((
 ///     FromIter::new([1, 3]),
 ///     FromIter::new([2, 4]),
-/// );
+///     FromIter::new([5]).map(|value| value * 10),
+/// ));
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
-/// assert_eq!(values, vec![1, 3, 2, 4]);
+/// assert_eq!(values, vec![1, 3, 2, 4, 50]);
 /// ```
 ///
-/// The mode is the two sources' joined ([`JoinedModeOf`]): a merge of
+/// With a limit, a source is pulled once there is room for it, here from an iterator that never
+/// ends:
+///
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::combining::merge::Merge,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{cell::RefCell, convert::Infallible, num::NonZeroUsize, rc::Rc};
+///
+/// let mut values = Vec::new();
+/// let requests = Rc::new(RefCell::new(Vec::new()));
+/// let pulled = requests.clone();
+///
+/// let observable = Merge::new_from_iter((0..).map(move |_| {
+///     let request = PublishSubject::<_, Infallible, _>::local();
+///     pulled.borrow_mut().push(request.clone());
+///     request
+/// }))
+/// .max_concurrency(NonZeroUsize::new(2).unwrap());
+/// let subscription = observable.subscribe_with_callback(|value| values.push(value), |_| {});
+/// assert_eq!(requests.borrow().len(), 2); // Pulled as there is room for them.
+///
+/// let mut first = requests.borrow()[0].clone();
+/// let _ = first.on_next(1);
+/// first.on_termination(Termination::Completed); // Makes room for the third one.
+/// assert_eq!(requests.borrow().len(), 3);
+///
+/// drop((subscription, requests));
+/// assert_eq!(values, [1]);
+/// ```
+///
+/// The mode is the sources' joined ([`SourceSet::Mode`]): a merge of
 /// `Local` sources keeps its state in an `Rc` and takes an observer holding one,
 ///
 /// ```rust
@@ -54,7 +117,7 @@ use educe::Educe;
 ///
 /// let values = Rc::new(RefCell::new(Vec::new()));
 /// let _subscription = Just::new(1)
-///     .merge_with(PublishSubject::local())
+///     .merge(PublishSubject::local())
 ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
 /// ```
 ///
@@ -69,107 +132,110 @@ use educe::Educe;
 ///
 /// let values = Rc::new(RefCell::new(Vec::new()));
 /// let _subscription = Just::new(1)
-///     .merge_with(PublishSubject::shared())
+///     .merge(PublishSubject::shared())
 ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Merge<OE1, OE2> {
-    source_1: OE1,
-    source_2: OE2,
+pub struct Merge<S, L = Unlimited> {
+    sources: S,
+    limit: L,
 }
 
-impl<OE1, OE2> Merge<OE1, OE2> {
-    /// Creates a [`Merge`] over `source_1` and `source_2`;
-    /// [`ObservableExt::merge_with`](crate::observable::ObservableExt::merge_with) is the fluent
-    /// form.
-    pub fn new<T, E>(source_1: OE1, source_2: OE2) -> Self
+impl<S> Merge<S> {
+    /// Creates a [`Merge`] over the tuple `sources`;
+    /// [`ObservableExt::merge`](crate::observable::ObservableExt::merge) is the fluent
+    /// form for two.
+    pub fn new(sources: S) -> Self
     where
-        OE1: ObservableTypes<Item = T, Error = E>,
-        OE2: ObservableTypes<Item = T, Error = E>,
+        S: SameItemSources,
     {
-        Self { source_1, source_2 }
+        Self {
+            sources,
+            limit: Unlimited,
+        }
+    }
+
+    /// Subscribes at most `max_concurrency` of the sources at a time: the next one is pulled,
+    /// from the tuple or from the iterator, only once one of them has completed, so an iterator
+    /// that never ends can be merged. With a `max_concurrency` of one the sources are
+    /// concatenated.
+    pub fn max_concurrency(self, max_concurrency: NonZeroUsize) -> Merge<S, NonZeroUsize> {
+        Merge {
+            sources: self.sources,
+            limit: max_concurrency,
+        }
+    }
+}
+
+impl<I> Merge<IterSources<I>> {
+    /// Merges the observables of an iterator, subscribing as it is consumed.
+    ///
+    /// Stops pulling sources when the stream stops; an empty iterator completes immediately.
+    pub fn new_from_iter<OE>(sources: I) -> Self
+    where
+        I: IntoIterator<Item = OE>,
+        OE: ObservableTypes,
+    {
+        Self {
+            sources: IterSources(sources),
+            limit: Unlimited,
+        }
     }
 }
 
 delegate_disposal!(
-    Disposal<M, T, E, D1, D2>,
-    subscribe_with_context::Disposal<M, T, E, Model, ChainDisposal<D2, D1>>,
-    where M: ThreadMode, D1: Disposable, D2: Disposable
+    Disposal<M, T, E, C, SL>,
+    ContextDisposal<M, T, E, C, SL>,
+    where M: ThreadMode
 );
 
-impl<T, E, OE1, OE2> ObservableTypes for Merge<OE1, OE2>
+impl<T, S> ObservableTypes for Merge<S>
 where
-    OE1: ObservableTypes<Item = T, Error = E>,
-    OE2: ObservableTypes<Item = T, Error = E>,
+    S: SameItemSources<SameItem = T>,
 {
     type Item = T;
-    type Error = E;
-    type Mode = JoinedModeOf<OE1, OE2>;
-    type Disposal = Disposal<JoinedModeOf<OE1, OE2>, T, E, OE1::Disposal, OE2::Disposal>;
+    type Error = S::Error;
+    type Mode = S::Mode;
+    /// The sources still subscribed are disposed the last subscribed first. No source waits to
+    /// be pulled, so the disposal names none.
+    type Disposal = Disposal<S::Mode, T, S::Error, Infallible, S::SubscriptionSlots>;
 }
 
-impl<T, E, OE1, OE2, OR> Observable<OR> for Merge<OE1, OE2>
+impl<T, S> ObservableTypes for Merge<S, NonZeroUsize>
 where
-    OR: Observer<T, E>,
-    OE1: Observable<
-            MergeObserver<JoinedModeOf<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
-            Item = T,
-            Error = E,
-        >,
-    OE2: Observable<
-            MergeObserver<JoinedModeOf<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
-            Item = T,
-            Error = E,
-        >,
+    S: SameItemSources<SameItem = T>,
+{
+    type Item = T;
+    type Error = S::Error;
+    type Mode = S::Mode;
+    /// The sources still subscribed are disposed the last subscribed first.
+    type Disposal = Disposal<S::Mode, T, S::Error, S::Cursor, S::SubscriptionSlots>;
+}
+
+/// The [`Driver`](super::internal::merge::Driver) of a [`Merge`] over `S`, subscribed with `OR`,
+/// whose sources wait for room as a `C`.
+type MergeDriverOf<S, OR, C> = DriverOf<S, <S as SameItemSources>::SameItem, OR, C>;
+
+impl<S, OR> Observable<OR> for Merge<S>
+where
+    S: SameItemSources + SourceOps,
+    <S as SourceSet>::Cursor: for<'a> SubscribeEach<&'a MergeDriverOf<S, OR, Infallible>, Pause>,
+    OR: Observer<<S as SameItemSources>::SameItem, <S as SourceSet>::Error>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let model = Model {
-            one_is_completed: false,
-        };
-        subscribe_with_context_two_steps(
-            observer,
-            model,
-            |context| Some(self.source_1.subscribe(MergeObserver(context.clone()))),
-            |context| Some(self.source_2.subscribe(MergeObserver(context.clone()))),
-        )
-        .map_inner_into()
+        subscribe_unlimited(self.sources, |_| observer).map_inner_into()
     }
 }
 
-struct Model {
-    one_is_completed: bool,
-}
-
-#[doc(hidden)]
-pub struct MergeObserver<M: ThreadMode, T, E, OR, D: Disposable>(
-    SubscriptionContext<M, T, E, OR, Model, D>,
-);
-
-impl<M: ThreadMode, T, E, OR, D> Observer<T, E> for MergeObserver<M, T, E, OR, D>
+impl<S, OR> Observable<OR> for Merge<S, NonZeroUsize>
 where
-    OR: Observer<T, E>,
-    D: Disposable,
+    S: SameItemSources + SourceOps,
+    <S as SourceSet>::Cursor:
+        for<'a> SubscribeEach<&'a MergeDriverOf<S, OR, <S as SourceSet>::Cursor>, Pause>,
+    OR: Observer<<S as SameItemSources>::SameItem, <S as SourceSet>::Error>,
 {
-    fn on_next(&mut self, value: T) -> Flow {
-        self.0.send_next(value)
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            completion @ Termination::Completed => {
-                let _ = self.0.update(|model| {
-                    if model.one_is_completed {
-                        UpdateOutcome::empty().with_termination_event(completion)
-                    } else {
-                        model.one_is_completed = true;
-                        UpdateOutcome::empty().without_events()
-                    }
-                });
-            }
-            error @ Termination::Error(_) => {
-                self.0.send_termination(error);
-            }
-        }
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        subscribe_limited(self.sources, self.limit, |_| observer).map_inner_into()
     }
 }

@@ -857,7 +857,7 @@ fn test_subscribe_by_different_observer() {
             Just::new(round * 1000)
                 .with_error_type()
                 .into_shared()
-                .merge_with(subject_cloned.clone())
+                .merge(subject_cloned.clone())
                 .into_send_boxed()
         })
     });

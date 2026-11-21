@@ -1,283 +1,318 @@
 //! The [`Amb`] operator, behind
-//! [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with).
+//! [`ObservableExt::amb`](crate::observable::ObservableExt::amb).
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableTypes},
+    observable::{
+        IterSources, Observable, ObservableTypes, SameItemSources, SourceSet,
+        sources::{SourceOps, SourceSubscriber, SubscribeEach},
+    },
     observer::{Flow, Observer, Termination},
     thread_mode::{
         ThreadMode,
         mutable::{MutableExt, MutableHelper},
     },
+    utils::positional::{position::Position, slots::ReservationSlots},
 };
 use educe::Educe;
+use std::ops::ControlFlow;
 
-/// Mirrors the first source observable to emit an item or a termination.
-/// With no sources, completes immediately.
+/// Mirrors the first source observable to emit an item or a termination, and disposes the others.
 /// See <https://reactivex.io/documentation/operators/amb.html>
+///
+/// The sources are a tuple of one to eight observables of one item type and one error type, which
+/// may be observables of different types: no boxing is needed to race them.
+/// [`ObservableExt::amb`](crate::observable::ObservableExt::amb) is the form for two;
+/// [`Amb::new_from_iter`] is the one for any number of observables of one type, decided as the
+/// program runs.
+///
+/// The sources are subscribed in order. One that wins as it is subscribed keeps the ones after it
+/// from being subscribed at all. Once a source has won, its items and its termination go straight
+/// to the observer, with no lock of the operator's on the way.
+///
+/// Its iterator may even be infinite if a source wins synchronously: sources are generated only
+/// until the race is decided.
 ///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
-///     observer::Termination,
-///     operators::{
-///         conditional_boolean::amb::Amb,
-///         creating::from_iter::FromIter,
-///     },
+///     observer::{Observer, Termination},
+///     operators::conditional_boolean::amb::Amb,
+///     subject::publish_subject::PublishSubject,
 /// };
+/// use std::convert::Infallible;
 ///
 /// let mut values = Vec::new();
+/// let mut cache = PublishSubject::<_, Infallible, _>::local();
+/// let mut network = PublishSubject::local();
 ///
-/// let observable = Amb::new([
-///     FromIter::new([1, 2]),
-///     FromIter::new([3, 4]),
-/// ]);
-/// observable.subscribe_with_callback(
-///     |value| values.push(value),
-///     |termination| assert_eq!(termination, Termination::Completed),
-/// );
+/// let subscription = Amb::new((cache.clone(), network.clone().map(|value| value * 10)))
+///     .subscribe_with_callback(
+///         |value| values.push(value),
+///         |termination| assert_eq!(termination, Termination::Completed),
+///     );
 ///
-/// assert_eq!(values, vec![1, 2]);
+/// let _ = network.on_next(1); // The network answers first: it wins.
+/// let _ = cache.on_next(2); // Disposed: not seen.
+/// network.on_termination(Termination::Completed);
+///
+/// drop((subscription, cache));
+/// assert_eq!(values, [10]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Amb<I> {
-    sources: I,
+pub struct Amb<S> {
+    sources: S,
 }
 
-impl<I> Amb<I> {
-    /// Creates an [`Amb`] racing every observable of `sources`;
-    /// [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with) is the two-source
-    /// form.
-    pub fn new(sources: I) -> Self {
+impl<S> Amb<S> {
+    /// Creates an [`Amb`] racing the observables of the tuple `sources`;
+    /// [`ObservableExt::amb`](crate::observable::ObservableExt::amb) is the fluent form
+    /// for two.
+    pub fn new(sources: S) -> Self
+    where
+        S: SameItemSources,
+    {
         Self { sources }
     }
 }
 
-impl<T, E, OE, I> ObservableTypes for Amb<I>
-where
-    I: IntoIterator<Item = OE>,
-    OE: ObservableTypes<Item = T, Error = E>,
-{
-    type Item = T;
-    type Error = E;
-    type Mode = OE::Mode;
-    type Disposal = Disposal<OE::Mode, OE::Disposal>;
-}
-
-impl<T, E, OE, I, OR> Observable<OR> for Amb<I>
-where
-    OR: Observer<T, E>,
-    I: IntoIterator<Item = OE>,
-    OE: Observable<
-            AmbObserver<<OE as ObservableTypes>::Mode, <OE as ObservableTypes>::Disposal, OR>,
-            Item = T,
-            Error = E,
-        >,
-{
-    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let sources = self.sources.into_iter();
-        let minimum_source_count = sources.size_hint().0;
-        let observer = OE::Mode::ptr(Some(observer));
-        let context = OE::Mode::ptr(AmbState::Racing(Vec::with_capacity(minimum_source_count)));
-
-        let mut has_sources = false;
-        for source in sources {
-            has_sources = true;
-            let Some(key) = reserve_subscription_slot(&context) else {
-                break;
-            };
-            let amb_observer = AmbObserver(AmbObserverState::Racing {
-                observer: observer.clone(),
-                context: OE::Mode::downgrade(&context),
-                key,
-            });
-            let subscription = source.subscribe(amb_observer);
-            if !store_subscription(&context, key, subscription) {
-                break;
-            }
+impl<I> Amb<IterSources<I>> {
+    /// Races the sources of an iterator, pulling them only while no source has won.
+    ///
+    /// An empty iterator completes immediately. A synchronous winner prevents later sources
+    /// from even being pulled from the iterator.
+    pub fn new_from_iter<OE>(sources: I) -> Self
+    where
+        I: IntoIterator<Item = OE>,
+        OE: ObservableTypes,
+    {
+        Self {
+            sources: IterSources(sources),
         }
-
-        if !has_sources {
-            // Without a source, no one can ever win the race, so it completes right away.
-            // The observer is taken out of its slot so that it is notified outside the lock.
-            let observer = observer
-                .take_value()
-                .expect("a new amb must retain its downstream observer");
-            observer.on_termination(Termination::Completed);
-        }
-
-        DisposeOnDrop::new(Disposal(context))
     }
 }
 
-enum AmbState<D: Disposable> {
-    Racing(Vec<Option<DisposeOnDrop<D>>>),
-    Won {
-        key: usize,
-        subscription: Option<DisposeOnDrop<D>>,
-    },
+impl<T, S> ObservableTypes for Amb<S>
+where
+    S: SameItemSources<SameItem = T>,
+{
+    type Item = T;
+    type Error = S::Error;
+    type Mode = S::Mode;
+    type Disposal = Disposal<S::Mode, S::SubscriptionSlots>;
+}
+
+/// The [`Registration`] of an [`Amb`] over `S`, subscribed with `OR`.
+type RegistrationOf<S, OR> =
+    Registration<<S as SourceSet>::Mode, <S as SourceSet>::SubscriptionSlots, OR>;
+
+impl<S, OR> Observable<OR> for Amb<S>
+where
+    S: SameItemSources + SourceOps,
+    <S as SourceSet>::Cursor: SubscribeEach<RegistrationOf<S, OR>, ()>,
+    OR: Observer<<S as SameItemSources>::SameItem, <S as SourceSet>::Error>,
+{
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        let mut registration = Registration {
+            observer: <S as SourceSet>::Mode::ptr(Some(observer)),
+            context: <S as SourceSet>::Mode::ptr(AmbState {
+                race: Race::Racing,
+                slots: Default::default(),
+            }),
+            subscribed: false,
+        };
+        // An iterator is pulled only while the race is open; the cursor, with the sources left,
+        // is dropped at the end of the statement.
+        let exhausted = self
+            .sources
+            .into_cursor()
+            .subscribe_each(&mut registration)
+            .is_continue();
+        if exhausted && !registration.subscribed {
+            // An empty iterator: no source can end the race.
+            registration
+                .observer
+                .take_value()
+                .expect("an empty race retains its observer")
+                .on_termination(Termination::Completed);
+        }
+        DisposeOnDrop::new(Disposal(registration.context))
+    }
+}
+
+/// The shared race state, with the subscription of each source, stored as soon as it is made.
+struct AmbState<SL> {
+    race: Race,
+    /// Every subscription stored while racing, the winner's alone once won, none once stopped.
+    slots: SL,
+}
+
+#[derive(Clone, Copy)]
+enum Race {
+    Racing,
+    /// Won by the source at this position.
+    Won(usize),
     Stopped,
 }
 
-fn reserve_subscription_slot<D, P>(context: &P) -> Option<usize>
-where
-    D: Disposable,
-    P: MutableHelper<Value = AmbState<D>>,
-{
-    context.with_mut(|state| match state {
-        AmbState::Racing(subscriptions) => {
-            let key = subscriptions.len();
-            subscriptions.push(None);
-            Some(key)
+impl Race {
+    /// Whether the subscription of the source at `position` is still wanted: every one while
+    /// racing, the winner's alone once won.
+    fn keeps(self, position: usize) -> bool {
+        match self {
+            Self::Racing => true,
+            Self::Won(winner) => winner == position,
+            Self::Stopped => false,
         }
-        AmbState::Won { .. } | AmbState::Stopped => None,
-    })
+    }
+
+    /// Goes on subscribing the next source only while the race is open.
+    fn flow(self) -> ControlFlow<()> {
+        match self {
+            Self::Racing => ControlFlow::Continue(()),
+            Self::Won(_) | Self::Stopped => ControlFlow::Break(()),
+        }
+    }
 }
 
-fn store_subscription<D, P>(context: &P, key: usize, subscription: DisposeOnDrop<D>) -> bool
-where
-    D: Disposable,
-    P: MutableHelper<Value = AmbState<D>>,
-{
-    // Wrapped in an `Option` so that the branches which do not store the subscription leave it to
-    // be dropped outside the lock.
-    let mut subscription = Some(subscription);
-    let (keep_subscribing, replaced) = context.with_mut(|state| match state {
-        // The race is still open: the subscription belongs in the reserved slot.
-        AmbState::Racing(subscriptions) => {
-            let slot = subscriptions
-                .get_mut(key)
-                .expect("a racing source must retain its subscription slot");
-            let replaced = std::mem::replace(slot, subscription.take());
-            (true, replaced)
-        }
-        // This source won while it was still being subscribed to: it owns the winning slot.
-        AmbState::Won {
-            key: winner_key,
-            subscription: winner_subscription,
-        } if *winner_key == key => {
-            let replaced = std::mem::replace(winner_subscription, subscription.take());
-            (false, replaced)
-        }
-        // Another source won, or the race is over: this subscription is not needed anymore.
-        AmbState::Won { .. } | AmbState::Stopped => (false, None),
-    });
-    // Both slots are empty until they are written above, so nothing is ever replaced. This is
-    // asserted outside the lock so that a failing assertion cannot poison it.
-    debug_assert!(
-        replaced.is_none(),
-        "a subscription slot is written only once"
-    );
-    drop((replaced, subscription)); // Drop a late losing subscription outside the lock.
-    keep_subscribing
+/// Subscribes the sources one at a time while the race is open, and stores each subscription in
+/// the race state as soon as it is made, so that a win disposes every loser subscribed so far.
+/// It breaks, with nothing to say, once the race is decided.
+struct Registration<M: ThreadMode, SL, OR> {
+    observer: M::Ptr<Option<OR>>,
+    context: M::Ptr<AmbState<SL>>,
+    /// Whether a source was pulled to be subscribed: with none, an empty iterator, the race
+    /// completes at once.
+    subscribed: bool,
 }
 
-fn try_win<D, OR, P, PO>(context: &P, shared_observer: &PO, key: usize) -> Option<OR>
+impl<M, SL, OR, K, OE> SourceSubscriber<K, OE, ()> for Registration<M, SL, OR>
 where
-    D: Disposable,
-    P: MutableHelper<Value = AmbState<D>>,
-    PO: MutableHelper<Value = Option<OR>>,
+    M: ThreadMode,
+    K: Position,
+    OE: ObservableTypes,
+    SL: ReservationSlots<K, Value = DisposeOnDrop<<OE as ObservableTypes>::Disposal>>,
 {
-    let losing_subscriptions = context.with_mut(|state| {
-        if !matches!(state, AmbState::Racing(_)) {
-            return None;
-        }
+    type Observer = AmbObserver<M, SL, OR, K>;
 
-        let AmbState::Racing(mut subscriptions) = std::mem::replace(state, AmbState::Stopped)
-        else {
-            unreachable!()
-        };
-        let winner_subscription = subscriptions
-            .get_mut(key)
-            .expect("a racing source must retain its subscription slot")
-            .take();
-        *state = AmbState::Won {
-            key,
-            subscription: winner_subscription,
-        };
-        Some(subscriptions)
-    })?;
-    // The `Racing` -> `Won` transition above elects a single winner, so the downstream observer is
-    // taken after the context lock is released: no other source can reach this point.
-    let observer = shared_observer
-        .take_value()
-        .expect("a racing amb must retain its downstream observer");
-    dispose_last_first(losing_subscriptions); // Outside the lock.
-    Some(observer)
+    fn still_running(&self) -> ControlFlow<()> {
+        // A source already subscribed may have won the race through `Iterator::next`.
+        self.context.with_ref(|state| state.race.flow())
+    }
+
+    fn observer(&mut self, position: K) -> Option<Self::Observer> {
+        self.subscribed = true;
+        Some(AmbObserver(AmbObserverState::Racing {
+            observer: self.observer.clone(),
+            context: M::downgrade(&self.context),
+            position,
+        }))
+    }
+
+    fn store(
+        &mut self,
+        position: K,
+        subscription: DisposeOnDrop<<OE as ObservableTypes>::Disposal>,
+    ) -> ControlFlow<()> {
+        // The race may have been decided meanwhile, by this source as it was subscribed or by
+        // another one on another thread: only the winner's subscription is kept then.
+        let (rejected, flow) = self.context.with_mut(|state| {
+            let rejected = if state.race.keeps(position.position()) {
+                state.slots.fill(position, subscription)
+            } else {
+                Some(subscription)
+            };
+            (rejected, state.race.flow())
+        });
+        drop(rejected); // Outside the lock.
+        flow
+    }
 }
 
-enum AmbObserverState<M: ThreadMode, D: Disposable, OR> {
+enum AmbObserverState<M: ThreadMode, SL, OR, K> {
     Racing {
         observer: M::Ptr<Option<OR>>,
-        context: M::Weak<AmbState<D>>,
-        key: usize,
+        context: M::Weak<AmbState<SL>>,
+        position: K,
     },
     Won(OR),
     Lost,
 }
 
-#[doc(hidden)]
-pub struct AmbObserver<M: ThreadMode, D: Disposable, OR>(AmbObserverState<M, D, OR>);
-
-impl<M, T, E, D, OR> Observer<T, E> for AmbObserver<M, D, OR>
+impl<M, SL, OR, K> AmbObserverState<M, SL, OR, K>
 where
     M: ThreadMode,
-    D: Disposable,
+    SL: ReservationSlots<K> + Default,
+    K: Position,
+{
+    /// Settles a racing source: it wins if the race is still open, and loses otherwise. A source
+    /// already settled stays as it is.
+    fn settle(self) -> Self {
+        let Self::Racing {
+            observer,
+            context,
+            position,
+        } = self
+        else {
+            return self;
+        };
+        let Some(context) = M::upgrade(&context) else {
+            return Self::Lost;
+        };
+        let losers = context.with_mut(|state| {
+            if !matches!(state.race, Race::Racing) {
+                return None;
+            }
+            state.race = Race::Won(position.position());
+            // Every subscription leaves with the losers but the winner's, which moves to fresh
+            // slots. Not stored yet, it finds its position still reserved there.
+            let mut losers = std::mem::take(&mut state.slots);
+            if let Some(winner) = losers.release(position) {
+                let late = state.slots.fill(position, winner);
+                assert!(late.is_none(), "fresh slots hold no release");
+            }
+            Some(losers)
+        });
+        let Some(losers) = losers else {
+            return Self::Lost;
+        };
+        // The `Racing` -> `Won` transition above elects a single winner, so the downstream
+        // observer is taken after the context lock is released: no other source can reach this
+        // point.
+        let observer = observer
+            .take_value()
+            .expect("a racing amb must retain its downstream observer");
+        drop(losers); // Outside the lock, the last subscribed first.
+        Self::Won(observer)
+    }
+}
+
+#[doc(hidden)]
+pub struct AmbObserver<M: ThreadMode, SL, OR, K>(AmbObserverState<M, SL, OR, K>);
+
+impl<M, T, E, SL, OR, K> Observer<T, E> for AmbObserver<M, SL, OR, K>
+where
+    M: ThreadMode,
+    SL: ReservationSlots<K> + Default,
+    K: Position,
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        match &mut self.0 {
-            AmbObserverState::Won(observer) => {
-                return observer.on_next(value);
-            }
-            // This source lost the race, so nothing it emits is wanted anymore.
-            AmbObserverState::Lost => return Flow::Stop,
-            AmbObserverState::Racing { .. } => {}
+        if let AmbObserverState::Racing { .. } = self.0 {
+            self.0 = std::mem::replace(&mut self.0, AmbObserverState::Lost).settle();
         }
-
-        let AmbObserverState::Racing {
-            observer: shared_observer,
-            context,
-            key,
-        } = std::mem::replace(&mut self.0, AmbObserverState::Lost)
-        else {
-            unreachable!()
-        };
-        let Some(shared_context) = M::upgrade(&context) else {
-            return Flow::Stop;
-        };
-        let Some(mut observer) = try_win(&shared_context, &shared_observer, key) else {
-            return Flow::Stop;
-        };
-        drop(shared_context);
-        drop(shared_observer);
-
-        let flow = observer.on_next(value);
-        self.0 = AmbObserverState::Won(observer);
-        flow
+        match &mut self.0 {
+            AmbObserverState::Won(observer) => observer.on_next(value),
+            // This source lost the race, so nothing it emits is wanted anymore.
+            AmbObserverState::Lost | AmbObserverState::Racing { .. } => Flow::Stop,
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        match self.0 {
-            AmbObserverState::Won(observer) => observer.on_termination(termination),
-            AmbObserverState::Lost => {}
-            AmbObserverState::Racing {
-                observer: shared_observer,
-                context,
-                key,
-            } => {
-                let Some(shared_context) = M::upgrade(&context) else {
-                    return;
-                };
-                let Some(observer) = try_win(&shared_context, &shared_observer, key) else {
-                    return;
-                };
-                drop(shared_context);
-                drop(shared_observer);
-                observer.on_termination(termination);
-            }
+        if let AmbObserverState::Won(observer) = self.0.settle() {
+            observer.on_termination(termination);
         }
     }
 }
@@ -285,23 +320,18 @@ where
 /// The disposal of an [`Amb`] subscription: it disposes every source still racing, or the winner.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct Disposal<M: ThreadMode, D: Disposable>(#[educe(Debug(ignore))] M::Ptr<AmbState<D>>);
+pub struct Disposal<M: ThreadMode, SL>(#[educe(Debug(ignore))] M::Ptr<AmbState<SL>>);
 
-impl<M, D> Disposable for Disposal<M, D>
+impl<M, SL> Disposable for Disposal<M, SL>
 where
     M: ThreadMode,
-    D: Disposable,
+    SL: Default,
 {
     fn dispose(self) {
-        // The remaining subscriptions are disposed outside the lock.
-        if let AmbState::Racing(subscriptions) = self.0.replace_value(AmbState::Stopped) {
-            dispose_last_first(subscriptions);
-        }
+        let slots = self.0.with_mut(|state| {
+            state.race = Race::Stopped;
+            std::mem::take(&mut state.slots)
+        });
+        drop(slots); // Outside the lock, the last subscribed first.
     }
-}
-
-/// Disposes the subscriptions of the racing sources, the last subscribed first, as the chained
-/// disposals of the operators with two sources do.
-fn dispose_last_first<D: Disposable>(subscriptions: Vec<Option<DisposeOnDrop<D>>>) {
-    subscriptions.into_iter().rev().for_each(drop);
 }
