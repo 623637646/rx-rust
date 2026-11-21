@@ -29,6 +29,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `filter_map`, `pairwise` and `single` filter optional mapping results, emit adjacent pairs,
+  and require exactly one source item, respectively.
 - `buffer_with_count_and_skip` and `window_with_count_and_skip` support overlapping groups and
   gaps; `with_latest_from` combines primary emissions with the latest auxiliary values.
 - `buffer_with_time_and_shift` and `window_with_time_and_shift` open groups at fixed intervals.

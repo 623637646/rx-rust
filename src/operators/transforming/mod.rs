@@ -14,6 +14,7 @@ pub mod flat_map;
 pub mod group_by;
 mod internal;
 pub mod map;
+pub mod pairwise;
 pub mod scan;
 pub mod switch_map;
 pub mod window;

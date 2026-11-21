@@ -77,8 +77,9 @@ use crate::{
         filtering::{
             audit::Audit, debounce::Debounce, distinct::Distinct,
             distinct_until_changed::DistinctUntilChanged, element_at::ElementAt, filter::Filter,
-            first::First, ignore_elements::IgnoreElements, last::Last, sample::Sample, skip::Skip,
-            skip_last::SkipLast, take::Take, take_last::TakeLast, throttle::Throttle,
+            filter_map::FilterMap, first::First, ignore_elements::IgnoreElements, last::Last,
+            sample::Sample, single::Single, skip::Skip, skip_last::SkipLast, take::Take,
+            take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::{
             average::Average, collect::Collect, count::Count, max::Max, min::Min, reduce::Reduce,
@@ -99,7 +100,7 @@ use crate::{
             buffer_with_time_and_shift::BufferWithTimeAndShift,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_eager_map::ConcatEagerMap,
             concat_map::ConcatMap, exhaust_map::ExhaustMap, flat_map::FlatMap, group_by::GroupBy,
-            map::Map, scan::Scan, switch_map::SwitchMap, window::Window,
+            map::Map, pairwise::Pairwise, scan::Scan, switch_map::SwitchMap, window::Window,
             window_with_count::WindowWithCount, window_with_count_and_skip::WindowWithCountAndSkip,
             window_with_time::WindowWithTime, window_with_time_and_shift::WindowWithTimeAndShift,
             window_with_time_or_count::WindowWithTimeOrCount,
@@ -606,6 +607,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
         F: FnMut(&Self::Item) -> bool,
     {
         Filter::new(self, callback)
+    }
+
+    /// Maps each item to an `Option`, forwarding only the values that are `Some`.
+    fn filter_map<T1, F>(self, callback: F) -> FilterMap<Self::Item, Self, F>
+    where
+        F: FnMut(Self::Item) -> Option<T1>,
+    {
+        FilterMap::new(self, callback)
     }
 
     /// Emits only the first item from the source, then completes; nothing if there was none.
@@ -1169,6 +1178,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
         ObserveOn::new(self, scheduler)
     }
 
+    /// Emits each item paired with the one before it, as `(previous, current)`.
+    fn pairwise(self) -> Pairwise<Self>
+    where
+        Self::Item: Clone,
+    {
+        Pairwise::new(self)
+    }
+
     /// Multicasts the source using a `PublishSubject`.
     fn publish<'a>(self) -> ConnectableController<Self, PublishSubjectOf<'a, Self>>
     where
@@ -1337,6 +1354,12 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Self::Error: Clone,
     {
         self.replay(buffer_size).ref_count()
+    }
+
+    /// Emits the only item of the source once it completes; fails if there is none or more than
+    /// one.
+    fn single(self) -> Single<Self> {
+        Single::new(self)
     }
 
     /// Skips the first `count` items before emitting the remainder of the sequence.
