@@ -502,3 +502,17 @@ the subject lowercase, imperative, without a trailing period. Types: `feat`, `fi
 Example: `test(scheduler): check that a periodic task catches up after an overrun`
 
 Do not commit or push unless asked.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as Markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: root `GLOSSARY.md`, with design decisions in `docs/decisions/`. See `docs/agents/domain.md`.
