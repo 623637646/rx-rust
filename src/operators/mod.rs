@@ -9,7 +9,7 @@
 //! |---|---|
 //! | [`creating`] | `Create`, `Defer`, `Empty`, `FromFuture`, `FromTryFuture`, `FromIter`, `FromResult`, `FromStream`, `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked`, `Interval`, `Just`, `Never`, `Range`, `Repeat`, `Start`, `Throw`, `Timer` |
 //! | [`transforming`] | `map`, `scan`, `pairwise`, `flat_map`, `concat_map`, `concat_eager_map`, `switch_map`, `exhaust_map`, `group_by`, `buffer`, `buffer_with_count`, `buffer_with_count_and_skip`, `buffer_with_time`, `buffer_with_time_or_count`, `window`, `window_with_count`, `window_with_count_and_skip`, `window_with_time`, `window_with_time_or_count` |
-//! | [`filtering`] | `filter`, `filter_map`, `first`, `last`, `single`, `element_at`, `take`, `take_last`, `skip`, `skip_last`, `distinct`, `distinct_until_changed`, `debounce`, `audit`, `throttle`, `sample`, `ignore_elements` |
+//! | [`filtering`] | `filter`, `filter_map`, `first`, `last`, `single`, `element_at`, `take`, `take_last`, `skip`, `skip_last`, `distinct`, `distinct_until_changed`, `debounce`, `audit`, `throttle`, `throttle_latest`, `sample`, `ignore_elements` |
 //! | [`combining`] | `merge`, `merge_all`, `concat`, `concat_all`, `concat_eager_all`, `switch`, `exhaust_all`, `zip`, `combine_latest`, `with_latest_from`, `fork_join`, `join`, `group_join`, [`When`](combining::when::When), `start_with` |
 //! | [`conditional_boolean`] | `all`, `contains`, `sequence_equal`, `default_if_empty`, `switch_if_empty`, `amb`, `take_while`, `take_until`, `skip_while`, `skip_until` |
 //! | [`mathematical_aggregate`] | `count`, `sum`, `average`, `min`, `max`, `reduce`, `collect`, `to_vec` |

@@ -188,8 +188,11 @@ when they fail.
   Every file directly in a category is a public operator; what is not — the crate-private
   machinery several operators share — lives in `<category>/internal/`, without a `_core` suffix:
   `combining/internal/` (`flatten`, `merge`, `join`, `reorder`), `filtering/internal/`
-  (`deadline`, the pending value and timer of `debounce` and `audit`, which differ only in whether
-  an item moves the deadline: a change to it runs `--test debounce --test audit`) and
+  (`span`, the timer and context of `debounce`, `audit` and `throttle_latest`, the operators
+  that limit their rate with spans; each keeps its own `SpanState` in its own file — what an item
+  does, what the end of a span does — with unit tests of its own: a change to `span` runs
+  `cargo test --lib operators::filtering` and
+  `--test debounce --test audit --test throttle_latest`) and
   `transforming/internal/` (`count`, `time_shift`, `time_or_count`, `boundary`, `group`,
   `bundle`, `window`, `overlap`, `timetable`). The twelve buffer and window operators are four state machines, one per way their
   groups open and close — `count`, `time_shift`, `time_or_count`, `boundary` — each generic over
@@ -372,8 +375,9 @@ when they fail.
   `C: Clock`, not a scheduler: `scheduler.clock()`, `SystemClock`, or `time.clock()` in a test.
   That is what lets `VirtualTime` drive every operator; CI fails on an
   `Instant::now` in `src/` outside `scheduler/mod.rs` and `scheduler/virtual_time.rs`. The clock
-  may be read under a context lock (decision 0008); a value every path needs is read before it
-  (`let deadline = self.clock.now() + span;` before `update`), which keeps the lock short.
+  may be read under a context lock (decision 0008): read it there, on the paths that need it,
+  rather than before the lock on every event. Reading it before the lock is for a value every
+  path needs, where contention on the lock matters more than one clock read.
 - Public items get doc comments; operators link to their reactivex.io page. `#![deny(missing_docs)]`
   enforces it, so an item that is `pub` only because the type system demands it — an operator's
   observer — takes `#[doc(hidden)]` instead of a doc comment.

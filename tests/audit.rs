@@ -18,7 +18,6 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -742,14 +741,17 @@ fn test_unsub_after_error() {
 fn test_next_on_sub() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let subject = BehaviorSubject::<_, Infallible, _>::shared(111);
+    let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = subject.clone().audit(DURATION_100_MS, scheduler.clone());
+    let observable = observable
+        .start_with([111])
+        .audit(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_100_MS - DURATION_1_MS);
     assert!(checker.values().is_empty());
@@ -759,9 +761,10 @@ fn test_next_on_sub() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), vec![111]);
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]

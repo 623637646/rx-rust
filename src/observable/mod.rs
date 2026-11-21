@@ -79,7 +79,7 @@ use crate::{
             distinct_until_changed::DistinctUntilChanged, element_at::ElementAt, filter::Filter,
             filter_map::FilterMap, first::First, ignore_elements::IgnoreElements, last::Last,
             sample::Sample, single::Single, skip::Skip, skip_last::SkipLast, take::Take,
-            take_last::TakeLast, throttle::Throttle,
+            take_last::TakeLast, throttle::Throttle, throttle_latest::ThrottleLatest,
         },
         mathematical_aggregate::{
             average::Average, collect::Collect, count::Count, max::Max, min::Min, reduce::Reduce,
@@ -1497,6 +1497,12 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// `scheduler.clock()`.
     fn throttle<C>(self, time_span: Duration, clock: C) -> Throttle<Self, C> {
         Throttle::new(self, time_span, clock)
+    }
+
+    /// Emits an item at once, then, while items keep coming, the most recent one at the end of
+    /// each `time_span`: a leading- and trailing-edge throttle.
+    fn throttle_latest<S>(self, time_span: Duration, scheduler: S) -> ThrottleLatest<Self, S> {
+        ThrottleLatest::new(self, time_span, scheduler)
     }
 
     /// Pairs each item with the time elapsed since the previous one, or since the subscription for

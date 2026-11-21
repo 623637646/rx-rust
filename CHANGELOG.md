@@ -43,6 +43,8 @@ All notable changes to this project are documented here. The format follows
   disposed from inside one of its notifications by something that cannot answer `Flow::Stop`.
 - `audit` emits the latest item of each source-triggered time span, `delay_subscription` defers
   subscribing on a scheduler, and `do_finally` runs cleanup once the stream ends for any reason.
+- `throttle_latest` emits an item at once, then, while items keep coming, the latest one at the
+  end of each time span: a leading- and trailing-edge throttle.
 - `CombineLatest`, `Zip`, `Merge` and `Concat` accept tuples of one to eight sources and expose
   `new_from_iter` for runtime-sized inputs. `Concat` pulls from an iterator one source at a time.
 - `max_concurrency(n)` limits concurrent subscriptions in `Merge`, `MergeAll` and `FlatMap`.

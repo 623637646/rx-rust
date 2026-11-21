@@ -19,3 +19,4 @@ pub mod skip_last;
 pub mod take;
 pub mod take_last;
 pub mod throttle;
+pub mod throttle_latest;
