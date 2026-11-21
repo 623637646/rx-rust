@@ -8,5 +8,6 @@ pub mod default_if_empty;
 pub mod sequence_equal;
 pub mod skip_until;
 pub mod skip_while;
+pub mod switch_if_empty;
 pub mod take_until;
 pub mod take_while;

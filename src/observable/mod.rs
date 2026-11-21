@@ -66,7 +66,7 @@ use crate::{
         conditional_boolean::{
             all::All, amb::Amb, contains::Contains, default_if_empty::DefaultIfEmpty,
             sequence_equal::SequenceEqual, skip_until::SkipUntil, skip_while::SkipWhile,
-            take_until::TakeUntil, take_while::TakeWhile,
+            switch_if_empty::SwitchIfEmpty, take_until::TakeUntil, take_while::TakeWhile,
         },
         connectable::{connectable_controller::ConnectableController, ref_count::RefCount},
         error_handling::{
@@ -1444,6 +1444,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Self::Item: ObservableTypes<Error = Self::Error>,
     {
         Switch::new(self)
+    }
+
+    /// Continues with `fallback` if the source completes without emitting any item.
+    fn switch_if_empty<OE1>(self, fallback: OE1) -> SwitchIfEmpty<Self, OE1>
+    where
+        OE1: ObservableTypes<Item = Self::Item, Error = Self::Error>,
+    {
+        SwitchIfEmpty::new(self, fallback)
     }
 
     /// Maps each item to an observable and switches to the latest inner sequence.
