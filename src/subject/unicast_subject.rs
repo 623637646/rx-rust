@@ -101,7 +101,8 @@
 //! [`ObservableExt::multicast`]: crate::observable::ObservableExt::multicast
 
 use crate::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    delegate_disposal,
+    disposable::{dispose_on_drop::DisposeOnDrop, flag_disposal::FlagDisposal},
     observable::{Observable, ObservableTypes},
     observer::{
         Event, Flow, Observer, Termination,
@@ -445,7 +446,7 @@ where
             .take()
             .expect("the pipe is taken by either subscribing or dropping");
         deliver(&pipe, observer);
-        DisposeOnDrop::new(Disposal(pipe.is_closed))
+        DisposeOnDrop::new(FlagDisposal(pipe.is_closed)).map_inner_into()
     }
 }
 
@@ -477,19 +478,15 @@ where
     }
 }
 
-/// The disposal of a [`UnicastObservable`] or [`BoxedUnicastObservable`] subscription.
-///
-/// It only raises the flag that closes the pipe; see the
-/// [module documentation](self#releasing-the-observer) for when the observer is released.
-#[derive(Educe)]
-#[educe(Debug)]
-pub struct Disposal<M: ThreadMode>(#[educe(Debug(ignore))] M::Flag);
-
-impl<M: ThreadMode> Disposable for Disposal<M> {
-    fn dispose(self) {
-        self.0.raise();
-    }
-}
+delegate_disposal!(
+    /// The disposal of a [`UnicastObservable`] or [`BoxedUnicastObservable`] subscription.
+    ///
+    /// It only raises the flag that closes the pipe; see the
+    /// [module documentation](self#releasing-the-observer) for when the observer is released.
+    Disposal<M>,
+    FlagDisposal<<M as ThreadMode>::Flag>,
+    where M: ThreadMode
+);
 
 enum Step<E, OR> {
     /// Deliver the values just moved into the replay's batch, then ask for the next step.

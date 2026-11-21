@@ -37,6 +37,7 @@ pub mod chain_disposal;
 mod delegate_disposal;
 pub mod dispose_on_drop;
 pub mod either_disposal;
+pub(crate) mod flag_disposal;
 pub mod option_disposal;
 pub mod replaceable_disposal;
 mod tuple_disposal;

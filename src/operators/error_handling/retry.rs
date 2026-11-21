@@ -66,6 +66,67 @@ pub enum RetryAction<E, OE1> {
 ///
 /// assert_eq!(values, vec![42]);
 /// ```
+///
+/// A back-off is a retry that waits: the callback returns the source behind a
+/// [`delay_subscription`](crate::observable::ObservableExt::delay_subscription), so each attempt
+/// starts later than the one before it.
+///
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::{defer::Defer, from_result::FromResult},
+///         error_handling::retry::RetryAction,
+///     },
+///     scheduler::virtual_time::VirtualTime,
+///     thread_mode::mutable::{MutableExt, MutableHelper},
+/// };
+/// use std::{
+///     sync::{Arc, Mutex, atomic::{AtomicU32, Ordering}},
+///     time::Duration,
+/// };
+///
+/// let time = VirtualTime::new();
+/// let scheduler = time.scheduler();
+/// let attempts = Arc::new(AtomicU32::new(0));
+/// // Fails on its first two subscriptions.
+/// let source = Defer::new({
+///     let attempts = attempts.clone();
+///     move || {
+///         let attempt = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+///         FromResult::new(if attempt < 3 { Err("flaky") } else { Ok(attempt) })
+///     }
+/// });
+///
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let values_observer = values.clone();
+/// let mut retries = 0;
+/// let _subscription = source
+///     .clone()
+///     .retry(move |error| {
+///         retries += 1;
+///         if retries > 3 {
+///             return RetryAction::Stop(error);
+///         }
+///         // Waits 10 ms, then 20 ms, then 40 ms.
+///         let backoff = Duration::from_millis(10) * 2u32.pow(retries - 1);
+///         RetryAction::Retry(source.clone().delay_subscription(backoff, scheduler.clone()))
+///     })
+///     .subscribe_with_callback(
+///         move |value| values_observer.with_mut(|values| values.push(value)),
+///         |termination| assert_eq!(termination, Termination::Completed),
+///     );
+/// assert_eq!(attempts.load(Ordering::SeqCst), 1);
+///
+/// time.advance_by(Duration::from_millis(10));
+/// assert_eq!(attempts.load(Ordering::SeqCst), 2);
+/// time.advance_by(Duration::from_millis(19));
+/// assert!(values.clone_value().is_empty());
+/// time.advance_by(Duration::from_millis(1));
+/// assert_eq!(attempts.load(Ordering::SeqCst), 3);
+/// assert_eq!(values.clone_value(), [3]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Retry<OE, F> {

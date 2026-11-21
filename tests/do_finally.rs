@@ -1,0 +1,460 @@
+mod tests_utils;
+
+use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::checker::State;
+use crate::tests_utils::test_channel::ChannelState;
+use crate::tests_utils::test_channel::test_channel;
+use crate::tests_utils::test_channel::test_channels;
+use crate::tests_utils::test_scheduler::block_on;
+use rx_rust::disposable::Disposable;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
+use rx_rust::operators::creating::create::Create;
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
+use rx_rust::{
+    observable::{Observable, ObservableExt},
+    observer::{Observer, Termination},
+    operators::{creating::just::Just, utility::do_finally::DoFinally},
+};
+use std::convert::Infallible;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use tests_utils::{checker::Checker, test_struct::TestStruct};
+
+/// A callback that counts its calls, and the count it reads.
+fn counter() -> (Arc<AtomicUsize>, impl FnOnce() + Send + Clone + 'static) {
+    let count = Arc::new(AtomicUsize::new(0));
+    let callback_count = count.clone();
+    (count, move || {
+        callback_count.fetch_add(1, Ordering::SeqCst);
+    })
+}
+
+#[test]
+fn test_completed() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+    let (count, callback) = counter();
+
+    let observable = observable.do_finally(callback);
+
+    let subscription = observable.subscribe(observer);
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+
+    // The stream is over already: the disposal does not run it again.
+    subscription.dispose();
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_error() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+    let (checker, observer) = Checker::new();
+    let (count, callback) = counter();
+
+    let _subscription = observable.do_finally(callback).subscribe(observer);
+
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_order() {
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let (events_finalize, events_next, events_termination) =
+        (events.clone(), events.clone(), events.clone());
+
+    let _subscription = observable
+        .do_finally(move || events_finalize.with_mut(|events| events.push("finalize")))
+        .subscribe_with_callback(
+            move |_| events_next.with_mut(|events| events.push("next")),
+            move |_| events_termination.with_mut(|events| events.push("completed")),
+        );
+
+    assert!(sender.on_next(111).is_continue());
+    sender.on_termination(Termination::Completed);
+    assert_eq!(events.clone_value(), ["next", "completed", "finalize"]);
+}
+
+#[test]
+fn test_unsubscribe() {
+    let (channels, observable) = test_channels::<'_, i32, _>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (count, callback) = counter();
+
+    let observable = observable.do_finally(callback);
+    let observable_1 = observable;
+    let observable_2 = observable_1.clone();
+
+    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_2 = observable_2.subscribe(observer_2);
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    subscription_1.dispose();
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+
+    channels.on_termination(1, Termination::Error("error"));
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(count.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn test_unsubscribe_after_source_disposal() {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let (events_source, events_finalize) = (events.clone(), events.clone());
+    let observable = Create::shared_boxed(move |observer| {
+        let events_source = events_source.clone();
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            // Dropping the observer is only one step of the source's disposal. DoFinally must
+            // wait until the entire disposal has returned.
+            drop(observer);
+            events_source.with_mut(|events| events.push("source disposed"));
+        }))
+    });
+
+    let subscription = observable
+        .with_item_type::<i32>()
+        .with_error_type::<Infallible>()
+        .do_finally(move || events_finalize.with_mut(|events| events.push("finalize")))
+        .subscribe_with_callback(|_| {}, |_| {});
+    assert!(events.clone_value().is_empty());
+
+    subscription.dispose();
+    assert_eq!(events.clone_value(), ["source disposed", "finalize"]);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_unsubscribe_panic_still_finalizes() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let (count, callback) = counter();
+    expect_panic_on_drop(|panic_on_drop| {
+        Create::shared_boxed(move |observer| {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
+                drop(observer);
+                drop(panic_on_drop);
+            }))
+        })
+        .with_item_type::<i32>()
+        .with_error_type::<Infallible>()
+        .do_finally(callback)
+        .subscribe_with_callback(|_| {}, |_| {})
+        .dispose();
+    });
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_ref() {
+    let value = 111;
+    let error = 222;
+
+    let (checker, observer) = Checker::new();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (count, callback) = counter();
+
+    let _subscription = observable.do_finally(callback).subscribe(observer);
+    assert!(sender.on_next(&value).is_continue());
+    sender.on_termination(Termination::Error(&error));
+    assert_eq!(checker.values(), [&value]);
+    assert_eq!(checker.state(), State::Error(&error));
+    assert_eq!(channel_checker.state(), ChannelState::Error(&error));
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_mut_ref() {
+    let mut value = 111;
+    let mut error = 222;
+
+    let observable = Create::shared_boxed(|mut observer| {
+        assert!(observer.on_next(&mut value).is_continue());
+        observer.on_termination(Termination::Error(&mut error));
+        DisposeOnDrop::default()
+    });
+    let (checker, observer) = Checker::new();
+    let (count, callback) = counter();
+
+    let (mut on_next, on_termination) = observer.into_callbacks();
+    let _subscription = observable.do_finally(callback).subscribe_with_callback(
+        |value| {
+            on_next(*value);
+            *value *= 2;
+        },
+        |termination| match termination {
+            Termination::Completed => panic!(),
+            Termination::Error(error) => {
+                on_termination(Termination::Error(*error));
+                *error *= 2;
+            }
+        },
+    );
+
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Error(222));
+    assert_eq!(value, 222);
+    assert_eq!(error, 444);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_async() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+        let (count, callback) = counter();
+
+        let observable = observable.do_finally(callback);
+
+        let subscription = scheduler
+            .spawn(async move { observable.subscribe(observer) })
+            .await;
+        assert_eq!(checker.state(), State::Active);
+
+        let _sender = scheduler
+            .spawn(async move {
+                assert!(sender.on_next(111).is_continue());
+                sender
+            })
+            .await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+
+        scheduler.spawn(async { subscription.dispose() }).await;
+        scheduler.sleep(DURATION_10_MS).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+    });
+}
+
+#[test]
+fn test_subscribe_by_different_observer() {
+    let (channels, observable) = test_channels::<'_, i32, &str>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (count, callback) = counter();
+
+    let observable = observable.do_finally(callback);
+    let observable_1 = observable;
+    let observable_2 = observable_1.clone();
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
+
+    for index in 0..2 {
+        assert!(channels.on_next(index, 111).is_continue());
+        channels.on_termination(index, Termination::Error("error"));
+    }
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(count.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn test_unsub_on_next_by_take() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+    let (count, callback) = counter();
+
+    let observable = observable.do_finally(callback).take(1);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    assert!(sender.on_next(111).is_stop());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_stop_on_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::stopping_after(1);
+    let (count, callback) = counter();
+
+    let _subscription = observable.do_finally(callback).subscribe(observer);
+
+    // The source lets go of the observer that stopped it, which ends the stream.
+    assert!(sender.on_next(111).is_stop());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+    let (count, callback) = counter();
+
+    let _subscription = observable.do_finally(callback).subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+
+    sender.abandon();
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_multiple_operation() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+    let (checker, observer) = Checker::new();
+    let (count_1, callback_1) = counter();
+    let (count_2, callback_2) = counter();
+
+    let observable = observable
+        .do_finally(callback_1)
+        .map(|value| value * 2)
+        .do_finally(callback_2);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(checker.values(), [222]);
+
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(count_1.load(Ordering::SeqCst), 1);
+    assert_eq!(count_2.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_without_convenient_api() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+    let (checker, observer) = Checker::new();
+    let (count, callback) = counter();
+
+    let observable = DoFinally::new(observable, callback);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_lifetime_sub() {
+    // OK
+    let life_marker = TestStruct;
+    let _subscription;
+
+    // Error
+    // let _subscription;
+    // let life_marker = TestStruct;
+
+    {
+        let observable = Create::shared_boxed(|mut observer| {
+            assert!(observer.on_next(1).is_continue());
+            observer.on_termination(Termination::<String>::Completed);
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
+                life_marker.consume_ref();
+            }))
+        });
+
+        let observable = observable.do_finally(|| life_marker.consume_ref());
+
+        let (_, observer) = Checker::new();
+        _subscription = observable.subscribe(observer);
+    }
+}
+
+#[test]
+fn test_lifetime_or() {
+    // OK
+    let life_marker_2 = TestStruct;
+    let mut life_marker_1 = None;
+
+    // Error
+    // let mut life_marker_1 = None;
+    // let life_marker_2 = TestStruct;
+
+    {
+        let observable = Create::shared_boxed(|observer| {
+            life_marker_1 = Some(observer);
+            DisposeOnDrop::default()
+        });
+        let observable = observable.do_finally(|| {});
+
+        let (_, mut observer) = Checker::<_, Infallible>::new();
+        assert!(observer.on_next(Some(&life_marker_2)).is_continue());
+        let _subscription = observable.subscribe(observer);
+    }
+}
+
+#[test]
+fn test_fn() {
+    let s = TestStruct;
+
+    let observable = Just::new(1).do_finally(move || {
+        s.consume();
+    });
+
+    let _ = observable.subscribe_with_callback(|_| {}, |_| {});
+}
+
+#[test]
+fn test_clone() {
+    let observable = Create::shared_boxed(|mut observer| {
+        assert!(observer.on_next(TestStruct).is_continue());
+        observer.on_termination(Termination::Error(TestStruct));
+        DisposeOnDrop::default()
+    });
+    let observable = observable.do_finally(|| {});
+    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+}
+
+#[test]
+fn test_type_inference_with_subscribe() {
+    let observable = Just::new(1).do_finally(|| {});
+
+    let observable = observable.do_finally(|| {});
+    let (_, observer) = Checker::new();
+    let _ = observable.subscribe(observer);
+}
+
+#[test]
+fn test_type_inference_without_subscribe() {
+    let observable = Just::new(1).do_finally(|| {});
+
+    observable.do_finally(|| {});
+}

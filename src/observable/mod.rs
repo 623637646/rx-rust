@@ -102,12 +102,14 @@ use crate::{
             window_with_time_or_count::WindowWithTimeOrCount,
         },
         utility::{
-            delay::Delay, dematerialize::Dematerialize, do_after_disposal::DoAfterDisposal,
-            do_after_next::DoAfterNext, do_after_subscription::DoAfterSubscription,
-            do_after_termination::DoAfterTermination, do_before_disposal::DoBeforeDisposal,
-            do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
-            do_before_termination::DoBeforeTermination, hold::Hold, materialize::Materialize,
-            observe_on::ObserveOn, repeat_source::RepeatSource, subscribe_on::SubscribeOn,
+            delay::Delay, delay_subscription::DelaySubscription, dematerialize::Dematerialize,
+            do_after_disposal::DoAfterDisposal, do_after_next::DoAfterNext,
+            do_after_subscription::DoAfterSubscription, do_after_termination::DoAfterTermination,
+            do_before_disposal::DoBeforeDisposal, do_before_next::DoBeforeNext,
+            do_before_subscription::DoBeforeSubscription,
+            do_before_termination::DoBeforeTermination, do_finally::DoFinally, hold::Hold,
+            materialize::Materialize, observe_on::ObserveOn, repeat_source::RepeatSource,
+            stop_on_disposal::StopOnDisposal, subscribe_on::SubscribeOn,
             time_interval::TimeInterval, timeout::Timeout, timestamp::Timestamp,
         },
     },
@@ -411,6 +413,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Delay::new(self, delay, scheduler)
     }
 
+    /// Subscribes to the source only once `delay` has passed on the provided scheduler.
+    fn delay_subscription<S>(self, delay: Duration, scheduler: S) -> DelaySubscription<Self, S> {
+        DelaySubscription::new(self, delay, scheduler)
+    }
+
     /// Turns a stream of [`Event`](crate::observer::Event)s back into the events they describe.
     fn dematerialize(self) -> Dematerialize<Self> {
         Dematerialize::new(self)
@@ -515,6 +522,15 @@ pub trait ObservableExt: ObservableTypes + Sized {
         F: FnOnce(&Termination<Self::Error>),
     {
         DoBeforeTermination::new(self, callback)
+    }
+
+    /// Invokes a callback once the stream is over: terminated, disposed, or let go of by its
+    /// source, whichever comes first.
+    fn do_finally<F>(self, callback: F) -> DoFinally<Self, F>
+    where
+        F: FnOnce(),
+    {
+        DoFinally::new(self, callback)
     }
 
     /// Emits only the item at the given zero-based index and then completes.
@@ -1315,6 +1331,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
         StartWith::new(self, values)
     }
 
+    /// Delivers nothing more once the subscription is disposed, and answers [`Flow::Stop`] from
+    /// then on: for an [`Observer`] that may be disposed from inside one of its notifications
+    /// without answering [`Flow::Stop`] itself.
+    fn stop_on_disposal(self) -> StopOnDisposal<Self> {
+        StopOnDisposal::new(self)
+    }
+
     /// Subscribes to the source on the provided scheduler.
     fn subscribe_on<S>(self, scheduler: S) -> SubscribeOn<Self, S> {
         SubscribeOn::new(self, scheduler)
@@ -1325,6 +1348,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// `on_next` may return nothing, which keeps the source going, or a [`Flow`], which lets it
     /// end its own stream with [`Flow::Stop`]: the source then stops pushing — a synchronous one
     /// stops iterating — and drops the callbacks without calling `on_termination`.
+    ///
+    /// A callback that disposes its own subscription answers [`Flow::Stop`] as well: the
+    /// disposal alone does not hold back what an operator still has to send for the event it is
+    /// handling. [`stop_on_disposal`](Self::stop_on_disposal) does, where the callback cannot
+    /// answer.
     fn subscribe_with_callback<FN, FT, R>(
         self,
         on_next: FN,

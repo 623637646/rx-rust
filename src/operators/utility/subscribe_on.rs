@@ -13,6 +13,7 @@ use crate::{
     thread_mode::ThreadMode,
 };
 use educe::Educe;
+use std::time::Duration;
 
 /// Specifies the `Scheduler` on which an observer will subscribe to this observable.
 /// See <https://reactivex.io/documentation/operators/subscribeon.html>
@@ -92,6 +93,9 @@ use educe::Educe;
 pub struct SubscribeOn<OE, S> {
     source: OE,
     scheduler: S,
+    /// How long the task waits before it subscribes: `None` but for a
+    /// [`DelaySubscription`](crate::operators::utility::delay_subscription::DelaySubscription).
+    delay: Option<Duration>,
 }
 
 impl<OE, S> SubscribeOn<OE, S> {
@@ -99,7 +103,22 @@ impl<OE, S> SubscribeOn<OE, S> {
     /// [`ObservableExt::subscribe_on`](crate::observable::ObservableExt::subscribe_on) is the
     /// fluent form.
     pub fn new(source: OE, scheduler: S) -> Self {
-        Self { source, scheduler }
+        Self {
+            source,
+            scheduler,
+            delay: None,
+        }
+    }
+
+    /// A [`SubscribeOn`] whose task waits `delay` before it subscribes, what a
+    /// [`DelaySubscription`](crate::operators::utility::delay_subscription::DelaySubscription) is
+    /// built on.
+    pub(crate) fn delayed(source: OE, scheduler: S, delay: Duration) -> Self {
+        Self {
+            source,
+            scheduler,
+            delay: Some(delay),
+        }
     }
 }
 
@@ -114,7 +133,7 @@ type UpstreamSlot<OE, S> =
     ReplaceableDisposal<JoinedSchedulerModeOf<OE, S>, <OE as ObservableTypes>::Disposal>;
 
 /// The task of a [`SubscribeOn`]: the source, the observer, and where to put the subscription.
-type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
+pub(crate) type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
 
 impl<T, E, OE, S> ObservableTypes for SubscribeOn<OE, S>
 where
@@ -150,7 +169,7 @@ where
                 upstream_slot.replace_with(|| source.subscribe(observer));
             },
         );
-        let disposal = self.scheduler.run_task(task, None);
+        let disposal = self.scheduler.run_task(task, self.delay);
         disposal.then(upstream_slot).map_inner_into()
     }
 }

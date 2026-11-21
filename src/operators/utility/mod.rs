@@ -10,6 +10,7 @@
 //! the calls into an observer.
 
 pub mod delay;
+pub mod delay_subscription;
 pub mod dematerialize;
 pub mod do_after_disposal;
 pub mod do_after_next;
@@ -19,10 +20,12 @@ pub mod do_before_disposal;
 pub mod do_before_next;
 pub mod do_before_subscription;
 pub mod do_before_termination;
+pub mod do_finally;
 pub mod hold;
 pub mod materialize;
 pub mod observe_on;
 pub mod repeat_source;
+pub mod stop_on_disposal;
 pub mod subscribe_on;
 pub mod time_interval;
 pub mod timeout;

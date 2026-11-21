@@ -30,6 +30,13 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - `with_latest_from` combines primary emissions with the latest auxiliary values.
+- `stop_on_disposal` delivers nothing more to its observer once the subscription is disposed and
+  answers `Flow::Stop` from then on. A disposal alone does not stop an operator that sends
+  several notifications for one event of its source — the replay and the completion of
+  `take_last`, the last bundle of `buffer_with_count` — so this is for a subscription that may be
+  disposed from inside one of its notifications by something that cannot answer `Flow::Stop`.
+- `delay_subscription` defers subscribing on a scheduler, and `do_finally` runs cleanup once
+  the stream ends for any reason.
 - `CombineLatest`, `Zip`, `Merge` and `Concat` accept tuples of one to eight sources and expose
   `new_from_iter` for runtime-sized inputs. `Concat` pulls from an iterator one source at a time.
 - `max_concurrency(n)` limits concurrent subscriptions in `Merge`, `MergeAll` and `FlatMap`.
