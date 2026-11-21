@@ -43,6 +43,12 @@ same lock again runs under it:
   builder, outside the lock;
 - `Waker::wake`, which may run the task inline.
 
+A `Clone` that panics under a lock is not given special handling either. The clones already made
+in that call — the first items of a `CombineLatest` or `WithLatestFrom` combination, the values a
+`ReplaySubject` replays — and a value the update was replacing are dropped as the panic unwinds,
+under the lock. A `Drop` among them that reaches back into the pipeline takes a lock the thread
+already holds, as above. It takes a `Clone` that panics and a `Drop` that re-enters together.
+
 ### Why
 
 - **The re-entry is contrived.** It takes a `Clone`, `PartialEq` or clock written to emit to, or
@@ -81,6 +87,11 @@ same lock again runs under it:
   full bundle. Written and reverted.
 - **Cloning the waker before the lock in `ObservableTryFuture`**: an executor's waker cannot reach
   the operator's private lock. Written and reverted.
+- **Keeping the clones made before a panicking `Clone` outside the lock** (a `PartialClone`
+  buffer handed to `CloneLatest::clone_all` from outside the update, with the replaced value):
+  new code on every value for a panic path, and only in `CombineLatest` and `WithLatestFrom`,
+  while a replay, a subject's `Termination<E>` and every other multi-value clone would still drop
+  theirs under the lock. Written and reverted.
 - **Calling the subject factory outside the lock.** The factory needs `&mut C`, so the context
   would have to leave the controller for the call, behind a "creating" state that the other
   subscribers wait on — a wait the `Local` mode has no primitive for — or every racing subscriber
