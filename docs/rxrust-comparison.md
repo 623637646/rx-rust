@@ -86,10 +86,11 @@ of both, and was rejected:
   and `Just`, which are `Local`, would land on `TokioLocalScheduler`, and panic outside a
   `LocalSet`.
 - **It doubles the API.** Rust has neither overloading nor default arguments, so each place
-  that takes a scheduler — `delay`, `debounce`, `timeout`, `buffer_with_time`,
-  `buffer_with_time_or_count`, `window_with_time`, `window_with_time_or_count`, `observe_on`,
-  `subscribe_on`, `Interval`, `Timer`, `FromFuture`, `FromTryFuture`, `FromStream`,
-  `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked` — would need a second form.
+  that takes a scheduler — `delay`, `delay_subscription`, `debounce`, `audit`, `timeout`,
+  `buffer_with_time`, `buffer_with_time_or_count`, `window_with_time`,
+  `window_with_time_or_count`, `observe_on`, `subscribe_on`, `Interval`, `Timer`, `FromFuture`,
+  `FromTryFuture`, `FromStream`, `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked` — would
+  need a second form.
 - **The saving is small.** It is one argument, `TokioScheduler::current()`, and `TokioScheduler`
   already implements `Default`.
 
@@ -164,10 +165,11 @@ own (`LocalCtx<T, MyScheduler>`).
 Both cover most of the [ReactiveX operators](https://reactivex.io/documentation/operators.html).
 
 - **rx-rust only**: `catch`, `timeout`, `window`, `window_with_count`, `window_with_time`,
-  `window_with_time_or_count`, `amb_with`, `sequence_equal`, `materialize`, `dematerialize`,
+  `window_with_time_or_count`, `amb`, `sequence_equal`, `materialize`, `dematerialize`,
   `timestamp`, `time_interval`, `replay`, `share_replay`, `publish_last`, `ReplaySubject`,
   `AsyncSubject`.
-- **rxRust only**: `with_latest_from`, `pairwise`, `filter_map`, `delay_subscription`.
+- **rxRust only**: none. `with_latest_from`, `pairwise`, `filter_map` and `delay_subscription`
+  are in both.
 
 ## Which one to use
 
