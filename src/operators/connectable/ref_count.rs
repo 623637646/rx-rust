@@ -10,10 +10,7 @@ use super::connectable_controller::{
 };
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-        option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::Observer,
     subject::Subject,
@@ -336,7 +333,7 @@ where
 
 delegate_disposal!(
     Disposal<OE, S, C>,
-    ChainDisposal<<S as ObservableTypes>::Disposal, OptionDisposal<RefCountDisposal<OE, S, C>>>,
+    ChainDisposal<<S as ObservableTypes>::Disposal, Option<RefCountDisposal<OE, S, C>>>,
     where OE: ObservableTypes,
         S: ObservableTypes
 );
@@ -391,10 +388,7 @@ where
             (subject, Some((generation, decision)))
         });
         let Some((generation, decision)) = counted else {
-            return subject
-                .subscribe(observer)
-                .then(OptionDisposal::none())
-                .map_inner_into();
+            return subject.subscribe(observer).then(None).map_inner_into();
         };
         let disposal = RefCountDisposal {
             state: self.state,
@@ -414,9 +408,7 @@ where
         // counts the subscriber out.
         let guard = OnPanic::new(disposal, Disposable::dispose);
         settle(&guard.state().state, decision);
-        subscription
-            .then(OptionDisposal::some(guard.disarm()))
-            .map_inner_into()
+        subscription.then(Some(guard.disarm())).map_inner_into()
     }
 }
 

@@ -7,9 +7,7 @@ use super::internal::{
 };
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Observer, boxed_observer::ObserverMode},
     subject::unicast_subject::BoxedUnicastObservable,
@@ -85,7 +83,7 @@ impl<OE> WindowWithCountAndSkip<'_, OE> {
 
 delegate_disposal!(
     Disposal<D>,
-    OptionDisposal<D>,
+    Option<D>,
     where D: Disposable
 );
 
@@ -142,10 +140,7 @@ where
     let mut observer = CountObserver::new(Windows::new(), delegate, count, skip);
     if observer.open_first::<E>().is_stop() {
         // The first window ended the stream, so the source is never subscribed to.
-        return OptionDisposal::none().into_dispose_on_drop();
+        return None.into_dispose_on_drop();
     }
-    source
-        .subscribe(observer)
-        .map_inner(OptionDisposal::some)
-        .map_inner_into()
+    source.subscribe(observer).map_inner(Some).map_inner_into()
 }

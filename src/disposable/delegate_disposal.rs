@@ -31,20 +31,20 @@
 ///     delegate_disposal,
 ///     disposable::{
 ///         Disposable, DisposableExt, callback_disposal::CallbackDisposal,
-///         dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
+///         dispose_on_drop::DisposeOnDrop,
 ///     },
 /// };
 ///
 /// delegate_disposal!(
 ///     /// The disposal of my operator.
 ///     MyDisposal<F>,
-///     OptionDisposal<CallbackDisposal<F>>,
+///     Option<CallbackDisposal<F>>,
 ///     where F: FnOnce()
 /// );
 ///
 /// let mut disposed = false;
 /// let disposal: DisposeOnDrop<MyDisposal<_>> =
-///     OptionDisposal::some(CallbackDisposal::new(|| disposed = true)).into_dispose_on_drop();
+///     Some(CallbackDisposal::new(|| disposed = true)).into_dispose_on_drop();
 /// assert!(format!("{disposal:?}").contains("MyDisposal"));
 ///
 /// drop(disposal);

@@ -2,9 +2,7 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -126,7 +124,7 @@ impl<FR, FO> Using<FR, FO> {
 
 delegate_disposal!(
     Disposal<D>,
-    OptionDisposal<D>,
+    Option<D>,
     where D: Disposable
 );
 
@@ -155,12 +153,12 @@ where
                 let observable = (self.observable_factory)(&mut resource);
                 observable
                     .subscribe(UsingObserver { observer, resource })
-                    .map_inner(OptionDisposal::some)
+                    .map_inner(Some)
                     .map_inner_into()
             }
             Err(error) => {
                 observer.on_termination(Termination::Error(error));
-                OptionDisposal::none().into_dispose_on_drop()
+                None.into_dispose_on_drop()
             }
         }
     }

@@ -10,7 +10,7 @@
 //!   that order during unwinding if an element's disposal panics;
 //! - [`CallbackDisposal`](callback_disposal::CallbackDisposal) runs a closure;
 //! - [`ChainDisposal`] disposes two in order, [`EitherDisposal`] one of two;
-//! - [`OptionDisposal`] disposes a value that may be absent;
+//! - `Option` disposes the disposal it holds, if any;
 //! - [`ReplaceableDisposal`](replaceable_disposal::ReplaceableDisposal) is a cloneable slot for a
 //!   disposal that is built, or replaced, later;
 //! - [`BoxedDisposal`] erases the type.
@@ -38,7 +38,6 @@ mod delegate_disposal;
 pub mod dispose_on_drop;
 pub mod either_disposal;
 pub(crate) mod flag_disposal;
-pub mod option_disposal;
 pub mod replaceable_disposal;
 mod tuple_disposal;
 
@@ -48,7 +47,6 @@ use crate::disposable::{
     chain_disposal::ChainDisposal,
     dispose_on_drop::DisposeOnDrop,
     either_disposal::EitherDisposal,
-    option_disposal::OptionDisposal,
 };
 
 /// A resource that is released exactly once, by consuming it.
@@ -65,6 +63,28 @@ pub trait Disposable {
 /// `subscribe` returns, so their subscription has nothing to dispose of.
 impl Disposable for () {
     fn dispose(self) {}
+}
+
+/// An `Option` disposes the disposal it holds, and nothing when it is `None`: an operator that
+/// sometimes never subscribes to its source — `take(0)`, or a `start_with` whose prepended values
+/// already ended the stream — returns one, so that both paths share one type.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::disposable::{Disposable, callback_disposal::CallbackDisposal};
+///
+/// let mut disposed = false;
+/// Some(CallbackDisposal::new(|| disposed = true)).dispose();
+/// assert!(disposed);
+///
+/// None::<()>.dispose(); // Nothing to release.
+/// ```
+impl<D: Disposable> Disposable for Option<D> {
+    fn dispose(self) {
+        if let Some(disposal) = self {
+            disposal.dispose();
+        }
+    }
 }
 
 /// Combinators available on every [`Disposable`]. See the [module documentation](self).
@@ -95,11 +115,6 @@ pub trait DisposableExt: Disposable + Sized {
         D: Disposable + From<Self>,
     {
         DisposeOnDrop::new(self.into())
-    }
-
-    /// Wraps this disposal as the present case of an [`OptionDisposal`].
-    fn into_option(self) -> OptionDisposal<Self> {
-        OptionDisposal::some(self)
     }
 
     /// Chains `other` after this disposal, so that disposing the result disposes this one first.

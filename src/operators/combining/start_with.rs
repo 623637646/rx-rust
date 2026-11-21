@@ -3,9 +3,7 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::Observer,
 };
@@ -57,7 +55,7 @@ impl<OE, I> StartWith<OE, I> {
 
 delegate_disposal!(
     Disposal<D>,
-    OptionDisposal<D>,
+    Option<D>,
     where D: Disposable
 );
 
@@ -82,12 +80,12 @@ where
             if observer.on_next(value).is_stop() {
                 // The prepended values ended the stream, so the source is never subscribed to and
                 // there is nothing to dispose of.
-                return OptionDisposal::none().into_dispose_on_drop();
+                return None.into_dispose_on_drop();
             }
         }
         self.source
             .subscribe(observer)
-            .map_inner(OptionDisposal::some)
+            .map_inner(Some)
             .map_inner_into()
     }
 }

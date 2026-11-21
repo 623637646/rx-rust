@@ -2,9 +2,7 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -55,7 +53,7 @@ impl<OE> Take<OE> {
 
 delegate_disposal!(
     Disposal<M, D>,
-    OptionDisposal<subscribe_with_auto_dispose_on_termination::Disposal<M, D>>,
+    Option<subscribe_with_auto_dispose_on_termination::Disposal<M, D>>,
     where M: ThreadMode, D: Disposable
 );
 
@@ -81,7 +79,7 @@ where
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
-            OptionDisposal::none().into_dispose_on_drop()
+            None.into_dispose_on_drop()
         } else {
             subscribe_with_auto_dispose_on_termination(observer, |observer| {
                 self.source.subscribe(TakeObserver {
@@ -89,7 +87,7 @@ where
                     count: self.count,
                 })
             })
-            .map_inner(OptionDisposal::some)
+            .map_inner(Some)
             .map_inner_into()
         }
     }

@@ -94,8 +94,6 @@ impl<D: Disposable> Disposable for DisposeOnDrop<D> {
 
 impl<D: Disposable> Drop for DisposeOnDrop<D> {
     fn drop(&mut self) {
-        if let Some(disposal) = self.0.take() {
-            disposal.dispose();
-        }
+        self.0.take().dispose();
     }
 }

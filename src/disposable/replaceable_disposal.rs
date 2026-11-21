@@ -128,9 +128,7 @@ impl<M: ThreadMode, D: Disposable> ReplaceableDisposal<M, D> {
                 Some(disposable)
             }
         });
-        if let Some(disposable) = stale {
-            disposable.dispose();
-        }
+        stale.dispose();
     }
 }
 

@@ -3,10 +3,7 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-        option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
@@ -85,10 +82,8 @@ impl<OE, S> Timeout<OE, S> {
 }
 
 /// The source subscription a [`Timeout`] context owns: the timer, then the source.
-type TimeoutSources<OE, S> = ChainDisposal<
-    OptionDisposal<<S as SchedulerTypes>::Disposal>,
-    <OE as ObservableTypes>::Disposal,
->;
+type TimeoutSources<OE, S> =
+    ChainDisposal<Option<<S as SchedulerTypes>::Disposal>, <OE as ObservableTypes>::Disposal>;
 
 /// The task of a [`Timeout`] timer. It holds the context strongly, so that a source that lets go of
 /// its observer without a termination still times out. A disposal still releases the observer at
@@ -110,7 +105,7 @@ delegate_disposal!(
         T,
         Error<E>,
         Model,
-        ChainDisposal<OptionDisposal<SD>, D>,
+        ChainDisposal<Option<SD>, D>,
     >,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
@@ -214,7 +209,7 @@ fn setup_timer<M, T, E, OR, S, D>(
     context: &SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     scheduler: &S,
     deadline: Option<Instant>,
-) -> DisposeOnDrop<OptionDisposal<S::Disposal>>
+) -> DisposeOnDrop<Option<S::Disposal>>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
@@ -225,7 +220,7 @@ where
     // fires, and there is no timer to install. The source stays subscribed, so this step is not
     // the one to end the assembly.
     let Some(deadline) = deadline else {
-        return DisposeOnDrop::new(OptionDisposal::none());
+        return DisposeOnDrop::new(None);
     };
 
     // The context owns only the task's disposal, never the task, which its runtime owns: holding
@@ -250,5 +245,5 @@ where
             task,
             Some(deadline.saturating_duration_since(scheduler.clock().now())),
         )
-        .map_inner(OptionDisposal::some)
+        .map_inner(Some)
 }

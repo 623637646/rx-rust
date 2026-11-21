@@ -5,7 +5,7 @@ use crate::{
     delegate_disposal,
     disposable::{
         Disposable, dispose_on_drop::DisposeOnDrop, either_disposal::EitherDisposal,
-        option_disposal::OptionDisposal, replaceable_disposal::ReplaceableDisposal,
+        replaceable_disposal::ReplaceableDisposal,
     },
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
@@ -149,7 +149,7 @@ impl<OE, F> Retry<OE, F> {
 
 /// The subscription of one attempt: of the source (`D`), of an observable the callback returned
 /// (`D1`), or nothing once the callback gave up.
-type AttemptDisposal<D, D1> = OptionDisposal<EitherDisposal<D, D1>>;
+type AttemptDisposal<D, D1> = Option<EitherDisposal<D, D1>>;
 
 delegate_disposal!(
     Disposal<M, D, D1>,
@@ -201,7 +201,7 @@ where
                 replaceable_disposal.replace_with(|| {
                     self.source
                         .subscribe(observer)
-                        .map_inner(|disposal| OptionDisposal::some(EitherDisposal::Left(disposal)))
+                        .map_inner(|disposal| Some(EitherDisposal::Left(disposal)))
                 })
             },
             |(observer, error)| RetryObserver::retry_once(observer, error),
@@ -274,11 +274,11 @@ where
                     let resubscribe = self.resubscribe;
                     resubscribe
                         .subscribe(observable, self)
-                        .map_inner(|disposal| OptionDisposal::some(EitherDisposal::Right(disposal)))
+                        .map_inner(|disposal| Some(EitherDisposal::Right(disposal)))
                 }
                 RetryAction::Stop(error) => {
                     self.observer.on_termination(Termination::Error(error));
-                    DisposeOnDrop::new(OptionDisposal::none())
+                    DisposeOnDrop::new(None)
                 }
             })
     }

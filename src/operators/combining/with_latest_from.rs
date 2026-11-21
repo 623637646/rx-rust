@@ -3,7 +3,7 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
         IterSources, Observable, ObservableTypes, SourceSet,
         sources::{ObserverFamily, SourceOps, SubscribeBatch},
@@ -118,7 +118,7 @@ impl<OE, I> WithLatestFrom<OE, IterSources<I>> {
 /// made — the last subscribed is disposed first.
 type Subscriptions<OE, S> = (
     <S as SourceSet>::SubscriptionSlots,
-    OptionDisposal<DisposeOnDrop<<OE as ObservableTypes>::Disposal>>,
+    Option<DisposeOnDrop<<OE as ObservableTypes>::Disposal>>,
 );
 
 /// The mode of a [`WithLatestFrom`]: the source's and the other observables', joined.
@@ -149,10 +149,7 @@ where
         <S::Item as Combination>::After<OE::Item>,
         OE::Error,
         S::Item,
-        (
-            S::SubscriptionSlots,
-            OptionDisposal<DisposeOnDrop<OE::Disposal>>,
-        ),
+        (S::SubscriptionSlots, Option<DisposeOnDrop<OE::Disposal>>),
     >;
 }
 
@@ -190,12 +187,12 @@ where
         subscribe_with_context(observer, latest, |context: ContextOf<OE, S, OR>| {
             let others = others.subscribe_batch(&context);
             let source = if context.is_active() {
-                OptionDisposal::some(
+                Some(
                     self.source
                         .subscribe(WithLatestFromObserver(context.clone())),
                 )
             } else {
-                OptionDisposal::none()
+                None
             };
             others.map_inner(|others| (others, source))
         })
