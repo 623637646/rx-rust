@@ -41,7 +41,7 @@ Rules of thumb:
   need to know whether it builds.
 - Changing `src/operators/<group>/<name>.rs` → run `tests/<name>.rs`. The mapping is one-to-one for
   nearly every operator and subject. Changing a crate-private module such as
-  `src/utils/reservation_slot.rs` → run its unit tests, `cargo test --lib utils::reservation_slot`,
+  `src/utils/positional/slots.rs` → run its unit tests, `cargo test --lib utils::positional::slots`,
   plus the integration tests of the operators that use it.
 - Do not re-run a test that already passed unless the code under it changed.
 - `cargo nextest run` also takes the `--test` filters above, and fails tests that leak; prefer it
@@ -103,7 +103,121 @@ when they fail.
 - `src/observable/`, `src/observer/`, `src/disposable/` — core traits. `ObservableExt` in
   `src/observable/mod.rs` is the fluent API; every operator gets a method there, in alphabetical
   order, except that each `into_*` conversion sits next to its `Send` twin.
+  `observable::sources` is the crate-private machinery for source sets (decision 0012):
+  `SourceSet` and `SameItemSources` cover tuples and the `IterSources<I>` adapter. `SourceSet`
+  holds `Item`, `Error` and `Mode` — `Item` is a `Combination`, a type selection that asks
+  nothing of the items (no `Clone`, no `Send`) — and selects, hidden, the
+  resources operators keep for the sources: `Cursor`, `CollectedCursor` and `SubscriptionSlots`, the
+  one store of subscriptions — types only; the operations returning them are crate-private. Typed positions keep
+  tuple access static and list access dynamic; storage capabilities let both forms share operator
+  state machines. The source-independent structure lives in `utils::positional`. In
+  `combination`, the public, sealed `Combination` — a tuple of items or a `Vec` — only selects
+  types: `Latest` and `Queues` storage, and `After<T>`, the output after a primary item; its
+  operations are in the crate-private `LatestOps`, `QueueOps`, `PrependOps` and `CloneLatest`
+  (cloning only). `CombineLatest`, `WithLatestFrom` and `ForkJoin` keep the raw `Latest`
+  storage, replacing a position through `AtPosition`: the first two clone a combination out with
+  `CloneLatest::clone_all`, which answers `None`, cloning nothing, until every position has a
+  value; `ForkJoin`, which takes its one combination as its stream ends, moves it out with
+  `LatestOps::take_all`. An operator projects
+  what it selects from a source set in place (`<S::Item as Combination>::Queues`), with no
+  public alias for it. A struct generic over
+  the combination itself (`Model<T>`) bounds it by `Combination`; operators require the `*Ops`
+  traits where they operate on it, and `CloneLatest` only when subscribing needs a clone.
+  Completion and termination policy stay in each operator.
+  Zip shares one model and observer across tuple and iterator sources; its model owns the raw
+  queues, empty-queue count and completed-source combination budget. `QueueOps::pop_all`
+  removes one complete combination and counts the queues left empty in the same pass.
+  Subscribing the sources has two levels, and an operator names only the higher one that fits
+  (decision 0012, "Two levels"). The lower, `sources::subscribe`: every
+  operator subscribes its sources through a cursor and a `SourceSubscriber`, whose steps
+  `SubscribeEach` (`subscribe_each`, resumable) runs in order for each
+  source — `still_running`, `observer` (`None` skips the source: `When`'s), the subscription,
+  `store` — and keeps each subscription in the slot of its position. `SubscribeEach` is
+  implemented directly by each cursor, a tuple of `Option`s (per arity) and an `Enumerate`, both
+  running the steps of one source in the private `subscribe_one`. `Merge`, amb and `When` write
+  a subscriber. On top,
+  `sources::batch`: crate-private `SubscribeBatch` is the shared
+  case, a batch, for the collecting operators (`CombineLatest`, `Zip`, `ForkJoin`,
+  `WithLatestFrom`): one impl, over `CollectedCursor`, whose subscriber (`batch::Batch`)
+  subscribes each source with the observer `ObserverFamily::at` gives for its position while
+  `ObserverFamily::is_active` holds, and returns the guarded slots. A subscriber has one impl over
+  `K: Position`. The batch's cursor is collected, so advancing it runs no user code — in its
+  type: `into_collected_cursor()` returns a `CollectedCursor<C>`, which only the `sources`
+  backends make, and a cursor from `into_cursor()` has no `subscribe_batch`. The `Enumerate`
+  impl of `SubscribeEach` asks the subscriber's `still_running`, a required method, after each
+  `Iterator::next`, user code, before subscribing the source it returned; the tuple impl takes its
+  sources directly and never asks. The crate-private `SourceOps` holds the operations needing no observer:
+  `into_collected_cursor()` collects every source and returns a cursor over them with their
+  position count (decision 0012), and `into_cursor()` prepares the cursor of sources not collected. The collected
+  cursor is subscribed by `SubscribeBatch`; the operator creates its storage for the count
+  (`LatestOps::empty(n)`, `QueueOps::empty(n)`); Zip's count of empty queues starts at that
+  count.
+  `ReservationSlots<K>` and its generic `TupleSlots` and `ListSlots` implementations live in
+  `utils::positional::slots`: values need no disposal trait, and those left are dropped in reverse
+  position order. The source backends select these stores with `DisposeOnDrop` values. What goes
+  from a tuple's last element to the first reverses the tuple with `IntoReversed`, from
+  `utils::positional::tuple`, and drops the result, whose drop glue keeps that order during
+  unwinding: `TupleSlots`, the tuple `Disposable` (each disposal wrapped in a `DisposeOnDrop`
+  first) and `When`'s released inputs.
+  The single-position `ReservationSlot` is in the same module, with three states: `Reserved`,
+  `Filled` and `Released`, which is terminal and hands back whatever is filled afterwards.
+  `When` needs only the cursor; `Merge` and amb need both the cursor and slots. `Merge` is one
+  state machine, the `Driver` of the crate-private `combining/internal/merge.rs`, with or without
+  a limit: with none there is always room, so the
+  cursor never waits in the model, whose type then names `Infallible` in its place, and neither
+  the observers nor the disposal name the sources. Both forms release the subscription of a
+  source as it completes. `ConcatEager` is that driver over its sources made `IndexedSource`s
+  (`IndexSources`, in `combining/internal/reorder.rs`), which send each value with their
+  position, and `ReorderObserver` as the merge's observer: the driver knows nothing of positions.
+  None of them requires batch resources. The three public strategy/resource traits are hidden;
+  observer bounds stay on subscription capabilities. All public collection traits, aliases and
+  adapters are re-exported by `observable`. Amb's winner swaps the slots for fresh ones and moves
+  its own subscription across at its typed position.
+  The tuple `Disposable` implementations live in the private `disposable::tuple_disposal` module.
+  Every tuple impl, these and `When`'s included, is generated over the arities of
+  `utils::positional::tuple::for_each_arity!`. A cursor — a tuple of `Option`s or an
+  enumerated iterator — hands each source, with its position, to the subscriber and retains
+  the remaining sources when it breaks. A subscriber that cannot break, its break
+  type `Infallible`, is handed every source by one `subscribe_each` (`When`'s). A subscriber is
+  borrowed `&mut`, so what it gathers is a plain field (the batch's slots, amb's `subscribed`),
+  with no `RefCell` or `Cell`; one that is a shared handle is implemented for `&Handle`
+  (`Merge`'s `&Driver`). The positions,
+  `TupleIndex` at compile time and `usize` at run time (both a `Position`), and `AtPosition`, the
+  typed access to an element of a tuple or a `Vec` at one, live in `utils::positional::position`.
 - `src/operators/<category>/<name>.rs` — one operator per file, categories mirror reactivex.io.
+  Every file directly in a category is a public operator; what is not — the crate-private
+  machinery several operators share — lives in `<category>/internal/`, without a `_core` suffix:
+  `combining/internal/` (`flatten`, `merge`, `join`, `reorder`), `filtering/internal/`
+  (`deadline`, the pending value and timer of `debounce` and `audit`, which differ only in whether
+  an item moves the deadline: a change to it runs `--test debounce --test audit`) and
+  `transforming/internal/` (`count`, `time_shift`, `time_or_count`, `boundary`, `group`,
+  `bundle`, `window`, `overlap`, `timetable`). The twelve buffer and window operators are four state machines, one per way their
+  groups open and close — `count`, `time_shift`, `time_or_count`, `boundary` — each generic over
+  the `Groups` of `group.rs`: the `Bundles` of `bundle.rs`, kept under the machine's lock, or the
+  `Windows` of `window.rs`, every change an `Action` for its `DelegateObserver` outside it
+  (decision 0014). `group.rs` holds only what the machines share; each kind of group is a module
+  of its own.
+  `buffer_with_count`, `window_with_count`, `buffer_with_time` and `window_with_time` are the
+  `*_and_skip` / `*_and_shift` operators with the step equal to the length and `no_overlap` as the
+  duplicate, so that they do not ask for `Clone`. A change to that machinery runs its unit tests,
+  `cargo test --lib transforming::internal` and the integration tests of the twelve operators.
+  The operators that flatten an observable of observables — `merge_all`, `concat_all`,
+  `switch`, `exhaust_all` and their `*_map` forms (`flat_map` for `merge_all`) — are one state
+  machine, the crate-private `combining/internal/flatten.rs`, set apart only by the store of the
+  inner observables that find no place (decision 0013); `concat_eager_all` and
+  `concat_eager_map` are that machine with an observer that puts the values back in order. A
+  change to it runs its unit tests, `cargo test --lib combining::internal::flatten`, and the
+  integration tests of those ten operators.
+  The operators that merge a tuple or a list — `merge`, `concat_eager`, and `concat` over a list,
+  a `Merge` of one at a time — are the `Driver` of `combining/internal/merge.rs` (decision
+  0012); a change to it runs `--test merge --test concat --test concat_eager`. The observer that
+  puts values back in order, with the observer that sends each source's position and the
+  subscription of an observable of observables over `flatten` (`subscribe_eager`), is
+  `combining/internal/reorder.rs`, shared by `concat_eager_all`, `concat_eager_map` and
+  `concat_eager`; a change to it runs
+  `--test concat_eager --test concat_eager_all --test concat_eager_map`.
+  A limit is a method on the operator, not a constructor: `merge_all().max_concurrency(n)`,
+  `Merge::new(sources).max_concurrency(n)`.
 - `src/subject/` — the subjects, the hot sources.
 - `src/thread_mode/` — the bottom layer, depending on nothing else in the crate: `ThreadMode`,
   `Local`, `Shared`, `Joined` (the mode of an operator with several sources), the pointer, weak
@@ -121,13 +235,14 @@ when they fail.
 - `src/utils/` — shared machinery. Public modules are for users writing their own operators:
   `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`.
   A module shared inside the crate only is `pub(crate) mod`: `serialized_delivery`,
-  `serialized_multicast`, `flagged_lock`, `subscribe_fn`, `pending_events`, `reservation_slot`,
-  `reservation_map`, `id_generator`, `on_panic`, `lazy_subscription`. A module stays public only
-  when a public signature names its items or a user writing an operator needs them; otherwise it
-  is `pub(crate)`, and so is everything in it — the crate's `#![warn(unreachable_pub)]` is what
-  catches a `pub` left behind in one, and CI denies warnings. The few items of such a module that
-  a public signature does name stay `pub` and are re-exported by the public module naming them
-  (`serialized_delivery::UpdateOutcome` from `subscribe_with_context`).
+  `serialized_multicast`, `flagged_lock`, `subscribe_fn`, `pending_events`,
+  `reservation_map`, `id_generator`, `on_panic`, `lazy_subscription`, `positional`. A
+  module stays public only when a public signature names its items or a user writing an operator
+  needs them; otherwise it is `pub(crate)`, and so is everything in it — the crate's
+  `#![warn(unreachable_pub)]` is what catches a `pub` left behind in one, and CI denies warnings.
+  The few items of such a module that a public signature does name stay `pub` and are re-exported
+  by the public module naming them (`serialized_delivery::UpdateOutcome` from
+  `subscribe_with_context`).
 - `tests/<name>.rs` — integration tests, one file per operator; shared helpers in
   `tests/tests_utils/`. Crate-private modules carry their own unit tests (see below).
 
@@ -184,14 +299,16 @@ when they fail.
   documentation and needs no doc comment (the crate denies `missing_docs`, which is what lists the
   ones that lack both). What sits only in
   its fields or in the where-clauses of trait impls — the model, the context, scheduler task and
-  mode aliases — stays private: privacy does not check those where-clauses. `Mode` is the source's, `JoinedModeOf<A, B>` for several sources, `JoinedSchedulerModeOf<OE, S>` for a source and a scheduler, or the scheduler's alone (`timer`, `observe_on`). Ask for
+  mode aliases — stays private: privacy does not check those where-clauses. `Mode` is the source's, `JoinedModeOf<A, B>` for two sources, `<S as SourceSet>::Mode` for a tuple or a list of them (decision 0012), `JoinedSchedulerModeOf<OE, S>` for a source and a scheduler, or the scheduler's alone (`timer`, `observe_on`). Ask for
   `OR: IntoBoxedObserver<'a, T, E, M>` only where the observer is boxed (a subject, `create`, a
   hook), box it with `M::boxed(observer)`, and bound a generic mode there by `M: ObserverMode`.
   Inside the bounds of the impl being written, project qualified —
   `<OE as ObservableTypes>::Disposal`, `<OE as ObservableTypes>::Mode` — not `OE::Disposal` (the
   shorthand is a cycle error there). An observer that re-subscribes with itself (`retry`,
-  `concat_all`) carries a `utils::subscribe_fn::SubscribeFn` created where the operator is
-  subscribed, instead of bounding its own `Observer` impl. See
+  `repeat_source`) carries a `utils::subscribe_fn::SubscribeFn` created where the operator is
+  subscribed, instead of bounding its own `Observer` impl; the inner observers of the flattening
+  operators carry the same capture as a plain function pointer, typed by what they queue
+  (`Infallible` for a store that queues nothing). See
   `docs/decisions/0002-observable-types-and-thread-mode.md`.
 - **The `Disposal`** is one of three: one passed through — the source's or scheduler's
   (`OE::Disposal`), or that of the operator it is built on (`switch_map` takes `switch::Disposal`)
@@ -267,7 +384,7 @@ when they fail.
   `PublishSubject::<_, Infallible, _>::local()`, not `PublishSubject::<&str, Infallible, _>`. A
   subject's error type is the usual exception, since nothing but a termination names it, unless
   the subject is joined to a source that fixes it
-  (`Just::new(1).merge_with(PublishSubject::local())`).
+  (`Just::new(1).merge(PublishSubject::local())`).
   Check each change by running the doctest or example it is in — and see that the doctest filter
   matched some test, since one that matches none passes. A `compile_fail` example changes together
   with its twin, and must still fail for its own reason, not for a type annotation now missing.
@@ -280,9 +397,9 @@ when they fail.
   answer reaches the source; an operator that ends its own stream returns `Stop`. A context-based
   operator gets it from the `Updated` an `update` answers (`.flow()`) or from `send_next`;
   `send_termination` answers nothing, since a termination is the last event anyway. The model
-  stops its own caller with `UpdateOutcome::answering_stop` (a superseded `switch` inner), never
+  stops its own caller with `UpdateOutcome::answering_stop` (a replaced `switch` inner), never
   with a `Flow` in the update's result. An `on_next` that does more work after its first update —
-  subscribing an inner observable or a duration, as `merge_all`, `switch` and `join` do — takes
+  subscribing an inner observable or a duration, as the flattening operators and `join` do — takes
   only the result of the earlier ones (`.result()`, or a match on `Updated::Ran { result, flow }` to
   skip the work once the flow says `Stop`), and answers what its *last* context call says, the
   `.flow()` of an `update` or a `send_next`: that work may have ended the stream, and a source still
@@ -295,7 +412,11 @@ when they fail.
   ended. No `is_active` check in front of that work: it costs a second lock on every value, and
   narrows a window it cannot close, since the work runs outside the lock anyway. The
   `#[must_use]` is what catches a
-  forgotten forward — `let _ =` only where ignoring it is deliberate. User callbacks
+  forgotten forward — `let _ =` only where ignoring it is deliberate. A disposal does not pass
+  through the operators — it goes from the subscription to the source — so an operator that sends
+  several notifications for one event (`take_last`, `buffer_with_count`) is stopped between two of
+  them by the flow alone, and carries no flag of its own for it: the explicit `stop_on_disposal`
+  operator turns a disposal into a `Stop` at the end of a chain that needs it. User callbacks
   (`subscribe_with_callback`) return `()` or a `Flow`, via `observer::IntoFlow` (a
   diverging `|_| unreachable!()` needs `-> ()`).
 
