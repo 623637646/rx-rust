@@ -169,17 +169,12 @@ fn test_completed_different_repeat_observable() {
     let observable = observable.repeat_source(move || {
         round += 1;
         match round {
-            1 => Some(
-                Just::new(222)
-                    .with_error_type()
-                    .into_shared()
-                    .into_send_boxed(),
-            ),
+            1 => Some(Just::new(222).with_error_type().into_shared().into_boxed()),
             2 => Some(
                 FromIter::new([333, 444])
                     .with_error_type()
                     .into_shared()
-                    .into_send_boxed(),
+                    .into_boxed(),
             ),
             3 => None,
             _ => panic!(),
@@ -216,9 +211,9 @@ fn test_completed_synchronous_complete() {
                     .with_item_type()
                     .with_error_type()
                     .into_shared()
-                    .into_send_boxed(),
+                    .into_boxed(),
             ),
-            1 => Some(source.clone().into_send_boxed()),
+            1 => Some(source.clone().into_boxed()),
             _ => None,
         });
 
@@ -277,7 +272,7 @@ fn completing(
         nesting.current.fetch_sub(1, Ordering::SeqCst);
         DisposeOnDrop::default()
     })
-    .into_send_boxed()
+    .into_boxed()
 }
 
 #[test]
@@ -312,12 +307,7 @@ fn test_error_after_many_synchronous_completions() {
         if round <= SYNCHRONOUS_COMPLETIONS {
             Some(completing(round, &nesting_of_callback))
         } else {
-            Some(
-                Throw::new(-1)
-                    .with_item_type()
-                    .into_shared()
-                    .into_send_boxed(),
-            )
+            Some(Throw::new(-1).with_item_type().into_shared().into_boxed())
         }
     });
     let _subscription = observable.subscribe(observer);
@@ -404,7 +394,7 @@ fn test_panicking_source_after_its_synchronous_completion() {
                     drop(fuse.take_value());
                     DisposeOnDrop::default()
                 })
-                .into_send_boxed(),
+                .into_boxed(),
             )
         });
         let _subscription = observable.subscribe(observer);
@@ -444,7 +434,7 @@ fn logged(
             log.with_mut(|log| log.push(format!("dispose {index}")));
         }))
     })
-    .into_send_boxed()
+    .into_boxed()
 }
 
 #[test]
@@ -858,7 +848,7 @@ fn test_subscribe_by_different_observer() {
                 .with_error_type()
                 .into_shared()
                 .merge(subject_cloned.clone())
-                .into_send_boxed()
+                .into_boxed()
         })
     });
     // Each clone counts its own rounds.

@@ -1675,13 +1675,13 @@ fn test_race_condition_next_after_unsub() {
         assert!(sender_1_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let sender_2_cloned = sender_2.clone();
     let observable_2 = Create::shared_boxed(move |observer| {
         assert!(sender_2_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let (checker, observer) = Checker::new();
 
     let mut observable_1_option = Some(observable_1);
@@ -1741,13 +1741,13 @@ fn test_race_condition_terminate_after_unsub() {
         assert!(sender_1_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let sender_2_cloned = sender_2.clone();
     let observable_2 = Create::shared_boxed(move |observer| {
         assert!(sender_2_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let (checker, observer) = Checker::new();
 
     let mut observable_1_option = Some(observable_1);

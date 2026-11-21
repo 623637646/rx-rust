@@ -2117,7 +2117,7 @@ fn test_send_boxed_local_source() {
         PublishSubject::<'_, i32, Infallible, _>::shared()
     })
     .ref_count()
-    .into_send_boxed();
+    .into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);

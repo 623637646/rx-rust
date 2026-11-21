@@ -322,7 +322,8 @@ when they fail.
   (`subscribe_with_auto_dispose_on_termination::{ObserverOf, DisposalOf}`), `JoinedModeOf<A, B>` and
   `ChainDisposalOf<A, B>` in `observable` for an operator with two sources, `JoinedSchedulerModeOf<OE, S>`
   and `ChainSchedulerDisposalOf<S, OE>` (the task's disposal, then the source's) for one with a
-  source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a source's mode. All
+  source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a source's mode, `BoxedObservableOf` /
+  `CloneableBoxedObservableOf` for what `into_boxed` / `into_cloneable_boxed` erase a source into. All
   of them are `pub`, so that an operator written outside the crate uses the same shorthand. Use
   them rather than spelling the projections out. Such an alias is written with qualified projections
   (`<OE as ObservableTypes>::Mode`), so it can appear in the bounds of `OE` itself, and it can
@@ -452,7 +453,7 @@ Pick the source by what the test needs from it, not by habit:
 
 Tests build in the `Shared` mode, the mode of every `TestScheduler`, through the library's own
 constructors: `Create::shared_boxed`, `PublishSubject::shared()` and the other subjects'
-`shared`, `unicast_subject::shared`; erase with `into_send_boxed` / `SendBoxedObserver`. A source
+`shared`, `unicast_subject::shared`; erase with `into_boxed` / `SendBoxedObserver`. A source
 of another mode that must sit among erased `Shared` observables of one type gets `.into_shared()`.
 Name the mode (`Shared`, from `rx_rust::thread_mode`) only where inference cannot reach it, and
 write `_` in `let` annotations. Keep test state in plain `Arc<Mutex<_>>`, reached through

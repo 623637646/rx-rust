@@ -167,9 +167,11 @@ uses `Arc<Mutex<_>>` and can be driven from several threads. Sources pick their 
 plain values such as `Just` or `FromIter` are `Local`), an operator with several sources is
 `Shared` as soon as one of them is, and a scheduler fixes the mode of what runs on it.
 
-Erasing the type is explicit: `into_boxed` / `into_cloneable_boxed`, or `into_send_boxed` /
-`into_send_cloneable_boxed` for a box that must be `Send`. The erased type keeps the mode;
-`into_shared()` lifts a `Local` source to share an erased type with `Shared` ones.
+Erasing the type takes the box the mode picks: `into_boxed` / `into_cloneable_boxed` give a
+`BoxedObservable` / `CloneableBoxedObservable` for a `Local` source and their `Send` twins,
+`SendBoxedObservable` / `SendCloneableBoxedObservable`, for a `Shared` one. The erased type keeps
+the mode; `into_shared()` lifts a `Local` source to share an erased type with `Shared` ones, and
+`SendBoxedObservable::new` puts a `Local` source that is `Send` into the `Send` box.
 
 Some user code runs under an internal lock — the `Clone` and `PartialEq` of items and errors, a
 custom `Clock::now`, a connectable's subject factory — and must not reach back into the same
@@ -395,7 +397,7 @@ Error handling              | `catch`, `map_err`, `retry`
 Utility                     | `delay`, `delay_subscription`, `timeout`, `timestamp`, `time_interval`, `hold`, `do_finally`, `stop_on_disposal`, `Using`, `repeat_source`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
 Connectable                 | `multicast`, `publish`, `publish_behavior`, `publish_last`, `replay`, `share`, `share_behavior`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
 Async conversion            | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`
-Type conversion             | `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
+Type conversion             | `into_boxed`, `into_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
 Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
 
 ## Contributing

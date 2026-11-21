@@ -360,13 +360,13 @@ fn test_completed_with_synchronous_inner_chain() {
     let _subscription = subject.clone().concat_all().subscribe(observer);
     assert!(
         subject
-            .on_next(first.clone().into_send_cloneable_boxed())
+            .on_next(first.clone().into_cloneable_boxed())
             .is_continue()
     );
     for value in 0..10_000 {
         assert!(
             subject
-                .on_next(Just::new(value).into_shared().into_send_cloneable_boxed())
+                .on_next(Just::new(value).into_shared().into_cloneable_boxed())
                 .is_continue()
         );
     }
@@ -1461,7 +1461,7 @@ fn test_next_on_inner_sub_from_another_thread() {
 
     assert!(
         subject
-            .on_next(subject_1.clone().into_send_cloneable_boxed())
+            .on_next(subject_1.clone().into_cloneable_boxed())
             .is_continue()
     );
     let subject_cloned = subject.clone();
@@ -1475,7 +1475,7 @@ fn test_next_on_inner_sub_from_another_thread() {
             std::thread::spawn(move || {
                 assert!(
                     subject_cloned
-                        .on_next(subject_3_cloned.into_send_cloneable_boxed())
+                        .on_next(subject_3_cloned.into_cloneable_boxed())
                         .is_continue()
                 );
             })
@@ -1485,13 +1485,13 @@ fn test_next_on_inner_sub_from_another_thread() {
         });
     assert!(
         subject
-            .on_next(observable_2.into_send_cloneable_boxed())
+            .on_next(observable_2.into_cloneable_boxed())
             .is_continue()
     );
     // This queued inner must run before the one emitted during observable_2.subscribe().
     assert!(
         subject
-            .on_next(Just::new(222).into_shared().into_send_cloneable_boxed())
+            .on_next(Just::new(222).into_shared().into_cloneable_boxed())
             .is_continue()
     );
     assert!(checker.values().is_empty());
@@ -1532,7 +1532,7 @@ fn test_next_on_inner_sub() {
 
     assert!(
         subject
-            .on_next(subject_1.clone().into_send_cloneable_boxed())
+            .on_next(subject_1.clone().into_cloneable_boxed())
             .is_continue()
     );
 
@@ -1543,18 +1543,18 @@ fn test_next_on_inner_sub() {
             // Terminates synchronously, and only then lets the source emit the next observable — on
             // this very thread, from inside the first inner observable's own termination.
             observer.on_termination(Termination::Completed);
-            let _ = subject_cloned.on_next(subject_3_cloned.into_send_cloneable_boxed());
+            let _ = subject_cloned.on_next(subject_3_cloned.into_cloneable_boxed());
             DisposeOnDrop::default()
         });
     assert!(
         subject
-            .on_next(observable_2.into_send_cloneable_boxed())
+            .on_next(observable_2.into_cloneable_boxed())
             .is_continue()
     );
 
     assert!(
         subject
-            .on_next(Just::new(222).into_shared().into_send_cloneable_boxed())
+            .on_next(Just::new(222).into_shared().into_cloneable_boxed())
             .is_continue()
     );
 
@@ -1591,7 +1591,7 @@ fn test_complete_on_inner_sub() {
     let _subscription = subject.clone().concat_all().subscribe(observer);
     assert!(
         subject
-            .on_next(first.clone().into_send_cloneable_boxed())
+            .on_next(first.clone().into_cloneable_boxed())
             .is_continue()
     );
 
@@ -1610,11 +1610,7 @@ fn test_complete_on_inner_sub() {
             disposed_inner.store(true, Ordering::SeqCst);
         }))
     });
-    assert!(
-        subject
-            .on_next(inner.into_send_cloneable_boxed())
-            .is_continue()
-    );
+    assert!(subject.on_next(inner.into_cloneable_boxed()).is_continue());
 
     first.on_termination(Termination::Completed);
     assert!(checker.values().is_empty());
@@ -1728,7 +1724,7 @@ fn test_inner_observer_pending_subscription_when_terminated() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
 
-    assert!(sender.on_next(observable_1.into_send_boxed()).is_continue());
+    assert!(sender.on_next(observable_1.into_boxed()).is_continue());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1736,12 +1732,12 @@ fn test_inner_observer_pending_subscription_when_terminated() {
 
     assert!(
         sender
-            .on_next(Just::new(-1).into_shared().into_send_boxed())
+            .on_next(Just::new(-1).into_shared().into_boxed())
             .is_continue()
     );
     assert!(
         sender
-            .on_next(Just::new(-2).into_shared().into_send_boxed())
+            .on_next(Just::new(-2).into_shared().into_boxed())
             .is_continue()
     );
     assert!(checker.values().is_empty());
@@ -1937,7 +1933,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
             drop(panic_on_drop);
             DisposeOnDrop::default()
         });
-        let _ = sender.on_next(failing.into_send_boxed());
+        let _ = sender.on_next(failing.into_boxed());
     });
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
     assert!(checker.values().is_empty());
@@ -1953,7 +1949,7 @@ fn test_unsubscribe_on_panic_while_subscribing_queued() {
     let (first_sender, first, first_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
     let _subscription = source.concat_all().subscribe(observer);
-    assert!(sender.on_next(first.into_send_boxed()).is_continue());
+    assert!(sender.on_next(first.into_boxed()).is_continue());
 
     // The same for one that waited in the queue, subscribed by the completion of the one before
     // it.
@@ -1962,7 +1958,7 @@ fn test_unsubscribe_on_panic_while_subscribing_queued() {
             drop(panic_on_drop);
             DisposeOnDrop::default()
         });
-        assert!(sender.on_next(failing.into_send_boxed()).is_continue());
+        assert!(sender.on_next(failing.into_boxed()).is_continue());
         first_sender.on_termination(Termination::Completed);
     });
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
@@ -1986,8 +1982,8 @@ fn test_unsubscribe_on_panic_while_releasing() {
     // already reserved: the stream is given up, and the queued one is never subscribed.
     expect_panic_on_drop(|panic_on_drop| {
         let first = first.do_after_disposal(move || drop(panic_on_drop));
-        assert!(sender.on_next(first.into_send_boxed()).is_continue());
-        assert!(sender.on_next(last.into_send_boxed()).is_continue());
+        assert!(sender.on_next(first.into_boxed()).is_continue());
+        assert!(sender.on_next(last.into_boxed()).is_continue());
         first_sender.on_termination(Termination::Completed);
     });
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);

@@ -1779,13 +1779,13 @@ mod max_concurrency {
             .subscribe(observer);
         assert!(
             subject
-                .on_next(first.clone().into_send_cloneable_boxed())
+                .on_next(first.clone().into_cloneable_boxed())
                 .is_continue()
         );
         for value in 0..10_000 {
             assert!(
                 subject
-                    .on_next(Just::new(value).into_shared().into_send_cloneable_boxed())
+                    .on_next(Just::new(value).into_shared().into_cloneable_boxed())
                     .is_continue()
             );
         }
@@ -2120,7 +2120,7 @@ mod max_concurrency {
                 // The source emits the next inner while this one is still being subscribed to: it
                 // waits for this one, which completes as it is subscribed.
                 let _ = observer.on_next(111);
-                let _ = subject_cloned.on_next(subject_2_cloned.into_send_cloneable_boxed());
+                let _ = subject_cloned.on_next(subject_2_cloned.into_cloneable_boxed());
                 observer.on_termination(Termination::Completed);
                 DisposeOnDrop::default()
             },
@@ -2128,7 +2128,7 @@ mod max_concurrency {
 
         assert!(
             subject
-                .on_next(observable_1.into_send_cloneable_boxed())
+                .on_next(observable_1.into_cloneable_boxed())
                 .is_continue()
         );
         assert_eq!(checker.values(), [111]);
@@ -2147,7 +2147,7 @@ mod max_concurrency {
         let (checker, observer) = Checker::new();
         let _subscription = source.merge_all().max_concurrency(ONE).subscribe(observer);
 
-        assert!(sender.on_next(0, first.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, first.into_boxed()).is_continue());
         let reentrant_sender = sender.clone();
         let second =
             Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
@@ -2156,17 +2156,17 @@ mod max_concurrency {
                 // place, but the builder must not then start the fourth inner as well.
                 assert!(
                     reentrant_sender
-                        .on_next(0, third.into_send_boxed())
+                        .on_next(0, third.into_boxed())
                         .is_continue()
                 );
                 assert!(
                     reentrant_sender
-                        .on_next(0, fourth.into_send_boxed())
+                        .on_next(0, fourth.into_boxed())
                         .is_continue()
                 );
                 DisposeOnDrop::default()
             });
-        assert!(sender.on_next(0, second.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, second.into_boxed()).is_continue());
         first_sender.on_termination(Termination::Completed);
 
         assert_eq!(third_checker.state(), ChannelState::Subscribed);
@@ -2251,12 +2251,12 @@ mod max_concurrency {
             .subscribe(observer);
         assert!(
             sender
-                .on_next(0, delivering_inner.into_send_boxed())
+                .on_next(0, delivering_inner.into_boxed())
                 .is_continue()
         );
         assert!(
             sender
-                .on_next(0, completing_inner.into_send_boxed())
+                .on_next(0, completing_inner.into_boxed())
                 .is_continue()
         );
         let error_sender = sender.clone();
@@ -2266,16 +2266,8 @@ mod max_concurrency {
                 observer.on_termination(Termination::Completed);
                 DisposeOnDrop::default()
             });
-        assert!(
-            sender
-                .on_next(0, error_inner.into_send_boxed())
-                .is_continue()
-        );
-        assert!(
-            sender
-                .on_next(0, queued_inner.into_send_boxed())
-                .is_continue()
-        );
+        assert!(sender.on_next(0, error_inner.into_boxed()).is_continue());
+        assert!(sender.on_next(0, queued_inner.into_boxed()).is_continue());
 
         let deliverer = thread::spawn(move || delivering_sender.on_next(111));
         started.recv_timeout(TIMEOUT).unwrap();
@@ -2623,8 +2615,8 @@ mod max_concurrency {
         let first = first.do_after_disposal(move || {
             error_sender.on_termination(0, Termination::Error("error"));
         });
-        assert!(sender.on_next(0, first.into_send_boxed()).is_continue());
-        assert!(sender.on_next(0, last.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, first.into_boxed()).is_continue());
+        assert!(sender.on_next(0, last.into_boxed()).is_continue());
 
         // Disposing the completed inner subscription ends the stream, after the update that
         // took the next observable out of the queue. That one is still subscribed, like one
@@ -2650,13 +2642,9 @@ mod max_concurrency {
                 error_sender.on_termination(0, Termination::Error("error"));
             }))
         });
-        assert!(sender.on_next(0, first.into_send_boxed()).is_continue());
-        assert!(
-            sender
-                .on_next(0, completing.into_send_boxed())
-                .is_continue()
-        );
-        assert!(sender.on_next(0, last.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, first.into_boxed()).is_continue());
+        assert!(sender.on_next(0, completing.into_boxed()).is_continue());
+        assert!(sender.on_next(0, last.into_boxed()).is_continue());
 
         // Disposing the completed inner subscription ends the stream, after the update that
         // took the next observable out of the queue. That one is still subscribed, like one
@@ -2681,9 +2669,9 @@ mod max_concurrency {
 
         expect_panic_on_drop(|panic_on_drop| {
             let first = first.do_after_disposal(move || drop(panic_on_drop));
-            assert!(sender.on_next(first.into_send_boxed()).is_continue());
-            assert!(sender.on_next(second.into_send_boxed()).is_continue());
-            assert!(sender.on_next(last.into_send_boxed()).is_continue());
+            assert!(sender.on_next(first.into_boxed()).is_continue());
+            assert!(sender.on_next(second.into_boxed()).is_continue());
+            assert!(sender.on_next(last.into_boxed()).is_continue());
             first_sender.on_termination(Termination::Completed);
         });
         assert_eq!(source_checker.state(), ChannelState::Unsubscribed);

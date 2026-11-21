@@ -1447,14 +1447,14 @@ fn test_next_on_inner_sub() {
         move |mut observer: SendBoxedObserver<'_, i32, Infallible>| {
             // The source emits the next inner while this one is still being subscribed to.
             let _ = observer.on_next(111);
-            let _ = subject_cloned.on_next(subject_2_cloned.into_send_cloneable_boxed());
+            let _ = subject_cloned.on_next(subject_2_cloned.into_cloneable_boxed());
             DisposeOnDrop::default()
         },
     );
 
     assert!(
         subject
-            .on_next(observable_1.into_send_cloneable_boxed())
+            .on_next(observable_1.into_cloneable_boxed())
             .is_continue()
     );
     assert_eq!(checker.values(), [111]);
@@ -1579,7 +1579,7 @@ fn test_stale_error_dropped_outside_lock() {
         old_observer_on_subscribe.replace_value(Some(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let (mut inner_sender, inner_source, _) = test_channel::<i32, Error>();
     let (mut sender, source, _) = test_channel();
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -1590,7 +1590,7 @@ fn test_stale_error_dropped_outside_lock() {
     );
 
     assert!(sender.on_next(old_source).is_continue());
-    assert!(sender.on_next(inner_source.into_send_boxed()).is_continue());
+    assert!(sender.on_next(inner_source.into_boxed()).is_continue());
     let error = DropProbe::new().on_drop(Box::new(move || {
         assert!(inner_sender.on_next(7).is_continue());
     }));
@@ -1616,12 +1616,12 @@ fn test_race_condition_next_after_unsub() {
         sender_1 = Some(observer);
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let observable_2 = Create::shared_boxed(|observer| {
         sender_2 = Some(observer);
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let (checker, observer) = Checker::new();
 
     let observable = observable.switch();
@@ -1672,12 +1672,12 @@ fn test_race_condition_terminate_after_unsub() {
         sender_1 = Some(observer);
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let observable_2 = Create::shared_boxed(|observer| {
         sender_2 = Some(observer);
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let (checker, observer) = Checker::new();
 
     let observable = observable.switch();
@@ -1902,7 +1902,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
     let (_, first, first_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
     let _subscription = source.switch().subscribe(observer);
-    assert!(sender.on_next(first.into_send_boxed()).is_continue());
+    assert!(sender.on_next(first.into_boxed()).is_continue());
 
     // The replacing inner observable fails to subscribe: the stream is given up, rather than left
     // with the slot reserved for good, so that the next inner observable would find a build in
@@ -1912,7 +1912,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
             drop(panic_on_drop);
             DisposeOnDrop::default()
         });
-        let _ = sender.on_next(failing.into_send_boxed());
+        let _ = sender.on_next(failing.into_boxed());
     });
     assert_eq!(first_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
@@ -1935,8 +1935,8 @@ fn test_unsubscribe_on_panic_while_releasing() {
     // replacing one: the stream is given up, and the replacing one is never subscribed.
     expect_panic_on_drop(|panic_on_drop| {
         let first = first.do_after_disposal(move || drop(panic_on_drop));
-        assert!(sender.on_next(first.into_send_boxed()).is_continue());
-        let _ = sender.on_next(second.into_send_boxed());
+        assert!(sender.on_next(first.into_boxed()).is_continue());
+        let _ = sender.on_next(second.into_boxed());
     });
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(second_checker.state(), ChannelState::Initialized);
@@ -1956,8 +1956,8 @@ fn test_unsubscribe_on_replaced_inner_unsub() {
     // it. The replacing inner observable is still subscribed, like one racing a termination (see
     // `test_next_while_terminating`), and disposed at once, since the stream has ended.
     let first = first.do_after_disposal(move || subscription.dispose());
-    assert!(sender.on_next(first.into_send_boxed()).is_continue());
-    assert!(sender.on_next(second.into_send_boxed()).is_stop());
+    assert!(sender.on_next(first.into_boxed()).is_continue());
+    assert!(sender.on_next(second.into_boxed()).is_stop());
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(second_checker.state(), ChannelState::Unsubscribed);
     assert!(checker.values().is_empty());

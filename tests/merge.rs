@@ -1862,9 +1862,9 @@ mod max_concurrency {
                 let pulled_next = pulled.clone();
                 Merge::new_from_iter(
                     [
-                        first.into_send_boxed(),
-                        completing.into_send_boxed(),
-                        last.into_send_boxed(),
+                        first.into_boxed(),
+                        completing.into_boxed(),
+                        last.into_boxed(),
                     ]
                     .into_iter()
                     .inspect(move |_| {

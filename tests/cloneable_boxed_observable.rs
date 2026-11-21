@@ -8,7 +8,9 @@ use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observable::boxed_observable::SendCloneableBoxedObservable;
+use rx_rust::observable::boxed_observable::{
+    CloneableBoxedObservableFor, SendCloneableBoxedObservable, SendCloneableBoxedObservableFor,
+};
 use rx_rust::operators::creating::create::Create;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
@@ -17,17 +19,14 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
-use tests_utils::{
-    checker::{Checker, CheckerObserver},
-    test_struct::TestStruct,
-};
+use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_cloneable_boxed();
+    let observable = observable.into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -50,7 +49,7 @@ fn test_error() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_cloneable_boxed();
+    let observable = observable.into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -74,7 +73,7 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable_1 = observable.into_send_cloneable_boxed();
+    let observable_1 = observable.into_cloneable_boxed();
     let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
@@ -128,7 +127,7 @@ fn test_ref() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_cloneable_boxed();
+    let observable = observable.into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -152,7 +151,7 @@ fn test_async() {
         let (channels, observable) = test_channels::<'_, &i32, &str>();
         let (checker, observer) = Checker::new();
 
-        let observable = observable.into_send_cloneable_boxed();
+        let observable = observable.into_cloneable_boxed();
 
         let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -185,8 +184,8 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable_1 = observable.clone().into_send_cloneable_boxed();
-    let observable_2 = observable.clone().into_send_cloneable_boxed();
+    let observable_1 = observable.clone().into_cloneable_boxed();
+    let observable_2 = observable.clone().into_cloneable_boxed();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
@@ -223,7 +222,7 @@ fn test_unsub_on_next_by_take() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_cloneable_boxed().take(1);
+    let observable = observable.into_cloneable_boxed().take(1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -243,8 +242,8 @@ fn test_multiple_operation() {
 
     let observable = observable
         .clone()
-        .into_send_cloneable_boxed()
-        .into_send_cloneable_boxed();
+        .into_cloneable_boxed()
+        .into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -291,10 +290,8 @@ fn test_fixed_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable_1 = observable
-        .clone()
-        .into_cloneable_boxed_for::<CheckerObserver<i32, &str>>();
-    let observable_2 = observable.into_send_cloneable_boxed_for::<CheckerObserver<i32, &str>>();
+    let observable_1 = CloneableBoxedObservableFor::new(observable.clone());
+    let observable_2 = SendCloneableBoxedObservableFor::new(observable);
 
     let _subscription_1 = observable_1.clone().subscribe(observer_1);
     let _subscription_2 = observable_2.clone().subscribe(observer_2);
@@ -337,7 +334,7 @@ fn test_lifetime_sub() {
             }))
         });
 
-        let observable = observable.into_send_cloneable_boxed();
+        let observable = observable.into_cloneable_boxed();
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -359,7 +356,7 @@ fn test_lifetime_or() {
             life_marker_1.replace_value(Some(observer));
             DisposeOnDrop::default()
         });
-        let observable = observable.into_send_cloneable_boxed();
+        let observable = observable.into_cloneable_boxed();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(observer.on_next(&life_marker_2).is_continue());
@@ -385,14 +382,14 @@ fn test_lifetime_oe() {
             DisposeOnDrop::default()
         });
 
-        _observable = create.into_send_cloneable_boxed();
+        _observable = create.into_cloneable_boxed();
     }
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     let (_, observable) = test_channels::<'_, i32, String>();
-    let observable = observable.into_send_cloneable_boxed();
+    let observable = observable.into_cloneable_boxed();
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -402,7 +399,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     let (_, observable) = test_channels::<'_, i32, String>();
-    let observable = observable.into_send_cloneable_boxed();
+    let observable = observable.into_cloneable_boxed();
 
     observable.filter(|_| true);
 }

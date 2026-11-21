@@ -103,6 +103,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `into_boxed` and `into_cloneable_boxed` erase an observable into the box its mode
+  picks (`BoxedObservableMode`): `BoxedObservable` / `CloneableBoxedObservable` for `Local`,
+  `SendBoxedObservable` / `SendCloneableBoxedObservable` for `Shared`
+  (`docs/decisions/0002-observable-types-and-thread-mode.md`, point 8). Replace
+  `into_send_boxed` / `into_send_cloneable_boxed` on a `Shared` source with `into_boxed` /
+  `into_cloneable_boxed`; on a `Local` one, with `SendBoxedObservable::new(source)` /
+  `SendCloneableBoxedObservable::new(source)`, or `into_shared()` in front. A `Shared` source
+  that is not `Send` goes into `BoxedObservable::new`.
 - **Breaking for specialized schedulers:** `buffer_with_time` and `window_with_time` use the
   task context of their time-and-shift counterparts. A custom scheduler that only implements
   `Scheduler<PeriodicContext<C>>` needs a generic `Scheduler<C>` implementation for these operators.
@@ -168,6 +176,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 
+- **Breaking:** `ObservableExt::into_send_boxed`, `into_send_cloneable_boxed` and the four `_for` methods
+  (`into_boxed_for`, …). `into_boxed` covers the first two through the mode; the `For` types
+  keep their constructors, `BoxedObservableFor::new(source)`, whose observer type is inferred
+  from the first subscription.
 - **Breaking:** `Switch::new_from_iter`. Use
   `Switch::new(FromIter::new(list).with_error_type())` to switch over an iterator of observables.
 - **Breaking:** `MergeAll::new_from_iter` and `ConcatAll::new_from_iter`. They merged and

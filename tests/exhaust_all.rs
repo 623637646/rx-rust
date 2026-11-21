@@ -421,14 +421,14 @@ fn test_next_on_inner_sub() {
             // The source emits the next inner while this one is still being subscribed to: it is
             // ignored, as this one is running.
             let _ = observer.on_next(111);
-            let _ = subject_cloned.on_next(subject_2_cloned.into_send_cloneable_boxed());
+            let _ = subject_cloned.on_next(subject_2_cloned.into_cloneable_boxed());
             DisposeOnDrop::default()
         },
     );
 
     assert!(
         subject
-            .on_next(observable_1.into_send_cloneable_boxed())
+            .on_next(observable_1.into_cloneable_boxed())
             .is_continue()
     );
     assert_eq!(checker.values(), [111]);
@@ -529,7 +529,7 @@ fn test_drop_ignored_inner_outside_lock() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.exhaust_all().subscribe(observer);
-    assert!(sender.on_next(observable_1.into_send_boxed()).is_continue());
+    assert!(sender.on_next(observable_1.into_boxed()).is_continue());
 
     // The ignored inner observable is dropped outside the lock: a drop that re-enters the operator
     // would deadlock otherwise, or panic on the re-entrancy check of a debug build.
@@ -545,7 +545,7 @@ fn test_drop_ignored_inner_outside_lock() {
         drop(probe.take());
         DisposeOnDrop::default()
     });
-    assert!(sender.on_next(ignored.into_send_boxed()).is_continue());
+    assert!(sender.on_next(ignored.into_boxed()).is_continue());
     assert_eq!(drops.get(), 1);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
@@ -703,7 +703,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
             drop(panic_on_drop);
             DisposeOnDrop::default()
         });
-        let _ = sender.on_next(failing.into_send_boxed());
+        let _ = sender.on_next(failing.into_boxed());
     });
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
     assert!(checker.values().is_empty());

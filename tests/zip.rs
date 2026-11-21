@@ -1983,14 +1983,12 @@ mod from_iter {
         });
 
         // Not cloned: the items are handed over, `&mut` ones included.
-        let subscription = Zip::new_from_iter([
-            observable_1.into_send_boxed(),
-            observable_2.into_send_boxed(),
-        ])
-        .subscribe_with_callback(
-            |values| values.into_iter().for_each(|value| *value *= 2),
-            |_| {},
-        );
+        let subscription =
+            Zip::new_from_iter([observable_1.into_boxed(), observable_2.into_boxed()])
+                .subscribe_with_callback(
+                    |values| values.into_iter().for_each(|value| *value *= 2),
+                    |_| {},
+                );
         subscription.dispose();
         assert_eq!(value_1, 222);
         assert_eq!(value_2, 444);
@@ -2111,8 +2109,8 @@ mod from_iter {
             Throw::new("error")
                 .with_item_type()
                 .into_shared()
-                .into_send_boxed(),
-            observable.into_send_boxed(),
+                .into_boxed(),
+            observable.into_boxed(),
         ];
 
         let _subscription = Zip::new_from_iter(sources).subscribe(observer);

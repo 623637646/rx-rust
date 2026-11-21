@@ -344,9 +344,9 @@ fn test_boxed_observable() {
     let observable = Defer::new(|| {
         let observable = Just::new(111);
         if switch.load(Ordering::SeqCst) {
-            observable.into_send_boxed()
+            observable.into_boxed()
         } else {
-            observable.map(|value| value * 2).into_send_boxed()
+            observable.map(|value| value * 2).into_boxed()
         }
     });
     let (checker, observer) = Checker::new();

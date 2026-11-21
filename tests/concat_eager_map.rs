@@ -521,10 +521,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
             drop(panic_on_drop);
             DisposeOnDrop::default()
         });
-        let mut inners = [
-            Some(observable_1.into_send_boxed()),
-            Some(failing.into_send_boxed()),
-        ];
+        let mut inners = [Some(observable_1.into_boxed()), Some(failing.into_boxed())];
         let _subscription = source
             .concat_eager_map(move |index: usize| inners[index].take().unwrap())
             .subscribe(observer);

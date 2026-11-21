@@ -1968,8 +1968,8 @@ mod from_iter {
             Throw::new("error")
                 .with_item_type()
                 .into_shared()
-                .into_send_boxed(),
-            observable.into_send_boxed(),
+                .into_boxed(),
+            observable.into_boxed(),
         ];
 
         // The first one fails as it is subscribed: the second is not subscribed at all.
