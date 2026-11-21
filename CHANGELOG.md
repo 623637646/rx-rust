@@ -38,8 +38,8 @@ All notable changes to this project are documented here. The format follows
   several notifications for one event of its source — the replay and the completion of
   `take_last`, the last bundle of `buffer_with_count` — so this is for a subscription that may be
   disposed from inside one of its notifications by something that cannot answer `Flow::Stop`.
-- `delay_subscription` defers subscribing on a scheduler, and `do_finally` runs cleanup once
-  the stream ends for any reason.
+- `audit` emits the latest item of each source-triggered time span, `delay_subscription` defers
+  subscribing on a scheduler, and `do_finally` runs cleanup once the stream ends for any reason.
 - `CombineLatest`, `Zip`, `Merge` and `Concat` accept tuples of one to eight sources and expose
   `new_from_iter` for runtime-sized inputs. `Concat` pulls from an iterator one source at a time.
 - `max_concurrency(n)` limits concurrent subscriptions in `Merge`, `MergeAll` and `FlatMap`.

@@ -75,10 +75,10 @@ use crate::{
             retry::{Retry, RetryAction},
         },
         filtering::{
-            debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
-            element_at::ElementAt, filter::Filter, first::First, ignore_elements::IgnoreElements,
-            last::Last, sample::Sample, skip::Skip, skip_last::SkipLast, take::Take,
-            take_last::TakeLast, throttle::Throttle,
+            audit::Audit, debounce::Debounce, distinct::Distinct,
+            distinct_until_changed::DistinctUntilChanged, element_at::ElementAt, filter::Filter,
+            first::First, ignore_elements::IgnoreElements, last::Last, sample::Sample, skip::Skip,
+            skip_last::SkipLast, take::Take, take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::{
             average::Average, collect::Collect, count::Count, max::Max, min::Min, reduce::Reduce,
@@ -248,6 +248,12 @@ pub trait ObservableExt: ObservableTypes + Sized {
         OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
     {
         Amb::new((self, source_2))
+    }
+
+    /// Emits the most recent item once `time_span` has passed since the item that started the
+    /// span: a trailing-edge throttle.
+    fn audit<S>(self, time_span: Duration, scheduler: S) -> Audit<Self, S> {
+        Audit::new(self, time_span, scheduler)
     }
 
     /// Calculates the arithmetic mean of all numeric items emitted by the source.
