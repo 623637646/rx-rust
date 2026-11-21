@@ -2,10 +2,9 @@
 //!
 //! Two shapes use this, and the difference lives in the caller, not in the id:
 //!
-//! - a *generation*, compared against [`IdGenerator::latest`] to tell whether something built with
-//!   the lock released is still the current one — see
-//!   [`ReplaceableDisposal`](crate::disposable::replaceable_disposal::ReplaceableDisposal) and
-//!   [`Switch`](crate::operators::combining::switch::Switch);
+//! - a *generation*, kept by the state and compared against the one a build was handed, to tell
+//!   whether something built with the lock released is still the current one — see
+//!   [`ReplaceableDisposal`](crate::disposable::replaceable_disposal::ReplaceableDisposal);
 //! - a *key*, identifying an entry of a collection — see
 //!   [`ReservationMap`](crate::utils::reservation_map::ReservationMap) and the observers of
 //!   [`SerializedMulticast`](crate::utils::serialized_multicast::SerializedMulticast).
@@ -36,11 +35,6 @@ impl IdGenerator {
         self.0 += 1;
         Id(self.0)
     }
-
-    /// The id handed out last, or `None` before the first one.
-    pub(crate) fn latest(&self) -> Option<Id> {
-        (self.0 != 0).then_some(Id(self.0))
-    }
 }
 
 #[cfg(test)]
@@ -50,10 +44,9 @@ mod tests {
     #[test]
     fn test_next_id() {
         let mut ids = IdGenerator::default();
-        assert_eq!(ids.latest(), None);
         let first = ids.next_id();
         let second = ids.next_id();
         assert!(first < second);
-        assert_eq!(ids.latest(), Some(second)); // `first` is stale now.
+        assert_ne!(first, second); // `first` is never handed out again.
     }
 }

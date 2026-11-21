@@ -1,10 +1,10 @@
 //! The [`GroupJoin`] operator, behind
 //! [`ObservableExt::group_join`](crate::observable::ObservableExt::group_join).
 
-use super::join_core::{
-    self, Action, DurationObserverOf, EndingSource, LeftObserverOf, RightObserverOf, Side,
+use super::internal::join::{
+    self, Action, DurationObserverOf, Ending, LeftObserverOf, RightObserverOf, Side,
 };
-pub use super::join_core::{
+pub use super::internal::join::{
     Disposal, DisposalOf, DurationObserver, LeftObserver, ModeOf, RightObserver,
 };
 use crate::{
@@ -175,10 +175,9 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        join_core::subscribe(
+        join::subscribe(
             (self.left, self.right),
             (self.left_duration_selector, self.right_duration_selector),
-            EndingSource::Left,
             |stop_view| GroupJoinDelegate {
                 observer,
                 stop_view,
@@ -200,6 +199,10 @@ pub struct GroupJoinDelegate<'a, M: ObserverMode, OR, R, E> {
     /// The right values whose windows are open, in the order they arrived: the order a new window
     /// receives them in.
     rights: BTreeMap<Id, R>,
+}
+
+impl<M: ObserverMode, OR, R, E> Ending for GroupJoinDelegate<'_, M, OR, R, E> {
+    const RIGHT_ENDS_STREAM: bool = false;
 }
 
 impl<'a, M, OR, L, R, E> Observer<Action<L, R>, E> for GroupJoinDelegate<'a, M, OR, R, E>

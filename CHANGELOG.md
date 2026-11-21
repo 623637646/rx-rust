@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `concat_all` and `concat_map` give the stream up when subscribing an inner observable panics,
+  or disposing the one that completed, as `merge_all`, `switch` and `exhaust_all` do. The
+  place of that inner observable used to stay taken: every later one waited in the queue, and the
+  stream never completed.
 - `average` switches to a running mean when finite values overflow its `f64` sum, preserving
   the existing summation and rounding for inputs whose sum stays in range.
 - `ChainDisposal` disposes its second resource even if disposing the first panics.
@@ -28,7 +32,9 @@ All notable changes to this project are documented here. The format follows
 - `with_latest_from` combines primary emissions with the latest auxiliary values.
 - `CombineLatest`, `Zip`, `Merge` and `Concat` accept tuples of one to eight sources and expose
   `new_from_iter` for runtime-sized inputs. `Concat` pulls from an iterator one source at a time.
-- `max_concurrency(n)` limits concurrent subscriptions in `Merge`.
+- `max_concurrency(n)` limits concurrent subscriptions in `Merge`, `MergeAll` and `FlatMap`.
+- `exhaust_all` ignores inner observables that arrive while one is active. `exhaust_map`
+  also skips the selector for those emissions.
 - `ForkJoin` emits the last value from each source once all sources complete with at least one
   value. Use `ForkJoin::new((a, b, ...))` or `ForkJoin::new_from_iter(list)`, and
   `a.fork_join(b)` for two sources.
@@ -85,6 +91,14 @@ All notable changes to this project are documented here. The format follows
   Migrate `Operator::new(a, b)` to `Operator::new((a, b))` and explicit type annotations from
   `Operator<A, B>` to `Operator<(A, B)>`. For iterator-based races, use
   `Amb::new_from_iter(list)` in place of `Amb::new(list)`.
+- **Breaking:** `merge_all`, `concat_all`, `switch` and their mapping forms
+  are built on one state machine (`docs/decisions/0013-one-flattening-machine.md`). The combining
+  modules now expose the hidden `SourceObserver` and `InnerObserver` types, and
+  `concat_all::Disposal` is gone: `ConcatAll` and `ConcatMap` have the `merge_all::Disposal` of
+  the `MergeAll` they are. `ConcatMap` and `SwitchMap` no longer subscribe their source with a
+  `MapObserver`.
+- A flattening operator holds an inner observable's place until the inner completes and its
+  `subscribe` call has returned. Then it can subscribe queued work or complete the stream.
 - **Breaking:** `ObservableExt::merge_with`, `amb_with` and `concat_with` are renamed `merge`,
   `amb` and `concat`, as `zip` and `combine_latest` are named: no method that combines `self` with
   another observable has a `_with` suffix.
@@ -135,6 +149,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 
+- **Breaking:** `Switch::new_from_iter`. Use
+  `Switch::new(FromIter::new(list).with_error_type())` to switch over an iterator of observables.
+- **Breaking:** `MergeAll::new_from_iter` and `ConcatAll::new_from_iter`. They merged and
+  concatenated a list of observables as `Merge::new_from_iter` and `Concat::new_from_iter` do,
+  which are the list forms of `merge` and `concat`; `MergeAll` and `ConcatAll` keep `new`, over
+  an observable of observables.
 - **Breaking:** `thread_mode::mutable::MutableBoolHelper`. It read and wrote the flag of either
   mode as a `bool`, which a flag no longer offers; an `AtomicBool` or a `Cell<bool>` of your own
   is read and written with its own methods.

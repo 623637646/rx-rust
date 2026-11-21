@@ -16,10 +16,12 @@
 //! flag raised only under it that guards the delivery, the subscribe function of an observer that
 //! subscribes an observable with an observer of its own type (as `retry` and `concat_all` do), the
 //! trampoline that keeps a re-subscription from a termination from nesting (`retry`,
-//! `repeat_source`), the queue behind a running delivery, the reservation slot and its keyed form, the id generator, the
-//! panic guard and the lazy subscription of the future and stream adapters. They serve the crate's
-//! own operators. The few of their types that a public signature names — what a context's update
-//! answers — are re-exported by the public module naming them.
+//! `repeat_source`), the queue behind a running delivery, keyed reservations, the id generator,
+//! the panic guard, the lazy subscription of the future and stream adapters, and the positional
+//! layer: tuple arities and traversal, typed access by position, item storage for tuples and
+//! vectors, and one-shot slots. They serve the crate's own operators. The few of their
+//! types that a public signature names — what a context's update answers, a tuple position, an
+//! item shape — are re-exported by the public module naming them.
 //!
 //! Nothing here is needed to *use* the operators; see the module documentation of each part for
 //! the rules it enforces.
@@ -31,7 +33,6 @@ pub(crate) mod on_panic;
 pub(crate) mod pending_events;
 pub(crate) mod positional;
 pub(crate) mod reservation_map;
-pub(crate) mod reservation_slot;
 pub(crate) mod serialized_delivery;
 pub(crate) mod serialized_multicast;
 pub(crate) mod subscribe_fn;

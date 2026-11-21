@@ -1,9 +1,9 @@
 //! The [`Join`] operator, behind [`ObservableExt::join`](crate::observable::ObservableExt::join).
 
-use super::join_core::{
-    self, Action, DurationObserverOf, EndingSource, LeftObserverOf, RightObserverOf, Side,
+use super::internal::join::{
+    self, Action, DurationObserverOf, Ending, LeftObserverOf, RightObserverOf, Side,
 };
-pub use super::join_core::{
+pub use super::internal::join::{
     Disposal, DisposalOf, DurationObserver, LeftObserver, ModeOf, RightObserver,
 };
 use crate::{
@@ -158,10 +158,9 @@ where
     F: FnMut(&L, &R) -> T,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        join_core::subscribe(
+        join::subscribe(
             (self.left, self.right),
             (self.left_duration_selector, self.right_duration_selector),
-            EndingSource::Either,
             |stop_view| JoinDelegate {
                 observer,
                 result_selector: self.result_selector,
@@ -185,6 +184,10 @@ pub struct JoinDelegate<M: ThreadMode, OR, F, L, R> {
     lefts: BTreeMap<Id, L>,
     /// The right values whose windows are open, as `lefts`.
     rights: BTreeMap<Id, R>,
+}
+
+impl<M: ThreadMode, OR, F, L, R> Ending for JoinDelegate<M, OR, F, L, R> {
+    const RIGHT_ENDS_STREAM: bool = true;
 }
 
 impl<M, OR, F, L, R, T, E> Observer<Action<L, R>, E> for JoinDelegate<M, OR, F, L, R>

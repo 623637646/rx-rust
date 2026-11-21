@@ -58,8 +58,8 @@ use crate::{
     operators::{
         combining::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll,
-            fork_join::ForkJoin, group_join::GroupJoin, join::Join, merge::Merge,
-            merge_all::MergeAll, start_with::StartWith, switch::Switch,
+            exhaust_all::ExhaustAll, fork_join::ForkJoin, group_join::GroupJoin, join::Join,
+            merge::Merge, merge_all::MergeAll, start_with::StartWith, switch::Switch,
             with_latest_from::WithLatestFrom, zip::Zip,
         },
         conditional_boolean::{
@@ -95,9 +95,9 @@ use crate::{
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
-            flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan, switch_map::SwitchMap,
-            window::Window, window_with_count::WindowWithCount, window_with_time::WindowWithTime,
-            window_with_time_or_count::WindowWithTimeOrCount,
+            exhaust_map::ExhaustMap, flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan,
+            switch_map::SwitchMap, window::Window, window_with_count::WindowWithCount,
+            window_with_time::WindowWithTime, window_with_time_or_count::WindowWithTimeOrCount,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_after_disposal::DoAfterDisposal,
@@ -489,6 +489,25 @@ pub trait ObservableExt: ObservableTypes + Sized {
         ElementAt::new(self, index)
     }
 
+    /// Flattens an observable of observables, ignoring the inner observables that arrive while
+    /// one is still running.
+    fn exhaust_all(self) -> ExhaustAll<Self, Self::Item>
+    where
+        Self::Item: ObservableTypes<Error = Self::Error>,
+    {
+        ExhaustAll::new(self)
+    }
+
+    /// Maps each item to an observable, ignoring the items that arrive while the previous one is
+    /// still running.
+    fn exhaust_map<OE1, F>(self, callback: F) -> ExhaustMap<Self::Item, Self, OE1, F>
+    where
+        OE1: ObservableTypes<Error = Self::Error>,
+        F: FnMut(Self::Item) -> OE1,
+    {
+        ExhaustMap::new(self, callback)
+    }
+
     /// Filters items using a predicate, forwarding only values that return `true`.
     fn filter<F>(self, callback: F) -> Filter<Self, F>
     where
@@ -503,6 +522,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Maps each item to an observable and merges the resulting inner sequences concurrently.
+    /// [`FlatMap::max_concurrency`] bounds how many are subscribed at a time.
     fn flat_map<OE1, F>(self, callback: F) -> FlatMap<Self::Item, Self, OE1, F>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -1007,6 +1027,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Merges an observable-of-observables by interleaving items from inner streams.
+    /// [`MergeAll::max_concurrency`] bounds how many are subscribed at a time.
     fn merge_all(self) -> MergeAll<Self, Self::Item>
     where
         Self::Item: ObservableTypes<Error = Self::Error>,

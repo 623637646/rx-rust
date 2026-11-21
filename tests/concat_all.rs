@@ -22,6 +22,10 @@ use rx_rust::{
     },
 };
 use std::convert::Infallible;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -348,52 +352,6 @@ fn test_completed_same_inner() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
-#[test]
-fn test_completed_new_from_iter() {
-    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
-    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable = ConcatAll::new_from_iter([observable_1, observable_2]);
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
-
-    assert!(sender_1.on_next(111).is_continue());
-    assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
-
-    assert!(sender_1.on_next(333).is_continue());
-    assert_eq!(checker.values(), [111, 333]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
-
-    sender_1.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 333]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
-
-    assert!(sender_2.on_next(444).is_continue());
-    assert_eq!(checker.values(), [111, 333, 444]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
-
-    sender_2.on_termination(Termination::<i32>::Completed);
-    assert_eq!(checker.values(), [111, 333, 444]);
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Completed);
-}
-
-/// A queue of immediately completing inners is drained by a loop, not nested subscriptions.
 #[test]
 fn test_completed_with_synchronous_inner_chain() {
     let mut subject = PublishSubject::<_, Infallible, _>::shared();
@@ -764,51 +722,6 @@ fn test_error_same_inner() {
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-}
-
-#[test]
-fn test_error_new_from_iter() {
-    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
-    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable = ConcatAll::new_from_iter([observable_1, observable_2]);
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
-
-    assert!(sender_1.on_next(111).is_continue());
-    assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
-
-    assert!(sender_1.on_next(333).is_continue());
-    assert_eq!(checker.values(), [111, 333]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
-
-    sender_1.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 333]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
-
-    assert!(sender_2.on_next(444).is_continue());
-    assert_eq!(checker.values(), [111, 333, 444]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
-
-    sender_2.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111, 333, 444]);
-    assert_eq!(checker.state(), State::Error("error"));
-    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
 }
 
 #[test]
@@ -1667,7 +1580,9 @@ fn test_complete_on_sub() {
     assert_eq!(checker.state(), State::Completed);
 }
 
-/// Source completion during an inner build must wait for its outstanding reservation to finish.
+/// The source completes while the last inner observable, which has completed already, is still
+/// being subscribed: nothing is left to wait for, so the stream completes at once, as in
+/// `merge_all`, and the subscription its builder returns is disposed.
 #[test]
 fn test_complete_on_inner_sub() {
     let mut subject = PublishSubject::<_, Infallible, _>::shared();
@@ -1682,12 +1597,18 @@ fn test_complete_on_inner_sub() {
 
     let source = subject.clone();
     let checker_during_sub = checker.clone();
+    let disposed = Arc::new(AtomicBool::new(false));
+    let disposed_inner = disposed.clone();
     let inner = Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
         observer.on_termination(Termination::Completed);
-        source.on_termination(Termination::Completed);
-        // The builder still owns the continuation until it returns its subscription.
         assert_eq!(checker_during_sub.state(), State::Active);
-        DisposeOnDrop::default()
+        source.on_termination(Termination::Completed);
+        // The inner observable keeps its place until this subscription returns and fills it:
+        // the stream completes then, not before.
+        assert_eq!(checker_during_sub.state(), State::Active);
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            disposed_inner.store(true, Ordering::SeqCst);
+        }))
     });
     assert!(
         subject
@@ -1698,6 +1619,7 @@ fn test_complete_on_inner_sub() {
     first.on_termination(Termination::Completed);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Completed);
+    assert!(disposed.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -1995,5 +1917,80 @@ fn test_abandon_after_next() {
 
     inner_channels.on_termination(1, Termination::Completed);
     assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_unsubscribe_on_panic_while_subscribing() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let (mut sender, source, source_checker) = test_channel();
+    let (checker, observer) = Checker::<i32, Infallible>::new();
+    let _subscription = source.concat_all().subscribe(observer);
+
+    // The inner observable fails to subscribe: the stream is given up, rather than left with its
+    // place taken for good, so that every later inner observable would wait in the queue and the
+    // stream would never complete.
+    expect_panic_on_drop(|panic_on_drop| {
+        let failing = Create::shared_boxed(move |_: SendBoxedObserver<'_, i32, Infallible>| {
+            drop(panic_on_drop);
+            DisposeOnDrop::default()
+        });
+        let _ = sender.on_next(failing.into_send_boxed());
+    });
+    assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_unsubscribe_on_panic_while_subscribing_queued() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let (mut sender, source, source_checker) = test_channel();
+    let (first_sender, first, first_checker) = test_channel::<'_, i32, Infallible>();
+    let (checker, observer) = Checker::new();
+    let _subscription = source.concat_all().subscribe(observer);
+    assert!(sender.on_next(first.into_send_boxed()).is_continue());
+
+    // The same for one that waited in the queue, subscribed by the completion of the one before
+    // it.
+    expect_panic_on_drop(|panic_on_drop| {
+        let failing = Create::shared_boxed(move |_: SendBoxedObserver<'_, i32, Infallible>| {
+            drop(panic_on_drop);
+            DisposeOnDrop::default()
+        });
+        assert!(sender.on_next(failing.into_send_boxed()).is_continue());
+        first_sender.on_termination(Termination::Completed);
+    });
+    assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(first_checker.state(), ChannelState::Completed);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_unsubscribe_on_panic_while_releasing() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let (mut sender, source, source_checker) = test_channel();
+    let (first_sender, first, _) = test_channel::<'_, i32, Infallible>();
+    let (_, last, last_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+    let _subscription = source.concat_all().subscribe(observer);
+
+    // The disposal of the completed inner observable fails, with the place of the next one
+    // already reserved: the stream is given up, and the queued one is never subscribed.
+    expect_panic_on_drop(|panic_on_drop| {
+        let first = first.do_after_disposal(move || drop(panic_on_drop));
+        assert!(sender.on_next(first.into_send_boxed()).is_continue());
+        assert!(sender.on_next(last.into_send_boxed()).is_continue());
+        first_sender.on_termination(Termination::Completed);
+    });
+    assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(last_checker.state(), ChannelState::Initialized);
     assert_eq!(checker.state(), State::Dropped);
 }

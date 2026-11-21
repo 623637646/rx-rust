@@ -1504,3 +1504,390 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The same operator with a `max_concurrency`.
+mod max_concurrency {
+    use crate::tests_utils::DURATION_10_MS;
+    use crate::tests_utils::checker::State;
+    use crate::tests_utils::test_channel::ChannelState;
+    use crate::tests_utils::test_channel::test_channels;
+    use crate::tests_utils::test_scheduler::block_on;
+    use crate::tests_utils::{
+        checker::Checker, test_channel::test_channel, test_struct::TestStruct,
+    };
+    use rx_rust::disposable::Disposable;
+    use rx_rust::disposable::callback_disposal::CallbackDisposal;
+    use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
+    use rx_rust::observer::boxed_observer::SendBoxedObserver;
+    use rx_rust::operators::creating::create::Create;
+    use rx_rust::operators::creating::empty::Empty;
+    use rx_rust::{
+        observable::{Observable, ObservableExt},
+        observer::{Observer, Termination},
+        operators::{
+            creating::{just::Just, throw::Throw},
+            transforming::flat_map::FlatMap,
+        },
+    };
+    use std::convert::Infallible;
+    use std::num::NonZeroUsize;
+
+    const ONE: NonZeroUsize = NonZeroUsize::new(1).unwrap();
+    const TWO: NonZeroUsize = NonZeroUsize::new(2).unwrap();
+
+    #[test]
+    fn test_completed() {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (inner_channels, inner) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable
+            .flat_map(move |offset: i32| inner.clone().map(move |value| value + offset))
+            .max_concurrency(TWO);
+
+        let _subscription = observable.subscribe(observer);
+        for offset in [100, 200, 300] {
+            assert!(sender.on_next(offset).is_continue());
+        }
+        assert_eq!(inner_channels.len(), 2);
+
+        assert!(inner_channels.on_next(0, 1).is_continue());
+        assert!(inner_channels.on_next(1, 2).is_continue());
+        inner_channels.on_termination(0, Termination::Completed);
+        assert_eq!(inner_channels.state(2), ChannelState::Subscribed);
+        assert!(inner_channels.on_next(2, 3).is_continue());
+        assert_eq!(checker.values(), [101, 202, 303]);
+
+        sender.on_termination(Termination::Completed);
+        inner_channels.on_termination(1, Termination::Completed);
+        assert_eq!(checker.state(), State::Active);
+        inner_channels.on_termination(2, Termination::Completed);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+    }
+
+    #[test]
+    fn test_error() {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (inner_channels, inner) = test_channels::<'_, i32, _>();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable
+            .flat_map(move |_: i32| inner.clone())
+            .max_concurrency(ONE)
+            .subscribe(observer);
+        assert!(sender.on_next(1).is_continue());
+        assert!(sender.on_next(2).is_continue());
+        assert!(inner_channels.on_next(0, 111).is_continue());
+        inner_channels.on_termination(0, Termination::Error("error"));
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Error("error"));
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        assert_eq!(inner_channels.len(), 1);
+    }
+
+    #[test]
+    fn test_unsubscribe() {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (inner_channels, inner) = test_channels::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let subscription = observable
+            .flat_map(move |_: i32| inner.clone())
+            .max_concurrency(ONE)
+            .subscribe(observer);
+        assert!(sender.on_next(1).is_continue());
+        assert!(sender.on_next(2).is_continue());
+        assert!(inner_channels.on_next(0, 111).is_continue());
+
+        subscription.dispose();
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        assert_eq!(inner_channels.state(0), ChannelState::Unsubscribed);
+        assert_eq!(inner_channels.len(), 1);
+    }
+
+    #[test]
+    fn test_ref() {
+        let value = 111;
+        let error = 222;
+
+        let (mut sender, observable, _channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable
+            .flat_map(|value| Just::new(value).with_error_type())
+            .max_concurrency(ONE)
+            .subscribe(observer);
+        assert!(sender.on_next(&value).is_continue());
+        sender.on_termination(Termination::Error(&error));
+        assert_eq!(checker.values(), [&value]);
+        assert_eq!(checker.state(), State::Error(&error));
+    }
+
+    #[test]
+    fn test_mut_ref() {
+        let mut value = 111;
+
+        let observable = Create::shared_boxed(|mut observer| {
+            assert!(observer.on_next(&mut value).is_continue());
+            observer.on_termination(Termination::<Infallible>::Completed);
+            DisposeOnDrop::default()
+        });
+
+        let subscription = observable
+            .flat_map(|value| Just::new(value).with_error_type())
+            .max_concurrency(ONE)
+            .subscribe_with_callback(|value| *value *= 2, |_| {});
+        subscription.dispose();
+        assert_eq!(value, 222);
+    }
+
+    #[test]
+    fn test_async() {
+        block_on(|scheduler| async move {
+            let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+            let (checker, observer) = Checker::new();
+
+            let observable = observable
+                .flat_map(|value| Just::new(value * 10))
+                .max_concurrency(ONE);
+
+            let subscription = scheduler
+                .spawn(async move { observable.subscribe(observer) })
+                .await;
+
+            let _sender = scheduler
+                .spawn(async move {
+                    assert!(sender.on_next(1).is_continue());
+                    sender
+                })
+                .await;
+            assert_eq!(checker.values(), [10]);
+            assert_eq!(checker.state(), State::Active);
+
+            scheduler.spawn(async { subscription.dispose() }).await;
+            scheduler.sleep(DURATION_10_MS).await;
+            assert_eq!(checker.values(), [10]);
+            assert_eq!(checker.state(), State::Dropped);
+            assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        });
+    }
+
+    #[test]
+    fn test_subscribe_by_different_observer() {
+        let (channels, observable) = test_channels::<'_, i32, &str>();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
+
+        let observable = observable
+            .flat_map(|value| Just::new(value).with_error_type())
+            .max_concurrency(ONE);
+        let observable_1 = observable;
+        let observable_2 = observable_1.clone();
+
+        let _subscription_1 = observable_1.subscribe(observer_1);
+        let (on_next, on_termination) = observer_2.into_callbacks();
+        let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
+
+        for index in 0..2 {
+            assert!(channels.on_next(index, 111).is_continue());
+            channels.on_termination(index, Termination::Error("error"));
+        }
+        assert_eq!(checker_1.values(), [111]);
+        assert_eq!(checker_1.state(), State::Error("error"));
+        assert_eq!(checker_2.values(), [111]);
+        assert_eq!(checker_2.state(), State::Error("error"));
+    }
+
+    #[test]
+    fn test_unsub_on_next_by_take() {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable
+            .flat_map(|value| Just::new(value).with_error_type())
+            .max_concurrency(ONE)
+            .take(1);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_stop());
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    }
+
+    #[test]
+    fn test_multiple_operation() {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable
+            .flat_map(|value| Just::new(value * 2))
+            .max_concurrency(ONE)
+            .flat_map(|value| Just::new(value + 1))
+            .max_concurrency(TWO);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(sender.on_next(1).is_continue());
+        assert!(sender.on_next(2).is_continue());
+        sender.on_termination(Termination::Completed);
+        assert_eq!(checker.values(), [3, 5]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+    }
+
+    #[test]
+    fn test_without_convenient_api() {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = FlatMap::new(observable, Just::new).max_concurrency(ONE);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.on_termination(Termination::Completed);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+    }
+
+    #[test]
+    fn test_complete_on_sub() {
+        let (checker, observer) = Checker::<Infallible, Infallible>::new();
+
+        let _subscription = Empty
+            .flat_map(|_| Empty)
+            .max_concurrency(ONE)
+            .subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    }
+
+    #[test]
+    fn test_error_on_sub() {
+        let (checker, observer) = Checker::<Infallible, _>::new();
+
+        let _subscription = Throw::new("error")
+            .flat_map(|_: Infallible| Throw::new("inner"))
+            .max_concurrency(ONE)
+            .subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Error("error"));
+    }
+
+    #[test]
+    fn test_next_on_unsub() {
+        let (checker, observer) = Checker::new();
+
+        let observable =
+            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    let mut observer = observer;
+                    assert!(observer.on_next(111).is_stop());
+                }))
+            });
+
+        let subscription = observable
+            .flat_map(Just::new)
+            .max_concurrency(ONE)
+            .subscribe(observer);
+        subscription.dispose();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+    }
+
+    #[test]
+    fn test_lifetime_sub() {
+        // OK
+        let life_marker = TestStruct;
+        let _subscription;
+
+        // Error
+        // let _subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let observable = Create::shared_boxed(|mut observer| {
+                assert!(observer.on_next(1).is_continue());
+                observer.on_termination(Termination::Completed);
+                DisposeOnDrop::new(CallbackDisposal::new(|| {
+                    life_marker.consume_ref();
+                }))
+            });
+
+            let observable = observable.flat_map(Just::new).max_concurrency(ONE);
+
+            let (_, observer) = Checker::<_, Infallible>::new();
+            _subscription = observable.subscribe(observer);
+        }
+    }
+
+    #[test]
+    fn test_lifetime_or() {
+        // OK
+        let life_marker_2 = TestStruct;
+        let mut life_marker_1 = None;
+
+        // Error
+        // let mut life_marker_1 = None;
+        // let life_marker_2 = TestStruct;
+
+        {
+            let observable =
+                Create::shared_boxed(|observer: SendBoxedObserver<'_, &TestStruct, Infallible>| {
+                    life_marker_1 = Some(observer);
+                    DisposeOnDrop::default()
+                });
+            let observable = observable.flat_map(Just::new).max_concurrency(ONE);
+
+            let (_, mut observer) = Checker::new();
+            assert!(observer.on_next(&life_marker_2).is_continue());
+            let _subscription = observable.subscribe(observer);
+        }
+    }
+
+    #[test]
+    fn test_fn() {
+        let mut s = TestStruct;
+
+        let observable = Just::new(1)
+            .flat_map(|value| {
+                s.consume_mut();
+                Just::new(value)
+            })
+            .max_concurrency(ONE);
+
+        let _ = observable.subscribe_with_callback(|_| {}, |_| {});
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = Create::shared_boxed(|mut observer| {
+            assert!(observer.on_next(TestStruct).is_continue());
+            observer.on_termination(Termination::Error(TestStruct));
+            DisposeOnDrop::default()
+        });
+        let observable = observable
+            .flat_map(|value| Just::new(value).with_error_type())
+            .max_concurrency(ONE);
+        _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+    }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        let observable = Just::new(1).flat_map(Just::new).max_concurrency(ONE);
+
+        let observable = observable.flat_map(Just::new).max_concurrency(ONE);
+        let (_, observer) = Checker::new();
+        let _ = observable.subscribe(observer);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        let observable = Just::new(1).flat_map(Just::new).max_concurrency(ONE);
+
+        observable.flat_map(Just::new).max_concurrency(ONE);
+    }
+}

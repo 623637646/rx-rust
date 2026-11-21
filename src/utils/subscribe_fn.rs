@@ -2,8 +2,8 @@
 //! type.
 //!
 //! An observer that subscribes again with itself — or with another instance of its own type, as
-//! the inner observer of [`ConcatAll`](crate::operators::combining::concat_all::ConcatAll) does
-//! for the next inner observable — needs `OE: Observable<OR>` to make that call. It cannot ask for
+//! the inner observer of [`ConcatAll`](crate::operators::combining::concat_all::ConcatAll) and of
+//! the other flattening operators does for the next inner observable — needs `OE: Observable<OR>` to make that call. It cannot ask for
 //! it on its own `Observer` implementation: proving that implementation would then depend on
 //! itself, since the observable's `Observable<OR>` implementation in turn requires `OR: Observer`,
 //! and rustc rejects the cycle as an overflow (`E0275`).
@@ -15,8 +15,7 @@
 //! `OE: ObservableTypes`.
 //!
 //! An observer that subscribes with a *different* observer type, as
-//! [`Switch`](crate::operators::combining::switch::Switch) or
-//! [`Catch`](crate::operators::error_handling::catch::Catch) do, needs none of this.
+//! [`Catch`](crate::operators::error_handling::catch::Catch) does, needs none of this.
 //!
 //! # Usage
 //!

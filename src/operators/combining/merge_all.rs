@@ -1,27 +1,37 @@
 //! The [`MergeAll`] operator, behind
 //! [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all).
 
+use super::internal::flatten::{self, ContextDisposal, InnerObserverOf, SourceObserverOf};
+pub use super::internal::flatten::{Enqueue, Identity, InnerObserver, SourceObserver};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{JoinedModeOf, Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
-    operators::{creating::from_iter::FromIter, others::with_error_type::WithErrorType},
+    observer::Observer,
     thread_mode::ThreadMode,
-    utils::{
-        MarkerType,
-        id_generator::Id,
-        reservation_map::ReservationMap,
-        serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
-    },
+    utils::MarkerType,
 };
 use educe::Educe;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, num::NonZeroUsize};
 
-/// Flattens an observable of observables by emitting the values of every inner observable as they
+/// Flattens an observable of observables by emitting the values of the inner observables as they
 /// arrive.
 /// See <https://reactivex.io/documentation/operators/merge.html>
+///
+/// [`MergeAll::new`] subscribes every inner observable as it arrives.
+/// [`MergeAll::max_concurrency`] subscribes at most `max_concurrency` of them at a time: one
+/// that arrives while that many are running waits in a queue, and is subscribed once one of them
+/// completes, in the order they arrived. With a `max_concurrency` of one it is
+/// [`ConcatAll`](crate::operators::combining::concat_all::ConcatAll). The usual use is to bound
+/// work: at most so many requests in flight, however many are asked for.
+/// That limit bounds active subscriptions only: the source pushes its observables when it likes,
+/// so the waiting queue can grow without a bound.
+///
+/// The observables of a tuple or a list go to [`Merge`](super::merge::Merge), with a limit too,
+/// which pulls them only as there is room for them and so queues nothing.
+///
+/// The stream completes once the source and every inner observable, the queued ones included, have
+/// completed; an error of any of them ends it, and drops the queue.
 ///
 /// # Examples
 /// ```rust
@@ -36,10 +46,10 @@ use std::marker::PhantomData;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = MergeAll::new_from_iter([
+/// let observable = MergeAll::new(FromIter::new([
 ///     FromIter::new([1, 3]),
 ///     FromIter::new([2, 4]),
-/// ]);
+/// ]));
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),
@@ -47,15 +57,53 @@ use std::marker::PhantomData;
 ///
 /// assert_eq!(values, vec![1, 3, 2, 4]);
 /// ```
+///
+/// With a limit, an inner observable waits for a place before it is subscribed:
+///
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::{Observer, Termination},
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, num::NonZeroUsize};
+///
+/// let mut values = Vec::new();
+/// let mut requests = PublishSubject::local();
+/// let mut request_1 = PublishSubject::<_, Infallible, _>::local();
+/// let mut request_2 = PublishSubject::local();
+/// let mut request_3 = PublishSubject::local();
+///
+/// let subscription = requests
+///     .clone()
+///     .merge_all()
+///     .max_concurrency(NonZeroUsize::new(2).unwrap())
+///     .subscribe_with_callback(
+///         |value| values.push(value),
+///         |termination| assert_eq!(termination, Termination::Completed),
+///     );
+/// for request in [&request_1, &request_2, &request_3] {
+///     let _ = requests.on_next(request.clone());
+/// }
+///
+/// let _ = request_3.on_next(3); // Queued, not subscribed yet: missed.
+/// let _ = request_2.on_next(2);
+/// request_1.on_termination(Termination::Completed); // Makes room for the third one.
+/// let _ = request_3.on_next(33);
+///
+/// drop((subscription, requests, request_2, request_3));
+/// assert_eq!(values, [2, 33]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct MergeAll<OE, OE1> {
     source: OE,
+    max_concurrency: NonZeroUsize,
     _marker: MarkerType<OE1>,
 }
 
 impl<OE, OE1> MergeAll<OE, OE1> {
-    /// Creates a [`MergeAll`] over `source`;
+    /// Creates a [`MergeAll`] over `source`, with no limit;
     /// [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all) is the fluent
     /// form.
     pub fn new<E>(source: OE) -> Self
@@ -65,29 +113,25 @@ impl<OE, OE1> MergeAll<OE, OE1> {
     {
         Self {
             source,
+            // No more than `usize::MAX` subscriptions can be held anyway, so nothing is ever
+            // queued.
+            max_concurrency: NonZeroUsize::MAX,
             _marker: PhantomData,
         }
     }
-}
 
-impl<E, OE1, I> MergeAll<WithErrorType<E, FromIter<I>>, OE1> {
-    /// Creates a [`MergeAll`] over the observables of `into_iterator`.
-    pub fn new_from_iter(into_iterator: I) -> Self
-    where
-        I: IntoIterator<Item = OE1>,
-        OE1: ObservableTypes<Error = E>,
-    {
-        Self {
-            source: WithErrorType::new(FromIter::new(into_iterator)),
-            _marker: PhantomData,
-        }
+    /// Subscribes at most `max_concurrency` inner observables at a time: one that arrives while
+    /// that many are running waits in a queue.
+    pub fn max_concurrency(mut self, max_concurrency: NonZeroUsize) -> Self {
+        self.max_concurrency = max_concurrency;
+        self
     }
 }
 
 delegate_disposal!(
-    Disposal<M, T, E, D, D1>,
-    subscribe_with_context::Disposal<M, T, E, Model<D1>, D>,
-    where M: ThreadMode, D: Disposable, D1: Disposable
+    Disposal<M, T, E, D, OE1>,
+    ContextDisposal<M, T, E, D, Enqueue<OE1>, <OE1 as ObservableTypes>::Disposal>,
+    where M: ThreadMode, D: Disposable, OE1: ObservableTypes
 );
 
 impl<T, E, OE, OE1> ObservableTypes for MergeAll<OE, OE1>
@@ -98,153 +142,27 @@ where
     type Item = T;
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
-    type Disposal = Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
+    type Disposal = Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for MergeAll<OE, OE1>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            MergeAllObserver<
-                JoinedModeOf<OE, OE1>,
-                T,
-                E,
-                OR,
-                <OE1 as ObservableTypes>::Disposal,
-                <OE as ObservableTypes>::Disposal,
-            >,
+            SourceObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>, Identity>,
             Item = OE1,
             Error = E,
         >,
-    OE1: Observable<
-            MergeAllInnerObserver<
-                JoinedModeOf<OE, OE1>,
-                T,
-                E,
-                OR,
-                <OE1 as ObservableTypes>::Disposal,
-                <OE as ObservableTypes>::Disposal,
-            >,
-            Item = T,
-            Error = E,
-        >,
+    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let model = Model {
-            subscriptions: ReservationMap::default(),
-            is_source_completed: false,
-        };
-        subscribe_with_context(observer, model, |context| {
-            self.source.subscribe(MergeAllObserver(context))
-        })
+        flatten::subscribe(
+            self.source,
+            |_| observer,
+            self.max_concurrency,
+            Enqueue::new(),
+            Identity,
+        )
         .map_inner_into()
-    }
-}
-
-struct Model<D: Disposable> {
-    /// Keys are never reused, so a late inner observer can never remove another
-    /// inner observer's subscription.
-    ///
-    /// They are disposed in the order they were subscribed in when the context stops, which rejects
-    /// their events first: the order among them cannot be observed downstream.
-    subscriptions: ReservationMap<DisposeOnDrop<D>>,
-    is_source_completed: bool,
-}
-
-#[doc(hidden)]
-pub struct MergeAllObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable>(
-    SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
-);
-
-impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<OE1, E>
-    for MergeAllObserver<M, T, E, OR, OE1::Disposal, SD>
-where
-    OR: Observer<T, E>,
-    OE1: Observable<
-            MergeAllInnerObserver<M, T, E, OR, <OE1 as ObservableTypes>::Disposal, SD>,
-            Item = T,
-            Error = E,
-        >,
-    SD: Disposable,
-{
-    fn on_next(&mut self, value: OE1) -> Flow {
-        let Some(key) = self
-            .0
-            .update(|model| UpdateOutcome::new(model.subscriptions.reserve()))
-            .result()
-        else {
-            return Flow::Stop;
-        };
-        let observer = MergeAllInnerObserver {
-            context: self.0.clone(),
-            key,
-        };
-        let subscription = value.subscribe(observer);
-
-        // `fill` gives the subscription back when the inner observable completed while it was being
-        // subscribed, and released its own entry.
-        self.0
-            .update(|model| {
-                UpdateOutcome::empty()
-                    .with_drop_outside(model.subscriptions.fill(key, subscription))
-            })
-            .flow()
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            completion @ Termination::Completed => {
-                let _ = self.0.update(|model| {
-                    if model.subscriptions.is_empty() {
-                        UpdateOutcome::empty().with_termination_event(completion)
-                    } else {
-                        model.is_source_completed = true;
-                        UpdateOutcome::empty().without_events()
-                    }
-                });
-            }
-            error @ Termination::Error(_) => {
-                self.0.send_termination(error);
-            }
-        }
-    }
-}
-
-#[doc(hidden)]
-pub struct MergeAllInnerObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable> {
-    context: SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
-    key: Id,
-}
-
-impl<M: ThreadMode, T, E, OR, ID, SD> Observer<T, E> for MergeAllInnerObserver<M, T, E, OR, ID, SD>
-where
-    OR: Observer<T, E>,
-    ID: Disposable,
-    SD: Disposable,
-{
-    fn on_next(&mut self, value: T) -> Flow {
-        self.context.send_next(value)
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            completion @ Termination::Completed => {
-                let _ = self.context.update(|model| {
-                    let subscription = model.subscriptions.release(self.key);
-                    if model.is_source_completed && model.subscriptions.is_empty() {
-                        UpdateOutcome::empty()
-                            .with_termination_event(completion)
-                            .with_drop_outside(subscription)
-                    } else {
-                        UpdateOutcome::empty()
-                            .without_events()
-                            .with_drop_outside(subscription)
-                    }
-                });
-            }
-            error @ Termination::Error(_) => {
-                self.context.send_termination(error);
-            }
-        }
     }
 }

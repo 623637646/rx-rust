@@ -1897,3 +1897,54 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+#[test]
+fn test_panic_in_selector() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+    use rx_rust::thread_mode::mutable::MutableExt;
+    use std::sync::{Arc, Mutex};
+
+    let (checker, observer) = Checker::<i32, Infallible>::new();
+    let panic_on_drop = Arc::new(Mutex::new(None));
+    let inner = PublishSubject::shared();
+
+    // A source that goes on after its observer unwinds: a test channel lets go of the observer.
+    let source = Create::shared_boxed({
+        let panic_on_drop = panic_on_drop.clone();
+        let checker = checker.clone();
+        let mut inner = inner.clone();
+        move |mut observer: SendBoxedObserver<'_, i32, Infallible>| {
+            assert!(observer.on_next(1).is_continue());
+
+            // The selector fails for the second value. It runs before the place of the inner
+            // observable of the first is taken, so that one is not replaced, and the stream goes
+            // on.
+            expect_panic_on_drop(|panic| {
+                panic_on_drop.replace_value(Some(panic));
+                let _ = observer.on_next(2);
+            });
+            assert_eq!(checker.state(), State::Active);
+            assert!(inner.on_next(10).is_continue());
+            assert_eq!(checker.values(), [10]);
+
+            // The next value replaces it as usual.
+            assert!(observer.on_next(3).is_continue());
+            assert!(inner.on_next(10).is_continue());
+            assert_eq!(checker.values(), [10, 30]);
+            inner.on_termination(Termination::Completed);
+            observer.on_termination(Termination::Completed);
+            DisposeOnDrop::new(CallbackDisposal::new(|| {}))
+        }
+    });
+    let _subscription = source
+        .switch_map(move |value| {
+            if value == 2 {
+                drop(panic_on_drop.take_value());
+            }
+            inner.clone().map(move |result| result * value)
+        })
+        .subscribe(observer);
+
+    assert_eq!(checker.values(), [10, 30]);
+    assert_eq!(checker.state(), State::Completed);
+}

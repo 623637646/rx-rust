@@ -388,6 +388,32 @@ fn test_merge_max_concurrency() {
 }
 
 #[test]
+fn test_merge_all_max_concurrency() {
+    let mut source = PublishSubject::<_, Infallible, _>::local();
+    let mut inner_1 = PublishSubject::local();
+    let mut inner_2 = PublishSubject::local();
+    let (record, _subscription) = record(
+        source
+            .clone()
+            .merge_all()
+            .max_concurrency(NonZeroUsize::new(1).unwrap()),
+    );
+
+    assert!(source.on_next(inner_1.clone()).is_continue());
+    assert!(source.on_next(inner_2.clone()).is_continue());
+    assert!(inner_1.on_next(Rc::new(1)).is_continue());
+    assert!(inner_2.on_next(Rc::new(2)).is_continue()); // Not subscribed yet.
+    source.on_termination(Termination::Completed);
+    assert!(record.termination().is_none());
+
+    inner_1.on_termination(Termination::Completed);
+    assert!(inner_2.on_next(Rc::new(3)).is_continue());
+    inner_2.on_termination(Termination::Completed);
+    assert_eq!(record.values(), rcs([1, 3]));
+    assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+#[test]
 fn test_combine_latest() {
     let mut subject_1: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
     let mut subject_2: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();

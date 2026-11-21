@@ -1,23 +1,28 @@
 //! The [`ConcatMap`] operator, behind
 //! [`ObservableExt::concat_map`](crate::observable::ObservableExt::concat_map).
 
-use super::map::Map;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
-    operators::{
-        combining::concat_all::{self, ConcatAll, InnerObserver, SourceObserver},
-        transforming::map::MapObserver,
+    operators::combining::{
+        internal::flatten::{self, Enqueue, InnerObserverOf, SourceObserverOf},
+        merge_all,
     },
     utils::MarkerType,
 };
 use educe::Educe;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, num::NonZeroUsize};
 
 /// Maps each source value to an observable and emits all of the values of each, one observable
 /// after the other.
 /// See <https://reactivex.io/documentation/operators/flatmap.html>
+///
+/// It is [`FlatMap`](crate::operators::transforming::flat_map::FlatMap) with a
+/// `max_concurrency` of one. The callback runs as each value arrives, and the observable it
+/// returns waits in a queue, which has no bound, until the ones before it have completed: it is
+/// subscribed only then, so an observable that starts its work as it is subscribed — most of
+/// them — runs alone.
 ///
 /// # Examples
 /// ```rust
@@ -76,38 +81,29 @@ where
     type Item = T;
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
-    /// The disposal of the [`ConcatAll`] this operator is built on.
-    type Disposal = concat_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
+    /// The disposal of the [`MergeAll`](crate::operators::combining::merge_all::MergeAll) this
+    /// operator shares its machinery with.
+    type Disposal = merge_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
 }
 
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for ConcatMap<T0, OE, OE1, F>
 where
     OR: Observer<T, E>,
-    OE: Observable<
-            MapObserver<
-                SourceObserver<
-                    JoinedModeOf<OE, OE1>,
-                    T,
-                    E,
-                    OR,
-                    OE1,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-                F,
-            >,
-            Item = T0,
-            Error = E,
-        >,
-    OE1: Observable<
-            InnerObserver<JoinedModeOf<OE, OE1>, T, E, OR, OE1, <OE as ObservableTypes>::Disposal>,
-            Item = T,
-            Error = E,
-        >,
+    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>, F>, Item = T0, Error = E>,
+    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>>, Item = T, Error = E>,
     F: FnMut(T0) -> OE1,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let observable = Map::new(self.source, self.callback);
-        let observable = ConcatAll::new(observable);
-        observable.subscribe(observer)
+        // Not a `Map` in front of a `MergeAll`: the callback is the selector of the machinery
+        // both are built on, which decides when it runs.
+        // One inner observable at a time.
+        flatten::subscribe(
+            self.source,
+            |_| observer,
+            NonZeroUsize::MIN,
+            Enqueue::new(),
+            self.callback,
+        )
+        .map_inner_into()
     }
 }

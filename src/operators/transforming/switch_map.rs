@@ -1,46 +1,53 @@
 //! The [`SwitchMap`] operator, behind
 //! [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map).
 
-use super::map::Map;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
-    operators::{
-        combining::switch::{self, Switch, SwitchInnerObserver, SwitchObserver},
-        transforming::map::MapObserver,
+    operators::combining::{
+        internal::flatten::{self, InnerObserverOf, Replace, SourceObserverOf},
+        switch,
     },
     utils::MarkerType,
 };
 use educe::Educe;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, num::NonZeroUsize};
 
 /// Maps each source value to an observable and emits the values of the most recent one only,
 /// unsubscribing from the previous one.
 /// See <https://reactivex.io/documentation/operators/switch.html>
 ///
+/// The callback runs for every value, before the previous observable is unsubscribed from. See
+/// [`Switch`](crate::operators::combining::switch::Switch) for the flattening this is
+/// built on.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
-///     observer::Termination,
-///     operators::{
-///         creating::from_iter::FromIter,
-///         transforming::switch_map::SwitchMap,
-///     },
+///     observer::Observer,
+///     operators::transforming::switch_map::SwitchMap,
+///     subject::publish_subject::PublishSubject,
 /// };
+/// use std::convert::Infallible;
 ///
 /// let mut values = Vec::new();
+/// let mut queries = PublishSubject::<_, Infallible, _>::local();
+/// let mut results = PublishSubject::local();
 ///
-/// let observable = SwitchMap::new(FromIter::new([1, 2]), |value| {
-///     FromIter::new([value, value + 10])
-/// });
-/// observable.subscribe_with_callback(
-///     |value| values.push(value),
-///     |termination| assert_eq!(termination, Termination::Completed),
-/// );
+/// let results_source = results.clone();
+/// let subscription = SwitchMap::new(queries.clone(), move |query| {
+///     results_source.clone().map(move |result| (query, result))
+/// })
+/// .subscribe_with_callback(|value| values.push(value), |_| {});
 ///
-/// assert_eq!(values, vec![1, 11, 2, 12]);
+/// let _ = queries.on_next("r");
+/// let _ = queries.on_next("rx"); // The search for "r" is unsubscribed from.
+/// let _ = results.on_next(3);
+///
+/// drop((subscription, queries, results));
+/// assert_eq!(values, [("rx", 3)]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -76,45 +83,29 @@ where
     type Item = T;
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
-    /// The disposal of the [`Switch`] this operator is built on.
+    /// The disposal of the [`Switch`](crate::operators::combining::switch::Switch) this
+    /// operator shares its machinery with.
     type Disposal = switch::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for SwitchMap<T0, OE, OE1, F>
 where
     OR: Observer<T, E>,
-    OE: Observable<
-            MapObserver<
-                SwitchObserver<
-                    JoinedModeOf<OE, OE1>,
-                    T,
-                    E,
-                    OR,
-                    <OE1 as ObservableTypes>::Disposal,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-                F,
-            >,
-            Item = T0,
-            Error = E,
-        >,
-    OE1: Observable<
-            SwitchInnerObserver<
-                JoinedModeOf<OE, OE1>,
-                T,
-                E,
-                OR,
-                <OE1 as ObservableTypes>::Disposal,
-                <OE as ObservableTypes>::Disposal,
-            >,
-            Item = T,
-            Error = E,
-        >,
+    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Replace, F>, Item = T0, Error = E>,
+    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Replace>, Item = T, Error = E>,
     F: FnMut(T0) -> OE1,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let observable = Map::new(self.source, self.callback);
-        let observable = Switch::new(observable);
-        observable.subscribe(observer)
+        // Not a `Map` in front of a `Switch`: the callback is the selector of the machinery
+        // both are built on, which decides when it runs.
+        // One inner observable at a time.
+        flatten::subscribe(
+            self.source,
+            |_| observer,
+            NonZeroUsize::MIN,
+            Replace,
+            self.callback,
+        )
+        .map_inner_into()
     }
 }

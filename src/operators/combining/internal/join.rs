@@ -1,11 +1,11 @@
-//! The machinery shared by [`Join`](super::join::Join) and
-//! [`GroupJoin`](super::group_join::GroupJoin): both open a window for every value of either
+//! The machinery shared by [`Join`](super::super::join::Join) and
+//! [`GroupJoin`](super::super::group_join::GroupJoin): both open a window for every value of either
 //! source, which lasts until the duration observable of that value emits or completes, and both
 //! serialize everything through one context. They differ only in what they emit, which a delegate
 //! observer decides outside the lock from the [`Action`]s this module hands it: a pair for every
 //! two values whose windows overlap, or a window of right values for every left value. Neither
-//! operator is built on the other: each is a projection of those actions, ended as its
-//! [`EndingSource`] says.
+//! operator is built on the other: each is a projection of those actions, ended as the
+//! [`Ending`] of its delegate says.
 //!
 //! The module is private, but what a public signature of either operator names stays `pub` and is
 //! re-exported by both: the [`Disposal`] and the aliases, and the observers the sources and the
@@ -20,7 +20,7 @@ use crate::{
     thread_mode::{Joined, ThreadMode},
     utils::{
         id_generator::Id,
-        reservation_map::{Released, ReservationMap},
+        reservation_map::ReservationMap,
         serialized_delivery::{StopView, UpdateOutcome, Updated},
         subscribe_with_context::{
             self, SubscriptionContext, subscribe_with_context_two_steps_with_stop_view,
@@ -34,10 +34,10 @@ use crate::{
 pub type ModeOf<OE, OE2, DL, DR> = Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>;
 
 delegate_disposal!(
-    /// The disposal of a [`Join`](super::join::Join) or
-    /// [`GroupJoin`](super::group_join::GroupJoin) subscription: it stops the context, which tells
-    /// the observer that emits the pairs or windows to stop, then disposes the sources and the
-    /// durations.
+    /// The disposal of a [`Join`](super::super::join::Join) or
+    /// [`GroupJoin`](super::super::group_join::GroupJoin) subscription: it stops the context,
+    /// which tells the observer that emits the pairs or windows to stop, then disposes the sources
+    /// and the durations.
     Disposal<M, L, R, E, SD, DLD, DRD>,
     subscribe_with_context::Disposal<M, Action<L, R>, E, Model<DLD, DRD>, SD>,
     where M: ThreadMode, SD: Disposable, DLD: Disposable, DRD: Disposable
@@ -56,7 +56,7 @@ pub type DisposalOf<OE, OE2, DL, DR> = Disposal<
 
 /// The [`LeftObserver`] of a join of `OE` and `OE2` whose windows last as long as `DL` and `DR`,
 /// with the delegate `D`.
-pub(super) type LeftObserverOf<OE, OE2, DL, DR, D, FL> = LeftObserver<
+pub(crate) type LeftObserverOf<OE, OE2, DL, DR, D, FL> = LeftObserver<
     ModeOf<OE, OE2, DL, DR>,
     <OE as ObservableTypes>::Item,
     <OE2 as ObservableTypes>::Item,
@@ -69,7 +69,7 @@ pub(super) type LeftObserverOf<OE, OE2, DL, DR, D, FL> = LeftObserver<
 >;
 
 /// [`LeftObserverOf`] for the right source.
-pub(super) type RightObserverOf<OE, OE2, DL, DR, D, FR> = RightObserver<
+pub(crate) type RightObserverOf<OE, OE2, DL, DR, D, FR> = RightObserver<
     ModeOf<OE, OE2, DL, DR>,
     <OE as ObservableTypes>::Item,
     <OE2 as ObservableTypes>::Item,
@@ -82,7 +82,7 @@ pub(super) type RightObserverOf<OE, OE2, DL, DR, D, FR> = RightObserver<
 >;
 
 /// [`LeftObserverOf`] for the durations.
-pub(super) type DurationObserverOf<OE, OE2, DL, DR, D> = DurationObserver<
+pub(crate) type DurationObserverOf<OE, OE2, DL, DR, D> = DurationObserver<
     ModeOf<OE, OE2, DL, DR>,
     <OE as ObservableTypes>::Item,
     <OE2 as ObservableTypes>::Item,
@@ -93,17 +93,16 @@ pub(super) type DurationObserverOf<OE, OE2, DL, DR, D> = DurationObserver<
     ChainDisposalOf<OE2, OE>,
 >;
 
-/// Subscribes both sources with observers sharing one context, ended as `ending_source` says,
-/// whose observer is the delegate that `delegate_builder` builds around the [`StopView`] of the
-/// context.
-pub(super) fn subscribe<L, R, E, OR, OE, OE2, FL, FR, DL, DR>(
+/// Subscribes both sources with observers sharing one context, whose observer is the delegate
+/// that `delegate_builder` builds around the [`StopView`] of the context, and which is ended as
+/// the [`Ending`] of that delegate says.
+pub(crate) fn subscribe<L, R, E, OR, OE, OE2, FL, FR, DL, DR>(
     (left, right): (OE, OE2),
     (left_duration_selector, right_duration_selector): (FL, FR),
-    ending_source: EndingSource,
     delegate_builder: impl FnOnce(StopView<ModeOf<OE, OE2, DL, DR>>) -> OR,
 ) -> DisposeOnDrop<DisposalOf<OE, OE2, DL, DR>>
 where
-    OR: Observer<Action<L, R>, E>,
+    OR: Observer<Action<L, R>, E> + Ending,
     OE: Observable<LeftObserverOf<OE, OE2, DL, DR, OR, FL>, Item = L, Error = E>,
     OE2: Observable<RightObserverOf<OE, OE2, DL, DR, OR, FR>, Item = R, Error = E>,
     FL: FnMut(&L) -> DL,
@@ -113,7 +112,7 @@ where
 {
     subscribe_with_context_two_steps_with_stop_view(
         delegate_builder,
-        Model::new(ending_source),
+        Model::new(),
         |context| {
             Some(left.subscribe(LeftObserver {
                 context: context.clone(),
@@ -132,7 +131,7 @@ where
 
 /// What the observers of a join ask the delegate to do, in the order they decided it under the
 /// lock.
-pub(super) enum Action<L, R> {
+pub(crate) enum Action<L, R> {
     /// A left value arrived: it meets the right values that are open. It is kept under its id
     /// while its window is open, and not at all when it opens none.
     Left(Option<Id>, L),
@@ -145,14 +144,13 @@ pub(super) enum Action<L, R> {
     Completed(Side),
 }
 
-/// The duration subscriptions of the open windows, and what decides when the stream ends.
+/// The duration subscriptions of the open windows.
 struct Model<DLD: Disposable, DRD: Disposable> {
     /// The windows of the left values, `None` once the right source has completed: a left value
     /// waits for right values only, so from then on no window of one stays open, nor opens.
     lefts: Windows<DLD>,
     /// The windows of the right values, `None` once the left source has completed, as `lefts`.
     rights: Windows<DRD>,
-    ending_source: EndingSource,
 }
 
 // A delegate emits several events for one action, or runs user code before an emission, while the
@@ -161,15 +159,13 @@ struct Model<DLD: Disposable, DRD: Disposable> {
 // inside one of those emissions or that user code, or from another thread meanwhile, reaches the
 // rest of them only through it.
 
-/// Which source ends the stream once it has completed and the windows of its values have closed:
-/// what is left of the other source then has nothing to meet.
-#[derive(Clone, Copy)]
-pub(super) enum EndingSource {
-    /// Either source, as a join, whose values all wait for the other source's.
-    Either,
-    /// The left source only, as a group join, which still emits a window for every left value
-    /// once the right source has finished.
-    Left,
+/// How the stream of an operator ends, fixed by the type of its delegate.
+pub(crate) trait Ending {
+    /// Whether the right source ends the stream once it has completed and the windows of its
+    /// values have closed, as the left one always does: what is left of the other source then has
+    /// nothing to meet. A join's does, since its values all wait for left ones; a group join's does
+    /// not, since it still emits a window for every left value.
+    const RIGHT_ENDS_STREAM: bool;
 }
 
 /// The duration subscription of each open window of one source's values, under an id never
@@ -180,18 +176,16 @@ type Windows<D> = Option<ReservationMap<DisposeOnDrop<D>>>;
 /// Which source a window belongs to. The ids of the two sides are handed out independently, so a
 /// window is known by its side and its id together.
 #[derive(Clone, Copy)]
-pub(super) enum Side {
+pub(crate) enum Side {
     Left,
     Right,
 }
 
 impl<DLD: Disposable, DRD: Disposable> Model<DLD, DRD> {
-    /// Creates a model ended as `ending_source` says.
-    fn new(ending_source: EndingSource) -> Self {
+    fn new() -> Self {
         Self {
             lefts: Some(ReservationMap::default()),
             rights: Some(ReservationMap::default()),
-            ending_source,
         }
     }
 
@@ -205,16 +199,14 @@ impl<DLD: Disposable, DRD: Disposable> Model<DLD, DRD> {
         }
     }
 
-    /// Whether nothing can come any more: a completed source whose windows have all closed leaves
-    /// the other source's values nothing to meet. A completed source also closes the windows of
-    /// the other, so two completed sources always end the stream.
-    fn is_finished(&self) -> bool {
+    /// Whether nothing can come any more, given [`Ending::RIGHT_ENDS_STREAM`]: a completed source
+    /// whose windows have all closed leaves the other source's values nothing to meet. A completed
+    /// source also closes the windows of the other, so two completed sources always end the stream.
+    fn is_finished(&self, right_ends_stream: bool) -> bool {
         match (&self.lefts, &self.rights) {
             (None, None) => true,
             (Some(lefts), None) => lefts.is_empty(),
-            (None, Some(rights)) => {
-                matches!(self.ending_source, EndingSource::Either) && rights.is_empty()
-            }
+            (None, Some(rights)) => right_ends_stream && rights.is_empty(),
             (Some(_), Some(_)) => false,
         }
     }
@@ -223,9 +215,10 @@ impl<DLD: Disposable, DRD: Disposable> Model<DLD, DRD> {
     /// come any more.
     fn events_ending_if_finished<L, R, E>(
         &self,
+        right_ends_stream: bool,
         action: Action<L, R>,
     ) -> EventBatch<Action<L, R>, E> {
-        if self.is_finished() {
+        if self.is_finished(right_ends_stream) {
             EventBatch::NextAndTermination(action, Termination::Completed)
         } else {
             EventBatch::Next(action)
@@ -258,7 +251,7 @@ macro_rules! impl_source_observer {
             for $name<M, L, R, E, OR, DLD, DRD, SD, F>
         where
             M: ThreadMode,
-            OR: Observer<Action<L, R>, E>,
+            OR: Observer<Action<L, R>, E> + Ending,
             DLD: Disposable,
             DRD: Disposable,
             SD: Disposable,
@@ -312,9 +305,10 @@ macro_rules! impl_source_observer {
                             let closed = model.$other.take();
                             UpdateOutcome::empty()
                                 .with_drop_outside(closed)
-                                .with_events(
-                                    model.events_ending_if_finished(Action::Completed(Side::$side)),
-                                )
+                                .with_events(model.events_ending_if_finished(
+                                    OR::RIGHT_ENDS_STREAM,
+                                    Action::Completed(Side::$side),
+                                ))
                         });
                     }
                     error @ Termination::Error(_) => self.context.send_termination(error),
@@ -351,7 +345,7 @@ fn close<M, L, R, E, OR, DLD, DRD, SD>(
     id: Id,
 ) where
     M: ThreadMode,
-    OR: Observer<Action<L, R>, E>,
+    OR: Observer<Action<L, R>, E> + Ending,
     DLD: Disposable,
     DRD: Disposable,
     SD: Disposable,
@@ -371,7 +365,7 @@ fn close_window<M, L, R, E, OR, DLD, DRD, SD, D>(
     windows: impl FnOnce(&mut Model<DLD, DRD>) -> &mut Windows<D>,
 ) where
     M: ThreadMode,
-    OR: Observer<Action<L, R>, E>,
+    OR: Observer<Action<L, R>, E> + Ending,
     DLD: Disposable,
     DRD: Disposable,
     SD: Disposable,
@@ -380,8 +374,8 @@ fn close_window<M, L, R, E, OR, DLD, DRD, SD, D>(
     let _ = context.update(|model| {
         let released = windows(model)
             .as_mut()
-            .map_or(Released::Absent, |windows| windows.release(id));
-        if matches!(released, Released::Absent) {
+            .and_then(|windows| windows.release(id));
+        if released.is_none() {
             // Closed already, by the completion of the other source.
             return UpdateOutcome::empty()
                 .without_drop_outside()
@@ -389,7 +383,9 @@ fn close_window<M, L, R, E, OR, DLD, DRD, SD, D>(
         }
         UpdateOutcome::empty()
             .with_drop_outside(released)
-            .with_events(model.events_ending_if_finished(Action::Close(side, id)))
+            .with_events(
+                model.events_ending_if_finished(OR::RIGHT_ENDS_STREAM, Action::Close(side, id)),
+            )
     });
 }
 
@@ -397,7 +393,7 @@ impl<M, L, R, E, OR, DLD, DRD, SD, T> Observer<T, E>
     for DurationObserver<M, L, R, E, OR, DLD, DRD, SD>
 where
     M: ThreadMode,
-    OR: Observer<Action<L, R>, E>,
+    OR: Observer<Action<L, R>, E> + Ending,
     DLD: Disposable,
     DRD: Disposable,
     SD: Disposable,

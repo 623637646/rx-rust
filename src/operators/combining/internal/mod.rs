@@ -2,4 +2,6 @@
 //! operator: each is shared by several of them, those of [`transforming`](crate::operators::transforming)
 //! included.
 
+pub(crate) mod flatten;
+pub(super) mod join;
 pub(super) mod merge;
