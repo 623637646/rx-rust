@@ -1850,11 +1850,10 @@ fn test_abandon_after_next() {
     assert_eq!(checker.state(), State::Dropped);
 }
 
-/// An inner observable that arrives once the stream is over — its error queued behind a delivery
-/// running on another thread, which has not delivered it yet — tells its source to stop. It is
-/// still subscribed to, like one racing the termination, and disposed once the stream has ended.
+/// A queued error prevents replacement of the current inner observable before it reaches
+/// downstream.
 #[test]
-fn test_next_while_terminating() {
+fn test_next_after_error_is_queued() {
     const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut sender, observable, _) = test_channel();
     let (mut sender_1, observable_1, _) = test_channel();
@@ -1882,6 +1881,7 @@ fn test_next_while_terminating() {
     // Queued behind the delivery of 111, which is still running on the other thread.
     sender_2.on_termination(Termination::Error("error"));
     assert!(sender.on_next(observable_3).is_break());
+    assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
     assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
@@ -1890,7 +1890,7 @@ fn test_next_while_terminating() {
     assert!(deliverer.join().unwrap());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
 }
 
 #[cfg(panic = "unwind")]
@@ -1953,8 +1953,7 @@ fn test_unsubscribe_on_replaced_inner_unsub() {
     let subscription = source.switch().subscribe(observer);
 
     // Disposing the replaced inner subscription ends the stream, after the update that replaced
-    // it. The replacing inner observable is still subscribed, like one racing a termination (see
-    // `test_next_while_terminating`), and disposed at once, since the stream has ended.
+    // it. The replacement's subscription starts as decided and is disposed as soon as it returns.
     let first = first.do_after_disposal(move || subscription.dispose());
     assert!(sender.on_next(first.into_boxed()).is_continue());
     assert!(sender.on_next(second.into_boxed()).is_break());

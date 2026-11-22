@@ -21,7 +21,7 @@ use crate::{
     utils::{
         id_generator::Id,
         reservation_map::ReservationMap,
-        serialized_delivery::{StopView, UpdateOutcome, Updated},
+        serialized_delivery::{StopView, UpdateOutcome},
         subscribe_with_context::{
             self, SubscriptionContext, subscribe_with_context_two_steps_with_stop_view,
         },
@@ -268,12 +268,9 @@ macro_rules! impl_source_observer {
                     let id = model.$this.as_mut().map(ReservationMap::reserve);
                     UpdateOutcome::new(id).with_next_event(Action::$side(id, value))
                 });
-                let Updated::Ran {
-                    result: Some(id),
-                    flow: Flow::Continue(()),
-                } = updated
-                else {
-                    return updated.flow();
+                let flow = updated.flow();
+                let Some(id) = updated.continued().flatten() else {
+                    return flow;
                 };
                 let subscription = duration.subscribe(DurationObserver {
                     context: self.context.clone(),

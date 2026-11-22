@@ -166,7 +166,7 @@ where
     /// [`UpdateOutcome::with_drop_outside`].
     ///
     /// `update` must not notify anyone and must not drop a value that can re-enter this multicast:
-    /// it runs under the lock. Answers [`Updated::Stopped`], without running `update`, once the
+    /// it runs under the lock. Answers [`Updated::Ended`], without running `update`, once the
     /// delivery has stopped.
     ///
     /// The flow is [`Flow::Break`] only once the multicast has terminated — including by this very
@@ -283,7 +283,7 @@ where
                 }
                 MulticastDisposal(None)
             }
-            Updated::Stopped => {
+            Updated::Ended => {
                 // The delivery only stops once an observer panicked, which kills the multicast:
                 // the termination went with the resources, so this observer is dropped here
                 // instead, outside the lock. See the module documentation.

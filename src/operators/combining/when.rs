@@ -16,7 +16,7 @@ use crate::{
             position::{AtPosition, TupleIndex},
             tuple::{IntoReversed, for_each_arity},
         },
-        serialized_delivery::{StopView, UpdateOutcome, Updated},
+        serialized_delivery::{StopView, UpdateOutcome},
         subscribe_with_context::{
             self, SubscriptionContext, subscribe_with_context_with_stop_view,
         },
@@ -496,17 +496,9 @@ where
     }
 
     fn observer(&mut self, _: TupleIndex<INDEX>) -> Option<Self::Observer> {
-        // An update that queues nothing answers `Break` once a termination is queued, so it tells
-        // that the stream is over as well.
-        let wanted = matches!(
-            self.update(|model| {
-                UpdateOutcome::new(model.inputs.at(TupleIndex::<INDEX>).is_some())
-            }),
-            Updated::Ran {
-                result: true,
-                flow: Flow::Continue(()),
-            }
-        );
+        let wanted = self
+            .update(|model| UpdateOutcome::new(model.inputs.at(TupleIndex::<INDEX>).is_some()))
+            .result()?;
         wanted.then(|| WhenObserver(self.clone()))
     }
 

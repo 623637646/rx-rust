@@ -50,7 +50,7 @@ use crate::{
         positional::{position::Position, slots::ReservationSlots},
         serialized_delivery::StopView,
         subscribe_with_context::{
-            self, DropUndecided, SubscriptionContext, UpdateOutcome, Updated,
+            self, DropUndecided, SubscriptionContext, UpdateOutcome,
             subscribe_with_context_with_stop_view,
         },
     },
@@ -296,11 +296,7 @@ where
                     });
                     // A stopped context dropped the cursor outside the lock, and so does a stop
                     // here.
-                    let Updated::Ran {
-                        result: Some(kept),
-                        flow: Flow::Continue(()),
-                    } = updated
-                    else {
+                    let Some(kept) = updated.continued().flatten() else {
                         return;
                     };
                     cursor = kept;
@@ -369,20 +365,15 @@ where
         });
         // The source may have ended the stream as it was subscribed: only a continuing flow goes
         // on.
-        match updated {
-            Updated::Ran {
-                result: (next, released),
-                flow: Flow::Continue(()),
-            } => {
-                // Disposing a synchronously completed source can re-enter and stop the stream
-                // after the update decided its flow. Check only when that disposal ran.
-                if released {
-                    self.ensure_running()?;
-                }
-                next
-            }
-            _ => ControlFlow::Break(Pause::Stopped),
+        let Some((next, released)) = updated.continued() else {
+            return ControlFlow::Break(Pause::Stopped);
+        };
+        // Disposing a synchronously completed source can re-enter and stop the stream after the
+        // update decided its flow. Check only when that disposal ran.
+        if released {
+            self.ensure_running()?;
         }
+        next
     }
 }
 
@@ -421,13 +412,8 @@ where
                     };
                     outcome.with_drop_outside(finished)
                 });
-                // An error may be queued behind a delivery running elsewhere already: its stop
-                // keeps the next source from being pulled, even before it is delivered.
-                if let Updated::Ran {
-                    result: Some(cursor),
-                    flow: Flow::Continue(()),
-                } = next
-                {
+                // Handing over the cursor reserves the next place without emitting any events.
+                if let Some(cursor) = next.result().flatten() {
                     // Disposing the finished subscription can re-enter and stop the stream after
                     // the update decided its flow. That disposal always ran: the sources are
                     // parked only while no source is being subscribed, so this one was stored.

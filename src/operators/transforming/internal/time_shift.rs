@@ -20,11 +20,8 @@ use crate::{
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
-    utils::{
-        serialized_delivery::Updated,
-        subscribe_with_context::{
-            SubscriptionContext, TwoStepsDisposal, subscribe_with_context_two_steps,
-        },
+    utils::subscribe_with_context::{
+        SubscriptionContext, TwoStepsDisposal, subscribe_with_context_two_steps,
     },
 };
 use std::time::Duration;
@@ -161,13 +158,7 @@ where
             };
             next
         });
-        match updated {
-            Updated::Ran {
-                result,
-                flow: Flow::Continue(()),
-            } => result,
-            _ => Next::Finished,
-        }
+        updated.continued().unwrap_or(Next::Finished)
     });
     scheduler.run_task(task, None)
 }

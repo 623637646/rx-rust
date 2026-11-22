@@ -11,41 +11,40 @@ use crate::observer::{EventBatch, Flow, Termination};
 use educe::Educe;
 use std::convert::identity;
 
-/// What an update answers: the result its callback gave back, and whether the observer still
-/// accepts events — or that the callback did not run at all, because the delivery had stopped.
+/// The result and flow of an update, or [`Updated::Ended`] if its stream had ended, so the update
+/// did not run.
 ///
 /// An `on_next` built on updates answers the [`flow`](Self::flow) of its last one; a step that only
 /// needs the result, a reservation say, takes it with [`result`](Self::result) and leaves the flow
-/// to the update that ends the work. A step that needs both matches on the variants.
+/// to the update that ends the work. A step that goes on only while the flow continues takes the
+/// result with [`continued`](Self::continued).
 #[derive(Educe)]
 #[educe(Debug, Clone, Copy, PartialEq, Eq)]
 #[must_use = "an `on_next` answers the flow of its last update"]
 pub enum Updated<R> {
     /// The callback ran and gave back `result`.
     ///
-    /// `flow` is what delivering the events it queued answered or, when it queued none, whether
-    /// the delivery still accepts events: [`Flow::Break`] once a termination is queued behind a
-    /// delivery running elsewhere. An outcome that [answers a stop](UpdateOutcome::answering_stop)
-    /// makes it [`Flow::Break`] whatever the delivery answered.
+    /// `flow` comes from sending the callback's events and defaults to [`Flow::Continue`] for
+    /// an update with no events. An outcome that [answers a stop](UpdateOutcome::answering_stop)
+    /// always makes it [`Flow::Break`].
     Ran {
         /// What the callback gave back with [`UpdateOutcome::new`].
         result: R,
         /// Whether the caller may go on sending.
         flow: Flow,
     },
-    /// The delivery had stopped, so the callback did not run: it was dropped, with everything it
-    /// captured, outside the lock.
-    ///
-    /// Stopping is terminal: once a delivery has stopped, every later update answers this.
-    Stopped,
+    /// The stream had ended — the delivery had stopped, or a termination was already queued — so
+    /// the callback did not run. It was dropped, with its captures, outside the lock. The end is
+    /// final: every later update answers this too.
+    Ended,
 }
 
 impl<R> Updated<R> {
-    /// Whether the caller may go on sending: [`Flow::Break`] for a delivery that had stopped.
+    /// Whether the caller may go on sending. Returns [`Flow::Break`] for [`Self::Ended`].
     pub fn flow(&self) -> Flow {
         match self {
             Self::Ran { flow, .. } => *flow,
-            Self::Stopped => Flow::Break(()),
+            Self::Ended => Flow::Break(()),
         }
     }
 
@@ -53,7 +52,20 @@ impl<R> Updated<R> {
     pub fn result(self) -> Option<R> {
         match self {
             Self::Ran { result, .. } => Some(result),
-            Self::Stopped => None,
+            Self::Ended => None,
+        }
+    }
+
+    /// The result of the callback when the caller may go on — it ran and its flow is
+    /// [`Flow::Continue`] — or [`None`]: for a step that goes on with more work only then, and
+    /// otherwise answers [`flow`](Self::flow).
+    pub fn continued(self) -> Option<R> {
+        match self {
+            Self::Ran {
+                result,
+                flow: Flow::Continue(()),
+            } => Some(result),
+            Self::Ran { .. } | Self::Ended => None,
         }
     }
 }

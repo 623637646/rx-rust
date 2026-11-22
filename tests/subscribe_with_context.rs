@@ -192,7 +192,7 @@ fn stopped_update_drops_callback_outside_lock() {
         UpdateOutcome::empty()
     });
 
-    assert_eq!(result, Updated::Stopped);
+    assert_eq!(result, Updated::Ended);
     assert!(callback_dropped.load(Ordering::SeqCst));
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Dropped);
@@ -243,11 +243,8 @@ fn dispose_during_batch_unsubscribes_upstream() {
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
-// `is_active` is false as soon as the stream is over, even while the delivery that ends it is
-// still running. An empty `update` still runs then, since the resources live until the
-// termination is delivered, and only its flow says the stream is over.
 #[test]
-fn is_active_sees_a_termination_queued_during_a_delivery() {
+fn queued_termination_rejects_updates_during_delivery() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
     let context_slot = Arc::new(Mutex::new(None));
     let hook_slot = context_slot.clone();
@@ -269,7 +266,9 @@ fn is_active_sees_a_termination_queued_during_a_delivery() {
         context.send_termination(Termination::Completed);
         seen_in_hook.replace_value(Some((
             context.is_active(),
-            context.update(|_: &mut ()| UpdateOutcome::new(()).without_events()),
+            context.update(|_: &mut ()| -> UpdateOutcome<_, _, ()> {
+                panic!("no update runs behind a queued termination")
+            }),
         )));
         Flow::Continue(())
     })
@@ -279,17 +278,7 @@ fn is_active_sees_a_termination_queued_during_a_delivery() {
 
     let _ = context.send_next(1);
 
-    // Inactive, while an `update` is still accepted: it runs, and answers the stop with its flow.
-    assert_eq!(
-        seen.clone_value(),
-        Some((
-            false,
-            Updated::Ran {
-                result: (),
-                flow: Flow::Break(())
-            }
-        ))
-    );
+    assert_eq!(seen.clone_value(), Some((false, Updated::Ended)));
     assert!(!context.is_active());
     assert_eq!(checker.state(), State::Completed);
 }

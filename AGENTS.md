@@ -165,8 +165,8 @@ when they fail.
   state machine, the `Driver` of the crate-private `combining/internal/merge.rs`, with or without
   a limit: with none there is always room, so the
   cursor never waits in the model, whose type then names `Infallible` in its place, and neither
-  the observers nor the disposal name the sources. Both forms release the subscription of a
-  source as it completes. `ConcatEager` is that driver over its sources made `IndexedSource`s
+  the observers nor the disposal name the sources. Both forms release completed sources while
+  the context accepts events. `ConcatEager` is that driver over its sources made `IndexedSource`s
   (`IndexSources`, in `combining/internal/reorder.rs`), which send each value with their
   position, and `ReorderObserver` as the merge's observer: the driver knows nothing of positions.
   None of them requires batch resources. The three public strategy/resource traits are hidden;
@@ -411,18 +411,19 @@ when they fail.
   stops its own caller with `UpdateOutcome::answering_stop` (a replaced `switch` inner), never
   with a `Flow` in the update's result. An `on_next` that does more work after its first update —
   subscribing an inner observable or a duration, as the flattening operators and `join` do — takes
-  only the result of the earlier ones (`.result()`, or a match on `Updated::Ran { result, flow }` to
-  skip the work once the flow says `Break`), and answers what its *last* context call says, the
+  only the result of the earlier ones (`.result()`, or `.continued()` to skip the work once the
+  flow says `Break`), and answers what its *last* context call says, the
   `.flow()` of an `update` or a `send_next`: that work may have ended the stream, and a source still
   emitting from inside its own `subscribe` has no disposal yet, so only the flow stops it. An
-  earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream that is over. A
-  termination queued behind a delivery running on another thread still lets the
-  context's updates run, so such an `on_next` may still start that work — call the selector,
-  subscribe the inner observable — for a value racing that termination; the flow of its last
-  update then stops the source, and the context disposes what it stored once the stream has
-  ended. No `is_active` check in front of that work: it costs a second lock on every value, and
-  narrows a window it cannot close, since the work runs outside the lock anyway. The
-  `#[must_use]` is what catches a
+  earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream that is over.
+  Once a termination is queued or the context stops, `update` returns `Updated::Ended` and
+  drops the unused callback and its captures outside the lock, so a model is final once its
+  stream's end is queued: a decision an operator takes as it ends the stream (`fork_join`'s count
+  of sources left) needs no guard against a later update. Leave in-flight work outside the
+  lock and hand its result to `update` without an extra `is_active` check, which would cost a
+  second lock per value and only narrow a window the update closes anyway. For the resulting
+  disposal order, see [decision 0015](docs/decisions/0015-no-update-behind-a-queued-termination.md).
+  The `#[must_use]` is what catches a
   forgotten forward — `let _ =` only where ignoring it is deliberate. A disposal does not pass
   through the operators — it goes from the subscription to the source — so an operator that sends
   several notifications for one event (`take_last`, `buffer_with_count`) is stopped between two of
