@@ -40,10 +40,11 @@ use std::{pin::Pin, task::Context, time::Instant};
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct Task<TC, P = ()> {
-    #[educe(Debug(ignore))]
-    context: TC,
+    // Declared first, so that a task dropped before it runs drops it first, as a running one does.
     #[educe(Debug(ignore))]
     pinned: P,
+    #[educe(Debug(ignore))]
+    context: TC,
     handler: TaskHandler<TC, P>,
 }
 

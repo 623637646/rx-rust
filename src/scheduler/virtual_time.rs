@@ -554,7 +554,11 @@ where
     ) -> DisposeOnDrop<Self::Disposal> {
         let (mut stepper, pinned) = task.split();
         let mut pinned: Pin<Box<P>> = Box::pin(pinned);
-        let job: Job = Box::new(move |cx, now| stepper.step(pinned.as_mut(), cx, now));
+        // Captured first, so dropped first, as `drive` does.
+        let job: Job = Box::new(move |cx, now| {
+            let pinned = pinned.as_mut();
+            stepper.step(pinned, cx, now)
+        });
         let id = self.state().with_mut(|state| state.queue_task(job, delay));
         DisposeOnDrop::new(VirtualTimeDisposal {
             state: self.state.clone(),

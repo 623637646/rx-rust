@@ -4,7 +4,7 @@ use crate::main_loop::MainLoop;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::drop_probe::DropProbe;
+use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::scheduler_ext::SchedulerExt;
 use crate::tests_utils::test_scheduler::block_on;
 use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
@@ -15,7 +15,8 @@ use rx_rust::observer::{Observer, Termination};
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::scheduler::{
-    Clock, Next, Scheduler, SchedulerTypes, Stepper, Task, TaskWaker, WakeableContext, drive,
+    Clock, Next, Scheduler, SchedulerTypes, Stepper, SystemClock, Task, TaskWaker, WakeableContext,
+    drive,
 };
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::Shared;
@@ -763,6 +764,34 @@ fn test_schedule_periodically_rejects_zero_period() {
         let _disposal =
             scheduler.schedule_periodically(|_| ControlFlow::Break(()), Duration::ZERO, None);
     });
+}
+
+/// A task that never ran drops its pinned state first, as a task being driven does.
+#[test]
+fn test_task_drops_pinned_state_first() {
+    async fn sleep_never(_: Duration) {
+        std::future::pending().await
+    }
+
+    for polled in [false, true] {
+        let context_drops = DropCount::new();
+        let pinned_drops = DropCount::new();
+        let context_drops_cloned = context_drops.clone();
+        let pinned = pinned_drops.probe().on_drop(Box::new(move || {
+            assert_eq!(context_drops_cloned.get(), 0);
+        }));
+        let task = Task::with_pinned(context_drops.probe(), pinned, |_, _, _, _| Next::Pending);
+        {
+            let mut driven = pin!(drive(task, None, SystemClock, sleep_never));
+            if polled {
+                let mut cx = Context::from_waker(Waker::noop());
+                assert!(driven.as_mut().poll(&mut cx).is_pending());
+            }
+            assert_eq!(pinned_drops.get(), 0);
+        }
+        assert_eq!(pinned_drops.get(), 1);
+        assert_eq!(context_drops.get(), 1);
+    }
 }
 
 /// A delay too long for an `Instant` to represent never ends, whatever the runtime's timer makes of

@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::drop_probe::DropCount;
 use crate::tests_utils::test_scheduler::block_on;
 use futures::{SinkExt, StreamExt, stream};
 use rx_rust::scheduler::virtual_time::VirtualTime;
@@ -11,6 +12,7 @@ use rx_rust::{
     operators::creating::from_stream::FromStream,
 };
 use std::sync::Arc;
+use std::task::Poll;
 use std::time::Duration;
 use std::{
     convert::Infallible,
@@ -83,6 +85,34 @@ fn test_unsubscribe() {
     time.advance_by(Duration::ZERO);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
+}
+
+/// The stream, the source here, goes before the observer, whether or not its task has run.
+#[test]
+fn test_unsubscribe_releases_observer_last() {
+    for started in [false, true] {
+        let drops = DropCount::new();
+        let time = VirtualTime::new();
+        let (checker, observer) = Checker::new();
+        let checker_cloned = checker.clone();
+        let probe = drops.probe().on_drop(Box::new(move || {
+            assert_eq!(checker_cloned.state(), State::Active);
+        }));
+        let stream = stream::poll_fn(move |_| {
+            let _probe = &probe;
+            Poll::<Option<i32>>::Pending
+        });
+
+        let subscription = FromStream::new(stream, time.scheduler()).subscribe(observer);
+        if started {
+            time.advance_by(Duration::ZERO);
+        }
+        assert_eq!(drops.get(), 0);
+
+        subscription.dispose();
+        assert_eq!(drops.get(), 1);
+        assert_eq!(checker.state(), State::Dropped);
+    }
 }
 
 #[test]
