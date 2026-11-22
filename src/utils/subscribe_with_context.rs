@@ -8,7 +8,7 @@
 //!
 //! The context owns the source subscription, so that it disposes the source as soon as it stops,
 //! whatever stopped it: a disposal, a termination — from the source, a notifier, a scheduler task
-//! or another source — or a downstream that answered [`Flow::Stop`].
+//! or another source — or a downstream that answered [`Flow::Break`].
 //!
 //! [`subscribe_with_context_two_steps`] subscribes two sources, or a source and a scheduler task,
 //! in order. It skips the second step if the first ended the stream and disposes the steps in
@@ -162,10 +162,9 @@ impl<M: ThreadMode, T, E, MD, D: Disposable> Disposable for Disposal<M, T, E, MD
 /// observer and a mutable model.
 ///
 /// `builder` subscribes the sources with observers holding clones of the context, and returns
-/// their subscription, which the context then owns: it is disposed once the context stops — by a
-/// disposal, by a termination, or because downstream answered [`Flow::Stop`] — including when
-/// that happens synchronously while `builder` is running. So the source is not left running once
-/// the operator has ended its stream, whichever thread ended it.
+/// their subscription. If the context stops accepting events before it can store the subscription,
+/// the subscription is disposed immediately. Otherwise the context owns it until it stops,
+/// disposing it after notifying downstream when it stops by delivering a termination.
 ///
 /// `M` is the thread mode the context's pointers are picked for: the mode of the operator.
 pub fn subscribe_with_context<M, T, E, OR, D, MD, F>(
@@ -314,10 +313,8 @@ where
     // so dropping its local handle alone would leave both them and the observer alive.
     let disposal = context.disposal().into_dispose_on_drop();
     if let Some(subscription) = builder(&context) {
-        // The context owns the source subscription from here on. The field is private and set only
-        // here, so it is still `None` and nothing is dropped under the lock. A context that already
-        // stopped while `builder` ran does not run this update: it drops `subscription`, which
-        // disposes the source, outside the lock.
+        // Only this update sets the field, so it is still `None`. If the update is rejected,
+        // its capture disposes the subscription outside the lock.
         let _ = context.delivery.update(|resources| {
             resources.source_subscription = Some(subscription);
             UpdateOutcome::new(())
@@ -401,7 +398,7 @@ impl<M: ThreadMode, T, E, OR, MD, D: Disposable> SubscriptionContext<M, T, E, OR
     /// started next outlives the check: that is what the context owning the subscription is for,
     /// as it disposes whatever it was handed once it has stopped.
     pub fn is_active(&self) -> bool {
-        self.delivery.is_active()
+        self.delivery.accepts_events()
     }
 }
 
@@ -418,11 +415,13 @@ where
     /// The callback must not call external APIs or drop values that can re-enter this context.
     /// Return such values through [`UpdateOutcome::with_drop_outside`] instead.
     ///
-    /// Answers the result of the callback and the flow: [`Flow::Stop`] when the outcome
-    /// [answers a stop](UpdateOutcome::answering_stop), when delivering the events it queued
-    /// answered it, or when the stream is over, so an operator observer can return
-    /// [`Updated::flow`] directly. If the context has stopped, the callback is not invoked and
-    /// [`Updated::Stopped`] is answered.
+    /// Returns the callback result and the flow described by [`Updated::Ran`]. An operator's
+    /// observer can forward that flow with [`Updated::flow`].
+    ///
+    /// If the context has stopped or a termination is already queued, this returns
+    /// [`Updated::Ended`] and drops the unused callback and its captures outside the lock.
+    /// A subscription captured by a skipped update can therefore be disposed before downstream
+    /// sees the termination. The context keeps the subscriptions it already owns until it stops.
     pub fn update<R, DO, const EVENTS_DECIDED: bool>(
         &self,
         callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
@@ -440,14 +439,14 @@ where
     ///
     /// Nothing is answered: a termination is the last event, so the caller is done whether it
     /// was delivered, queued behind a running delivery, or rejected by a context that had already
-    /// stopped — [`Self::send`] would say [`Flow::Stop`] in every case.
+    /// stopped — [`Self::send`] would say [`Flow::Break`] in every case.
     pub fn send_termination(&self, termination: Termination<E>) {
         let _ = self.send(EventBatch::Termination(termination));
     }
 
     /// Sends `events` downstream, delivering them now or queueing them behind a running delivery.
     ///
-    /// Returns whether downstream still accepts events. [`Flow::Stop`] means the events were
+    /// Returns whether downstream still accepts events. [`Flow::Break`] means the events were
     /// rejected and dropped, because the context has stopped or a termination is already queued,
     /// or that the stream is over: `events` carried a termination, or delivering them ended it.
     pub fn send(&self, events: EventBatch<T, E>) -> Flow {

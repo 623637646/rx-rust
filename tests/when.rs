@@ -90,7 +90,7 @@ fn test_completed_after_the_queue_drains() {
     assert_eq!(checker.values(), [(111, "111")]);
     assert_eq!(checker.state(), State::Active);
 
-    assert!(sender_1.on_next("222").is_stop());
+    assert!(sender_1.on_next("222").is_break());
     assert_eq!(checker.values(), [(111, "111"), (222, "222")]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
@@ -219,7 +219,7 @@ fn test_completed_shared_source_drained_by_another_plan() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(checker_a.state(), ChannelState::Completed);
 
-    assert!(sender_b.on_next(10).is_stop());
+    assert!(sender_b.on_next(10).is_break());
     assert_eq!(checker.values(), [11]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(checker_b.state(), ChannelState::Unsubscribed);
@@ -298,7 +298,7 @@ fn test_completed_3_sources() {
 
     assert!(sender.on_next(2).is_continue());
     sender_1.on_termination(Termination::Completed);
-    assert!(sender_2.on_next(false).is_stop());
+    assert!(sender_2.on_next(false).is_break());
     assert_eq!(checker.values(), [(1, "a", true), (2, "b", false)]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker_2.state(), ChannelState::Unsubscribed);
@@ -770,7 +770,7 @@ fn test_drop_queued_value_outside_lock() {
         .on_drop(drops.callback())
         .on_drop(Box::new(move || {
             let mut sender = sender_a_on_drop.take_value().unwrap();
-            assert!(sender.on_next(DropProbe::new()).is_stop());
+            assert!(sender.on_next(DropProbe::new()).is_break());
             assert!(sender_c.on_next(7).is_continue());
         }));
     let mut sender = sender_a.take_value().unwrap();
@@ -814,7 +814,7 @@ fn test_race_condition() {
         );
 
         for value in 0..VALUES {
-            if sender_b.on_next(value).is_stop() {
+            if sender_b.on_next(value).is_break() {
                 assert_eq!(value, VALUES - 1);
             }
         }
@@ -830,7 +830,7 @@ fn test_race_condition() {
 }
 
 /// Both sources may queue matches while another thread delivers the match that stops the
-/// observer. Queued matches and sends after `Stop` must never reach it or terminate it.
+/// observer. Queued matches and sends after `Break` must never reach it or terminate it.
 #[test]
 fn test_race_condition_stop_on_next() {
     const VALUES: usize = 100;
@@ -858,7 +858,7 @@ fn test_race_condition_stop_on_next() {
         let _task = scheduler.schedule(
             move || {
                 for value in 0..VALUES {
-                    if sender_a.on_next(value).is_stop() {
+                    if sender_a.on_next(value).is_break() {
                         break;
                     }
                 }
@@ -867,13 +867,13 @@ fn test_race_condition_stop_on_next() {
             None,
         );
         for value in 0..VALUES {
-            if sender_b.on_next(value).is_stop() {
+            if sender_b.on_next(value).is_break() {
                 break;
             }
         }
         let mut sender_a = finish.recv_timeout(TIMEOUT).expect("both sources finish");
-        assert!(sender_a.on_next(VALUES).is_stop());
-        assert!(sender_b.on_next(VALUES).is_stop());
+        assert!(sender_a.on_next(VALUES).is_break());
+        assert!(sender_b.on_next(VALUES).is_break());
         sender_a.on_termination(Termination::Completed);
         sender_b.on_termination(Termination::Completed);
         assert_eq!(
@@ -930,7 +930,7 @@ fn test_unsub_on_next_by_take() {
     assert!(sender.on_next(111).is_continue());
     assert!(sender.on_next(222).is_continue());
 
-    assert!(sender_1.on_next("111").is_stop());
+    assert!(sender_1.on_next("111").is_break());
     assert_eq!(checker.values(), [(111, "111")]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -949,7 +949,7 @@ fn test_stop_on_next() {
 
     let _subscription = observable.subscribe(observer);
     assert!(sender.on_next(1).is_continue());
-    assert!(sender_1.on_next(10).is_stop());
+    assert!(sender_1.on_next(10).is_break());
     assert_eq!(checker.values(), [11]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -972,7 +972,7 @@ fn test_unsub_in_result_selector() {
 
     subscription.replace_value(Some(observable.subscribe(observer)));
     assert!(sender.on_next(1).is_continue());
-    assert!(sender_1.on_next(2).is_stop());
+    assert!(sender_1.on_next(2).is_break());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1001,7 +1001,7 @@ fn test_unsub_in_result_selector_with_pending_termination() {
     assert!(sender.on_next(1).is_continue());
     sender.on_termination(Termination::Completed);
     assert_eq!(checker.state(), State::Active);
-    assert!(sender_1.on_next(2).is_stop());
+    assert!(sender_1.on_next(2).is_break());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -1099,7 +1099,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -1199,7 +1199,7 @@ fn test_next_on_sub_after_release() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(
-        flows.with_ref(|flows| flows.iter().map(|flow| flow.is_stop()).collect::<Vec<_>>()),
+        flows.with_ref(|flows| flows.iter().map(|flow| flow.is_break()).collect::<Vec<_>>()),
         [true, true]
     );
     assert!(disposed.with_ref(|disposed| *disposed));

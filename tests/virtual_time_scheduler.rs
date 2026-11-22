@@ -12,6 +12,7 @@ use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::{VirtualTime, VirtualTimeScheduler};
 use rx_rust::scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task};
 use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
+use std::ops::ControlFlow;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -157,7 +158,7 @@ fn test_periodic_rate() {
     let _disposal = scheduler.schedule_periodically(
         move |_| {
             log_at(&log_task, "tick", scheduler_task.clock().now(), start);
-            true
+            ControlFlow::Continue(())
         },
         DURATION_10_MS,
         Some(DURATION_10_MS),
@@ -185,7 +186,7 @@ fn test_periodic_waits_until_anchor_without_initial_delay() {
             ticks.clone(),
             |ticks, count| {
                 ticks.with_mut(|ticks| ticks.push(count));
-                true
+                ControlFlow::Continue(())
             },
             DURATION_10_MS,
             Some(time.now() + DURATION_100_MS),
@@ -876,7 +877,7 @@ fn test_periodic_delay_too_long_never_comes_due() {
     let disposal = time.scheduler().schedule_periodically(
         move |_| {
             runs_task.with_mut(|runs| *runs += 1);
-            true
+            ControlFlow::Continue(())
         },
         DURATION_10_MS,
         Some(Duration::MAX),
@@ -903,7 +904,7 @@ fn test_periodic_period_too_long_finishes() {
         move |_| {
             let _probe = &probe;
             runs_task.with_mut(|runs| *runs += 1);
-            true
+            ControlFlow::Continue(())
         },
         Duration::MAX,
         None,

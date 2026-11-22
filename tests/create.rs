@@ -20,6 +20,7 @@ use rx_rust::{
     observer::{Observer, Termination},
 };
 use std::convert::Infallible;
+use std::ops::ControlFlow;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -109,11 +110,11 @@ fn test_unsubscribe() {
                 if count < 2 {
                     let observer = observer.as_mut().unwrap();
                     assert!(observer.on_next(count as i32 + 2).is_continue());
-                    true
+                    ControlFlow::Continue(())
                 } else {
                     let observer = observer.take().unwrap();
                     observer.on_termination(Termination::<String>::Completed);
-                    false
+                    ControlFlow::Break(())
                 }
             },
             DURATION_100_MS,
@@ -309,8 +310,8 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     let observable = Create::shared_boxed(|mut observer| {
-        assert!(observer.on_next(111).is_stop());
-        assert!(observer.on_next(222).is_stop());
+        assert!(observer.on_next(111).is_break());
+        assert!(observer.on_next(222).is_break());
         observer.on_termination(Termination::Error("error"));
         DisposeOnDrop::default()
     })
@@ -481,11 +482,11 @@ fn test_emitter_unsubscribe() {
             move |count| {
                 if count == 0 {
                     assert!(emitter.as_mut().unwrap().on_next(2).is_continue());
-                    true
+                    ControlFlow::Continue(())
                 } else {
                     let emitter = emitter.take().unwrap();
                     emitter.on_termination(Termination::<String>::Completed);
-                    false
+                    ControlFlow::Break(())
                 }
             },
             DURATION_100_MS,
@@ -528,8 +529,8 @@ fn test_emitter_unsubscribe() {
 #[test]
 fn test_emitter_unsub_on_next_by_take() {
     let observable = Create::shared(|mut emitter| {
-        assert!(emitter.on_next(111).is_stop());
-        assert!(emitter.on_next(222).is_stop());
+        assert!(emitter.on_next(111).is_break());
+        assert!(emitter.on_next(222).is_break());
         emitter.on_termination(Termination::Error("error"));
         DisposeOnDrop::default()
     })

@@ -372,7 +372,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(111).is_stop());
+    assert!(sender_1.on_next(111).is_break());
     assert_eq!(checker.values(), vec![111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
@@ -432,9 +432,9 @@ fn test_without_convenient_api() {
     let (checker, observer) = Checker::new();
 
     let observable = Amb::new_from_iter([
-        observable_1.into_send_boxed(),
-        observable_2.into_send_boxed(),
-        observable.into_send_boxed(),
+        observable_1.into_boxed(),
+        observable_2.into_boxed(),
+        observable.into_boxed(),
     ]);
 
     let _subscription = observable.subscribe(observer);
@@ -539,9 +539,9 @@ fn test_three_sources_next_on_sub() {
     let (checker, observer) = Checker::new();
 
     let observable = Amb::new_from_iter([
-        source.into_send_boxed(),
-        observable_2.into_send_boxed(),
-        observable_3.into_send_boxed(),
+        source.into_boxed(),
+        observable_2.into_boxed(),
+        observable_3.into_boxed(),
     ]);
 
     // The first source wins while it is being subscribed to, so the others are never subscribed.
@@ -779,7 +779,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 

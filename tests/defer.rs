@@ -264,7 +264,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -344,9 +344,9 @@ fn test_boxed_observable() {
     let observable = Defer::new(|| {
         let observable = Just::new(111);
         if switch.load(Ordering::SeqCst) {
-            observable.into_send_boxed()
+            observable.into_boxed()
         } else {
-            observable.map(|value| value * 2).into_send_boxed()
+            observable.map(|value| value * 2).into_boxed()
         }
     });
     let (checker, observer) = Checker::new();

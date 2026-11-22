@@ -1115,7 +1115,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(111).is_stop());
+    assert!(sender_1.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1376,7 +1376,7 @@ fn test_next_on_unsub() {
         |observer: SendBoxedObserver<'_, ReceiverObservable<'_, i32, Infallible>, Infallible>| {
             DisposeOnDrop::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                assert!(observer.on_next(observable_1).is_stop());
+                assert!(observer.on_next(observable_1).is_break());
             }))
         },
     );
@@ -1581,11 +1581,9 @@ fn test_abandon_after_next() {
     assert_eq!(checker.state(), State::Dropped);
 }
 
-/// An inner observable that arrives once the stream is over — its error queued behind a delivery
-/// running on another thread, which has not delivered it yet — tells its source to stop. It is
-/// still subscribed to, like one racing the termination, and disposed once the stream has ended.
+/// A queued error prevents admission of new inner observables before it reaches downstream.
 #[test]
-fn test_next_while_terminating() {
+fn test_next_after_error_is_queued() {
     const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut sender, observable, _) = test_channel();
     let (mut sender_1, observable_1, _) = test_channel();
@@ -1607,12 +1605,13 @@ fn test_next_while_terminating() {
 
     let _subscription = observable.subscribe(observer);
     assert!(sender.on_next(observable_1).is_continue());
-    let deliverer = thread::spawn(move || sender_1.on_next(111).is_stop());
+    let deliverer = thread::spawn(move || sender_1.on_next(111).is_break());
     delivering.recv_timeout(TIMEOUT).unwrap();
     assert!(sender.on_next(observable_2).is_continue());
     // Queued behind the delivery of 111, which is still running on the other thread.
     sender_2.on_termination(Termination::Error("error"));
-    assert!(sender.on_next(observable_3).is_stop());
+    assert!(sender.on_next(observable_3).is_break());
+    assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
     assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
@@ -1621,7 +1620,7 @@ fn test_next_while_terminating() {
     assert!(deliverer.join().unwrap());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
 }
 
 /// The same operator with a `max_concurrency`.
@@ -1779,13 +1778,13 @@ mod max_concurrency {
             .subscribe(observer);
         assert!(
             subject
-                .on_next(first.clone().into_send_cloneable_boxed())
+                .on_next(first.clone().into_cloneable_boxed())
                 .is_continue()
         );
         for value in 0..10_000 {
             assert!(
                 subject
-                    .on_next(Just::new(value).into_shared().into_send_cloneable_boxed())
+                    .on_next(Just::new(value).into_shared().into_cloneable_boxed())
                     .is_continue()
             );
         }
@@ -2029,7 +2028,7 @@ mod max_concurrency {
         let _subscription = observable.subscribe(observer);
         assert!(sender.on_next(inner.clone()).is_continue());
         assert!(sender.on_next(inner.clone()).is_continue());
-        assert!(inner_channels.on_next(1, 111).is_stop());
+        assert!(inner_channels.on_next(1, 111).is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -2120,7 +2119,7 @@ mod max_concurrency {
                 // The source emits the next inner while this one is still being subscribed to: it
                 // waits for this one, which completes as it is subscribed.
                 let _ = observer.on_next(111);
-                let _ = subject_cloned.on_next(subject_2_cloned.into_send_cloneable_boxed());
+                let _ = subject_cloned.on_next(subject_2_cloned.into_cloneable_boxed());
                 observer.on_termination(Termination::Completed);
                 DisposeOnDrop::default()
             },
@@ -2128,7 +2127,7 @@ mod max_concurrency {
 
         assert!(
             subject
-                .on_next(observable_1.into_send_cloneable_boxed())
+                .on_next(observable_1.into_cloneable_boxed())
                 .is_continue()
         );
         assert_eq!(checker.values(), [111]);
@@ -2147,7 +2146,7 @@ mod max_concurrency {
         let (checker, observer) = Checker::new();
         let _subscription = source.merge_all().max_concurrency(ONE).subscribe(observer);
 
-        assert!(sender.on_next(0, first.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, first.into_boxed()).is_continue());
         let reentrant_sender = sender.clone();
         let second =
             Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
@@ -2156,17 +2155,17 @@ mod max_concurrency {
                 // place, but the builder must not then start the fourth inner as well.
                 assert!(
                     reentrant_sender
-                        .on_next(0, third.into_send_boxed())
+                        .on_next(0, third.into_boxed())
                         .is_continue()
                 );
                 assert!(
                     reentrant_sender
-                        .on_next(0, fourth.into_send_boxed())
+                        .on_next(0, fourth.into_boxed())
                         .is_continue()
                 );
                 DisposeOnDrop::default()
             });
-        assert!(sender.on_next(0, second.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, second.into_boxed()).is_continue());
         first_sender.on_termination(Termination::Completed);
 
         assert_eq!(third_checker.state(), ChannelState::Subscribed);
@@ -2180,9 +2179,9 @@ mod max_concurrency {
         assert_eq!(checker.state(), State::Completed);
     }
 
-    /// An error queued behind an in-flight delivery must prevent queued work from starting.
+    /// A completion after a queued error leaves the stored subscription with the context.
     #[test]
-    fn test_complete_while_terminating() {
+    fn test_complete_after_error_is_queued() {
         const TIMEOUT: Duration = Duration::from_secs(5);
         let (mut sender, source, _) = test_channel();
         let (mut delivering_sender, delivering_inner, _) = test_channel();
@@ -2192,6 +2191,10 @@ mod max_concurrency {
         let (checker, observer) = Checker::new();
         let (started_sender, started) = mpsc::channel();
         let (resume_sender, resume) = mpsc::channel();
+        let (dispose_sender, disposed) = mpsc::channel();
+        let completing_inner = completing_inner.do_after_disposal(move || {
+            let _ = dispose_sender.send(());
+        });
 
         let _subscription = source
             .merge_all()
@@ -2204,10 +2207,10 @@ mod max_concurrency {
             })
             .subscribe(observer);
         for inner in [
-            delivering_inner,
-            error_inner,
-            completing_inner,
-            queued_inner,
+            delivering_inner.into_boxed(),
+            error_inner.into_boxed(),
+            completing_inner.into_boxed(),
+            queued_inner.into_boxed(),
         ] {
             assert!(sender.on_next(inner).is_continue());
         }
@@ -2218,13 +2221,16 @@ mod max_concurrency {
         error_sender.on_termination(Termination::Error("error"));
         completing_sender.on_termination(Termination::Completed);
         let queued_state = queued_checker.state();
+        let early_disposal = disposed.try_recv();
 
         resume_sender.send(()).unwrap();
-        assert!(deliverer.join().unwrap().is_stop());
+        assert!(deliverer.join().unwrap().is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(queued_state, ChannelState::Initialized);
         assert_eq!(queued_checker.state(), ChannelState::Initialized);
+        assert_eq!(early_disposal, Err(mpsc::TryRecvError::Empty));
+        assert_eq!(disposed.try_recv(), Ok(()));
     }
 
     /// A synchronous queue drain also stops if an inner subscription queues an error.
@@ -2251,12 +2257,12 @@ mod max_concurrency {
             .subscribe(observer);
         assert!(
             sender
-                .on_next(0, delivering_inner.into_send_boxed())
+                .on_next(0, delivering_inner.into_boxed())
                 .is_continue()
         );
         assert!(
             sender
-                .on_next(0, completing_inner.into_send_boxed())
+                .on_next(0, completing_inner.into_boxed())
                 .is_continue()
         );
         let error_sender = sender.clone();
@@ -2266,16 +2272,8 @@ mod max_concurrency {
                 observer.on_termination(Termination::Completed);
                 DisposeOnDrop::default()
             });
-        assert!(
-            sender
-                .on_next(0, error_inner.into_send_boxed())
-                .is_continue()
-        );
-        assert!(
-            sender
-                .on_next(0, queued_inner.into_send_boxed())
-                .is_continue()
-        );
+        assert!(sender.on_next(0, error_inner.into_boxed()).is_continue());
+        assert!(sender.on_next(0, queued_inner.into_boxed()).is_continue());
 
         let deliverer = thread::spawn(move || delivering_sender.on_next(111));
         started.recv_timeout(TIMEOUT).unwrap();
@@ -2283,7 +2281,7 @@ mod max_concurrency {
         let queued_state = queued_checker.state();
 
         resume_sender.send(()).unwrap();
-        assert!(deliverer.join().unwrap().is_stop());
+        assert!(deliverer.join().unwrap().is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(queued_state, ChannelState::Initialized);
@@ -2329,7 +2327,7 @@ mod max_concurrency {
             >| {
                 DisposeOnDrop::new(CallbackDisposal::new(move || {
                     let mut observer = observer;
-                    assert!(observer.on_next(observable_1).is_stop());
+                    assert!(observer.on_next(observable_1).is_break());
                 }))
             },
         );
@@ -2623,13 +2621,12 @@ mod max_concurrency {
         let first = first.do_after_disposal(move || {
             error_sender.on_termination(0, Termination::Error("error"));
         });
-        assert!(sender.on_next(0, first.into_send_boxed()).is_continue());
-        assert!(sender.on_next(0, last.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, first.into_boxed()).is_continue());
+        assert!(sender.on_next(0, last.into_boxed()).is_continue());
 
         // Disposing the completed inner subscription ends the stream, after the update that
-        // took the next observable out of the queue. That one is still subscribed, like one
-        // racing a termination (see `test_next_while_terminating`), and disposed at once, since
-        // the stream has ended.
+        // reserved the next observable. That subscription starts as decided and is disposed
+        // as soon as it returns.
         first_sender.on_termination(Termination::Completed);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(last_checker.state(), ChannelState::Unsubscribed);
@@ -2650,18 +2647,13 @@ mod max_concurrency {
                 error_sender.on_termination(0, Termination::Error("error"));
             }))
         });
-        assert!(sender.on_next(0, first.into_send_boxed()).is_continue());
-        assert!(
-            sender
-                .on_next(0, completing.into_send_boxed())
-                .is_continue()
-        );
-        assert!(sender.on_next(0, last.into_send_boxed()).is_continue());
+        assert!(sender.on_next(0, first.into_boxed()).is_continue());
+        assert!(sender.on_next(0, completing.into_boxed()).is_continue());
+        assert!(sender.on_next(0, last.into_boxed()).is_continue());
 
         // Disposing the completed inner subscription ends the stream, after the update that
-        // took the next observable out of the queue. That one is still subscribed, like one
-        // racing a termination (see `test_next_while_terminating`), and disposed at once, since
-        // the stream has ended.
+        // reserved the next observable. That subscription starts as decided and is disposed
+        // as soon as it returns.
         first_sender.on_termination(Termination::Completed);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(last_checker.state(), ChannelState::Unsubscribed);
@@ -2681,9 +2673,9 @@ mod max_concurrency {
 
         expect_panic_on_drop(|panic_on_drop| {
             let first = first.do_after_disposal(move || drop(panic_on_drop));
-            assert!(sender.on_next(first.into_send_boxed()).is_continue());
-            assert!(sender.on_next(second.into_send_boxed()).is_continue());
-            assert!(sender.on_next(last.into_send_boxed()).is_continue());
+            assert!(sender.on_next(first.into_boxed()).is_continue());
+            assert!(sender.on_next(second.into_boxed()).is_continue());
+            assert!(sender.on_next(last.into_boxed()).is_continue());
             first_sender.on_termination(Termination::Completed);
         });
         assert_eq!(source_checker.state(), ChannelState::Unsubscribed);

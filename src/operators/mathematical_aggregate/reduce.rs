@@ -1,6 +1,7 @@
 //! The [`Reduce`] operator, behind
 //! [`ObservableExt::reduce`](crate::observable::ObservableExt::reduce).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -104,24 +105,15 @@ where
         let Some(accumulated) = self.value.take() else {
             // The callback panicked and the accumulator went with it, so there is nothing left to
             // accumulate into: this observer accepts nothing more.
-            return Flow::Stop;
+            return Flow::Break(());
         };
         self.value = Some((self.callback)(accumulated, value));
-        Flow::Continue
+        Flow::Continue(())
     }
 
-    fn on_termination(mut self, termination: Termination<E>) {
-        let Some(accumulated) = self.value.take() else {
-            // No accumulator left to emit, see `on_next`: the termination still goes downstream.
-            return self.observer.on_termination(termination);
-        };
-        // The final value ends the stream, so a downstream that stopped on it is not completed
-        // on top of that: it has already ended itself.
-        if matches!(termination, Termination::Completed)
-            && self.observer.on_next(accumulated).is_stop()
-        {
-            return;
-        }
-        self.observer.on_termination(termination)
+    fn on_termination(self, termination: Termination<E>) {
+        // No accumulator is left once the callback panicked, see `on_next`: the termination still
+        // goes downstream, alone.
+        emit_then_terminate(self.observer, self.value, termination);
     }
 }

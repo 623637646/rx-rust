@@ -72,7 +72,7 @@ fn test_completed() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Completed);
@@ -156,7 +156,7 @@ fn test_completed_with_buffer_0() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111, 222, 333]);
     assert_eq!(checker_1.state(), State::Completed);
@@ -240,7 +240,7 @@ fn test_completed_with_buffer_1() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111, 222, 333]);
     assert_eq!(checker_1.state(), State::Completed);
@@ -317,7 +317,7 @@ fn test_error() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Error("error"));
@@ -401,7 +401,7 @@ fn test_error_with_buffer_0() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [111, 222, 333]);
     assert_eq!(checker_1.state(), State::Error("error"));
@@ -485,7 +485,7 @@ fn test_error_with_buffer_1() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [111, 222, 333]);
     assert_eq!(checker_1.state(), State::Error("error"));
@@ -628,7 +628,7 @@ fn test_ref() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(&value_3).is_stop());
+    assert!(subject.on_next(&value_3).is_break());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [&value_1, &value_2]);
     assert_eq!(checker_1.state(), State::Completed);
@@ -729,7 +729,7 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         scheduler
             .spawn(async move {
-                assert!(subject_cloned.on_next(333).is_stop());
+                assert!(subject_cloned.on_next(333).is_break());
             })
             .await;
         let subject_cloned = subject.clone();
@@ -934,7 +934,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_3),
     ));
@@ -1000,7 +1000,7 @@ fn test_sub_on_next() {
                     subscription_3_cloned
                         .replace_value(Some(observable.clone().subscribe(observer)));
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_1),
     );
@@ -1049,7 +1049,7 @@ fn test_next_on_next() {
             if value < 3 {
                 // Like the termination above: the send of `1` is queued behind the running
                 // delivery, the send of `2` finds the subject terminated.
-                assert_eq!(subject_cloned.on_next(value + 1).is_stop(), value > 1);
+                assert_eq!(subject_cloned.on_next(value + 1).is_break(), value > 1);
             }
             subject_cloned
                 .clone()

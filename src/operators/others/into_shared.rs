@@ -33,8 +33,8 @@ use educe::Educe;
 ///
 /// let subject = PublishSubject::shared();
 /// let sources: Vec<SendBoxedObservable<'_, '_, '_, i32, Infallible, Shared>> = vec![
-///     Just::new(1).into_shared().into_send_boxed(),
-///     subject.into_send_boxed(),
+///     Just::new(1).into_shared().into_boxed(),
+///     subject.into_boxed(),
 /// ];
 /// assert_eq!(sources.len(), 2);
 /// ```

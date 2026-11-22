@@ -3,7 +3,7 @@
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::{Scheduler, SchedulerTypes, StreamAck, StreamAckedThenContext, Task},
 };
 use educe::Educe;
@@ -104,14 +104,14 @@ where
                 // The observer ending its own stream stops polling it, as for `FromTryStream`.
                 Ok(value) => observer
                     .as_mut()
-                    .is_some_and(|observer| observer.on_next((value, ack)).is_continue()),
+                    .map_or(Flow::Break(()), |observer| observer.on_next((value, ack))),
                 // An error is terminal for an observable, so the stream is left wherever it is;
                 // the `StreamAck` is dropped, which gives back a permit nothing will use.
                 Err(error) => {
                     if let Some(observer) = observer.take() {
                         observer.on_termination(Termination::Error(error));
                     }
-                    false
+                    Flow::Break(())
                 }
             },
             |observer| {

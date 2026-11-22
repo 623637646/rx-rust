@@ -312,7 +312,7 @@ fn test_unsub_on_next_by_take() {
         .take(1);
 
     let _subscription = observable.subscribe(observer);
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -397,7 +397,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -521,10 +521,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
             drop(panic_on_drop);
             DisposeOnDrop::default()
         });
-        let mut inners = [
-            Some(observable_1.into_send_boxed()),
-            Some(failing.into_send_boxed()),
-        ];
+        let mut inners = [Some(observable_1.into_boxed()), Some(failing.into_boxed())];
         let _subscription = source
             .concat_eager_map(move |index: usize| inners[index].take().unwrap())
             .subscribe(observer);

@@ -14,7 +14,7 @@ programs by chaining observables and operators in a declarative style, inspired 
   the `futures` executors) is selected by a feature flag.
 - Single- or multi-threaded is part of a pipeline's type: one that stays on its thread pays for
   no `Arc<Mutex<_>>` and asks nothing to be `Send`, and one build can mix both.
-- A built-in stop signal: an observer that has seen enough returns `Flow::Stop`, and the source
+- A built-in stop signal: an observer that has seen enough returns `Flow::Break(())`, and the source
   stops pushing, even a synchronous one that is still inside `subscribe`.
 - Time-based pipelines are testable on a virtual clock: synchronously, on exact boundaries,
   without sleeping.
@@ -31,7 +31,7 @@ writes the same program both ways.
 Why not rxRust? [rxRust](https://github.com/rxRust/rxRust) shares the choice of `Local` or `Shared`
 in the type. rx-rust asks for the scheduler at each time-based operator, rather than taking an
 ambient Tokio runtime by default, so it runs on Tokio, smol or the `futures` executors and every
-pipeline can be tested on virtual time; it also stops a source with `Flow::Stop`, forbids `unsafe`,
+pipeline can be tested on virtual time; it also stops a source with `Flow::Break(())`, forbids `unsafe`,
 and has `catch`, `timeout` and `replay`. rxRust lends `&mut` items and runs on WebAssembly.
 [rx-rust and rxRust](https://github.com/623637646/rx-rust/blob/master/docs/rxrust-comparison.md)
 compares the two.
@@ -125,7 +125,7 @@ struct Printer;
 impl Observer<i32, std::convert::Infallible> for Printer {
     fn on_next(&mut self, value: i32) -> Flow {
         println!("{value}");
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<std::convert::Infallible>) {
@@ -136,9 +136,10 @@ impl Observer<i32, std::convert::Infallible> for Printer {
 
 `on_termination` takes `self`: a termination is the last event, and the observer is consumed by it.
 
-`on_next` returns a `Flow`. `Flow::Stop` is a promise that the observer accepts nothing more, not
-even a termination: the source stops pushing and drops the observer. This is how a consumer ends an
-infinite synchronous source, which never leaves `subscribe` and so has no subscription to drop yet:
+`on_next` returns `Flow`, an alias for `std::ops::ControlFlow<()>`. On `Flow::Break(())`, the source
+stops pushing and drops the observer without calling `on_termination`. This lets a consumer end
+an infinite synchronous source while it is still inside `subscribe`, before a subscription can be
+returned.
 
 ```rust
 use rx_rust::{observable::ObservableExt, observer::Flow, operators::creating::range::Range};
@@ -147,14 +148,14 @@ let mut seen = Vec::new();
 Range::new(1..).subscribe_with_callback(
     |value| {
         seen.push(value);
-        if value == 3 { Flow::Stop } else { Flow::Continue }
+        if value == 3 { Flow::Break(()) } else { Flow::Continue(()) }
     },
     |_| {}, // not called: a stopped observer is not terminated
 );
 assert_eq!(seen, [1, 2, 3]);
 ```
 
-A callback that returns `()` means `Flow::Continue`. Operators forward their downstream's answer to
+A callback that returns `()` means `Flow::Continue(())`. Operators forward their downstream's answer to
 the source, so `take`, `first`, `take_until` and friends stop their source the same way. A stop
 does not replace disposal: a source that emits later is still ended by dropping its subscription.
 
@@ -167,9 +168,11 @@ uses `Arc<Mutex<_>>` and can be driven from several threads. Sources pick their 
 plain values such as `Just` or `FromIter` are `Local`), an operator with several sources is
 `Shared` as soon as one of them is, and a scheduler fixes the mode of what runs on it.
 
-Erasing the type is explicit: `into_boxed` / `into_cloneable_boxed`, or `into_send_boxed` /
-`into_send_cloneable_boxed` for a box that must be `Send`. The erased type keeps the mode;
-`into_shared()` lifts a `Local` source to share an erased type with `Shared` ones.
+Erasing the type takes the box the mode picks: `into_boxed` / `into_cloneable_boxed` give a
+`BoxedObservable` / `CloneableBoxedObservable` for a `Local` source and their `Send` twins,
+`SendBoxedObservable` / `SendCloneableBoxedObservable`, for a `Shared` one. The erased type keeps
+the mode; `into_shared()` lifts a `Local` source to share an erased type with `Shared` ones, and
+`SendBoxedObservable::new` puts a `Local` source that is `Send` into the `Send` box.
 
 Some user code runs under an internal lock — the `Clone` and `PartialEq` of items and errors, a
 custom `Clock::now`, a connectable's subject factory — and must not reach back into the same
@@ -292,7 +295,7 @@ async fn main() {
 ```
 
 A whole sequence goes through `into_stream()` / `into_try_stream()`, and back with `FromStream` /
-`FromTryStream`. An observable has no `request(n)`: its observer's only word is `Flow::Stop`, so
+`FromTryStream`. An observable has no `request(n)`: its observer's only word is `Flow::Break(())`, so
 demand-driven consumption stays with `Stream`, and `into_stream_with_buffer` bounds what a fast
 source leaves between two polls (see the `observable::stream` module documentation).
 
@@ -395,7 +398,7 @@ Error handling              | `catch`, `map_err`, `retry`
 Utility                     | `delay`, `delay_subscription`, `timeout`, `timestamp`, `time_interval`, `hold`, `do_finally`, `stop_on_disposal`, `Using`, `repeat_source`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
 Connectable                 | `multicast`, `publish`, `publish_behavior`, `publish_last`, `replay`, `share`, `share_behavior`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
 Async conversion            | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`
-Type conversion             | `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
+Type conversion             | `into_boxed`, `into_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
 Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
 
 ## Contributing

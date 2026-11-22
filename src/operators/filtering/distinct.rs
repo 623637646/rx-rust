@@ -115,7 +115,7 @@ where
         if self.emitted_keys.insert(key) {
             self.observer.on_next(value)
         } else {
-            Flow::Continue
+            Flow::Continue(())
         }
     }
 

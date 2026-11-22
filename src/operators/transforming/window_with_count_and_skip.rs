@@ -138,7 +138,7 @@ where
 {
     let delegate = DelegateObserver::new(observer, duplicate);
     let mut observer = CountObserver::new(Windows::new(), delegate, count, skip);
-    if observer.open_first::<E>().is_stop() {
+    if observer.open_first::<E>().is_break() {
         // The first window ended the stream, so the source is never subscribed to.
         return None.into_dispose_on_drop();
     }

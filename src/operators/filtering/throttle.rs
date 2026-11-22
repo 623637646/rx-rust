@@ -116,7 +116,7 @@ where
             self.last_emit = Some(now);
             self.observer.on_next(value)
         } else {
-            Flow::Continue
+            Flow::Continue(())
         }
     }
 

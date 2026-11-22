@@ -1192,7 +1192,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
 
-    assert!(sender_1.on_next(111).is_stop());
+    assert!(sender_1.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1712,7 +1712,7 @@ mod max_concurrency {
             .take(1);
 
         let _subscription = observable.subscribe(observer);
-        assert!(sender.on_next(111).is_stop());
+        assert!(sender.on_next(111).is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1785,7 +1785,7 @@ mod max_concurrency {
             Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
                 DisposeOnDrop::new(CallbackDisposal::new(move || {
                     let mut observer = observer;
-                    assert!(observer.on_next(111).is_stop());
+                    assert!(observer.on_next(111).is_break());
                 }))
             });
 

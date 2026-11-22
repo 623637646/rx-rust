@@ -1,7 +1,7 @@
 # 0002: Observable types and the thread mode
 
 Status: adopted. The observer is a type parameter of `Observable`, the disposal is not, the thread
-mode is a type, schedulers run nameable tasks, and erasure is explicit. The design was first
+mode is a type, schedulers run nameable tasks, and erasure picks its box from the mode. The design was first
 rejected (see [History](#history)), then reached in two steps.
 
 Reference: the `rust-test` prototype, a separate repository (`623637646/rust-test`), and its
@@ -122,10 +122,16 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    handle is a cycle that keeps an executor nobody drives — and its tasks — alive forever. A
    `ThreadPool` is held strongly: its threads always run, so a disposed task is dropped and breaks
    the cycle. Running a task after the executor is gone panics.
-8. **Erasure is explicit and says what it keeps.** `into_boxed` / `into_cloneable_boxed` (no
-   `Send`) and `into_send_boxed` / `into_send_cloneable_boxed`, plus the `_for::<OR>` version of
-   each for a fixed observer type; the lifetimes bound the observer (`'or`), the disposal (`'sub`)
-   and the observable (`'oe`).
+8. **Erasure picks its box from the mode.** `into_boxed` / `into_cloneable_boxed` erase into the
+   box `BoxedObservableMode` gives the source's mode — `BoxedObservable` /
+   `CloneableBoxedObservable` for `Local`, `SendBoxedObservable` / `SendCloneableBoxedObservable`
+   for `Shared` — the way `ObserverMode` picks the boxed observer, and `IntoBoxedObservable` /
+   `IntoCloneableBoxedObservable` check what that box asks, `Send` included, where the mode is
+   concrete. A box of the other flavor is made by its constructor: `SendBoxedObservable::new` for a
+   `Local` source that is `Send`, to be moved to another thread before it is subscribed;
+   `BoxedObservable::new` for a `Shared` one that is not. The `For` types, over a fixed observer
+   type `OR`, have only their constructors. The lifetimes bound the observer (`'or`), the disposal
+   (`'sub`) and the observable (`'oe`); erasing never changes the mode.
 9. **`Create` offers both builders.** A closure cannot be generic, so its parameter decides what a
    `Create` subscribes. `Create::local` / `shared` hand it an `Emitter<M, OR>`, the unboxed
    downstream observer: zero-cost, but the `Create` subscribes the one observer type it was
@@ -231,3 +237,26 @@ the `Cell` and `AtomicBool` inside. Every flag of the crate was only ever raised
 call site by call site, and a reader that relied on it had to trust all of them. The helper went
 with the bare types: without a generic flag to reach, it was only a shorthand for the `Ordering`
 of an `AtomicBool`, which the tests now spell out as they do for their `AtomicUsize` counters.
+
+### Erasure named its `Send` flavor — replaced
+
+`ObservableExt` had eight erasing methods, every combination of three choices: `into_boxed`,
+`into_send_boxed`, their `cloneable` forms and a `_for::<OR>` form of each, on the grounds that
+which box to use is a choice about storage, independent of the mode. In practice the mode had
+already made it: a `Shared` subject, `create` or hook asks for a `Send` observer, which
+`BoxedObserver` is not, so such a source erased only into the `Send` box; and the `Local` source
+in a `Send` box, the case the separate methods were for, is rare. The `Send` methods were the ones
+used — over a hundred times in the `Shared` test suite — under a name that repeated the mode. Now
+the mode picks the box, two methods remain, and the other flavor is one constructor away.
+What it costs: a mode-generic caller of `into_boxed` gets the projection
+`<M as BoxedObservableMode>::Boxed<..>`, not a concrete type, and `ObserverExt` and
+`DisposableExt` keep their `into_boxed` / `into_send_boxed` pair, since an observer or a disposal
+has no mode to follow. The `_for` methods went without a replacement method: the observer type had
+to be named in them anyway, the constructor infers it from the first subscription, and they were
+used by one test.
+
+Rejected along the way: one generic `erase::<Target>()` through a trait of the crate (`From`
+overlaps `impl<T> From<T> for T`, since a box is itself an observable), which needs the target
+written wherever it is not inferred; and a builder, `.boxed().send().cloneable()`, longer than the
+method it replaces — a fluent modifier after erasing cannot work, since `Send`, `Clone` and the
+observer type are fixed in the `dyn` type when the source is erased.

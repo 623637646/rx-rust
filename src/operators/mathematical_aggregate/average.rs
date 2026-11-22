@@ -1,6 +1,7 @@
 //! The [`Average`] operator, behind
 //! [`ObservableExt::average`](crate::observable::ObservableExt::average).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -161,19 +162,11 @@ macro_rules! average_observer_impl {
         {
             fn on_next(&mut self, value: $t) -> Flow {
                 self.accumulator.push(value as f64);
-                Flow::Continue
+                Flow::Continue(())
             }
 
-            fn on_termination(mut self, termination: Termination<E>) {
-                // The final value ends the stream, so a downstream that stopped on it is not
-                // completed on top of that: it has already ended itself.
-                if matches!(termination, Termination::Completed)
-                    && let Some(average) = self.accumulator.average()
-                    && self.observer.on_next(average).is_stop()
-                {
-                    return;
-                }
-                self.observer.on_termination(termination)
+            fn on_termination(self, termination: Termination<E>) {
+                emit_then_terminate(self.observer, self.accumulator.average(), termination);
             }
         }
 

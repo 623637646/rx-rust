@@ -27,7 +27,7 @@ impl<T, E> WindowChecker<T, E> {
         Self::with_outer(Checker::new())
     }
 
-    /// A checker whose observer answers [`Flow::Stop`] once it has received `count` windows, as
+    /// A checker whose observer answers [`Flow::Break`] once it has received `count` windows, as
     /// [`Checker::stopping_after`] does for values.
     pub(crate) fn stopping_after(count: usize) -> (Self, WindowCheckerObserver<T, E>) {
         Self::with_outer(Checker::stopping_after(count))

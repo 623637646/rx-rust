@@ -1320,7 +1320,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
 
-    assert!(sender_1.on_next(111).is_stop());
+    assert!(sender_1.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1582,7 +1582,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -1675,13 +1675,13 @@ fn test_race_condition_next_after_unsub() {
         assert!(sender_1_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let sender_2_cloned = sender_2.clone();
     let observable_2 = Create::shared_boxed(move |observer| {
         assert!(sender_2_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let (checker, observer) = Checker::new();
 
     let mut observable_1_option = Some(observable_1);
@@ -1741,13 +1741,13 @@ fn test_race_condition_terminate_after_unsub() {
         assert!(sender_1_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let sender_2_cloned = sender_2.clone();
     let observable_2 = Create::shared_boxed(move |observer| {
         assert!(sender_2_cloned.set(observer));
         DisposeOnDrop::default()
     })
-    .into_send_boxed();
+    .into_boxed();
     let (checker, observer) = Checker::new();
 
     let mut observable_1_option = Some(observable_1);

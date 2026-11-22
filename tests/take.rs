@@ -63,7 +63,7 @@ fn test_completed_reach_count() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -280,8 +280,8 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(channels.on_next(0, 222).is_stop());
-    assert!(channels.on_next(1, 222).is_stop());
+    assert!(channels.on_next(0, 222).is_break());
+    assert!(channels.on_next(1, 222).is_break());
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(channels.state(0), ChannelState::Unsubscribed);
@@ -304,7 +304,7 @@ fn test_unsub_on_next_by_take() {
 
     // The inner `take` ends the stream and the outer one passes that on, so the source is told
     // to stop and not only unsubscribed.
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -322,7 +322,7 @@ fn test_stop_on_next() {
 
     // Downstream ended the stream before the count was reached, so nothing is completed here:
     // the flow is passed on to the source, which stops.
-    assert!(Observer::on_next(&mut sender, 111).is_stop());
+    assert!(Observer::on_next(&mut sender, 111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -345,7 +345,7 @@ fn test_multiple_operation_trigger_first() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -368,7 +368,7 @@ fn test_multiple_operation_trigger_second() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -391,7 +391,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

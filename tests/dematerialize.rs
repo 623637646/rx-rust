@@ -42,7 +42,7 @@ fn test_completed_inner_finish() {
     assert!(
         sender
             .on_next(Event::Termination(Termination::<Infallible>::Completed))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
@@ -102,7 +102,7 @@ fn test_error_inner_finish() {
     assert!(
         sender
             .on_next(Event::Termination(Termination::Error("error")))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error"));
@@ -156,7 +156,7 @@ fn test_unsubscribe() {
     assert!(
         channels
             .on_next(1, Event::Termination(Termination::Error("error")))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
@@ -195,7 +195,7 @@ fn test_ref() {
     assert!(
         sender
             .on_next(Event::Termination(Termination::Error(&error)))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker.values(), [&value_1, &value_2,],);
     assert_eq!(checker.state(), State::Error(&error));
@@ -212,7 +212,7 @@ fn test_mut_ref() {
         assert!(
             observer
                 .on_next(Event::Termination(Termination::Error(&mut error)))
-                .is_stop()
+                .is_break()
         );
         observer.on_termination(Termination::Completed);
         DisposeOnDrop::default()
@@ -309,12 +309,12 @@ fn test_subscribe_by_different_observer() {
     assert!(
         channels
             .on_next(0, Event::Termination(Termination::Error("error")))
-            .is_stop()
+            .is_break()
     );
     assert!(
         channels
             .on_next(1, Event::Termination(Termination::Error("error")))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Error("error"));
@@ -336,7 +336,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(Event::Next(111)).is_stop());
+    assert!(sender.on_next(Event::Next(111)).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -366,7 +366,7 @@ fn test_multiple_operation_complete() {
     assert!(
         sender
             .on_next(Event::Termination(Termination::Completed))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
@@ -394,7 +394,7 @@ fn test_multiple_operation_error() {
     assert!(
         sender
             .on_next(Event::Next(Event::Termination(Termination::Error("error"))))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker.values(), [111,]);
     assert_eq!(checker.state(), State::Error("error"));
@@ -426,7 +426,7 @@ fn test_without_convenient_api() {
     assert!(
         sender
             .on_next(Event::Termination(Termination::<Infallible>::Completed))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(checker.values(), [111, 222],);
     assert_eq!(checker.state(), State::Completed);
@@ -458,7 +458,7 @@ fn test_revert_completed() {
     assert!(
         sender
             .on_next(Event::Termination(Termination::<Infallible>::Completed))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(
         checker.values(),
@@ -497,7 +497,7 @@ fn test_revert_error() {
     assert!(
         sender
             .on_next(Event::Termination(Termination::Error("error")))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(
         checker.values(),

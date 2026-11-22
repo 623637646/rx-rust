@@ -118,7 +118,7 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         let key = (self.key_selector)(&value);
         if self.previous_key.as_ref() == Some(&key) {
-            return Flow::Continue;
+            return Flow::Continue(());
         }
         self.previous_key = Some(key);
         self.observer.on_next(value)

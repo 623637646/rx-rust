@@ -11,15 +11,15 @@ the source as it stops.
 
 `subscribe_with_context` puts the subscription its builder returns inside the context, and the
 context drops it, outside the lock, once it stops — by a disposal, by a termination from any of its
-sources, notifiers or tasks, or because downstream answered `Flow::Stop`. The source is then
+sources, notifiers or tasks, or because downstream answered `Flow::Break(())`. The source is then
 disposed on the thread that stopped the context.
 
 ### Why
 
-- **A `Flow::Stop` delivered by a scheduler task.** `observe_on`, `delay` and `debounce` deliver
-  from a task. When downstream answers `Stop` there, the context stops, but the source is not in
-  the call stack to hear it: it learns only from the `Stop` its next `on_next` gets back. A source
-  that sends nothing more stayed subscribed until the subscription was dropped.
+- **A `Flow::Break(())` delivered by a scheduler task.** `observe_on`, `delay` and `debounce` deliver
+  from a task. Before the context owned the subscription, the source had to send again to see
+  the `Break` returned by its next `on_next`. A source that sent nothing more stayed subscribed
+  until the subscription was dropped.
 - **The wrong choice was asymmetric.** With two helpers, choosing the non-owning one where the
   context could stop on its own left the source running — a bug; choosing the owning one where it
   was not needed cost one more lock per subscription. With one helper there is nothing to choose.
@@ -47,6 +47,6 @@ subscription; it was for an operator that could terminate only from inside its s
 the helper above. `observe_on`, `delay` and `debounce` used the first: their source's disposal
 stayed out of their tasks, so it could borrow, and was always disposed on the caller's thread.
 
-Rejected, with that design: keeping both and documenting `Flow::Stop` as a reason to own the
+Rejected, with that design: keeping both and documenting `Flow::Break(())` as a reason to own the
 source. Every operator that delivers from a task would then have needed the owning helper, which
 left the other one with no user that the rule would not have to argue about.

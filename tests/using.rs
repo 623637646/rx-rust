@@ -202,7 +202,7 @@ fn test_stop_on_next() {
     let (checker, observer) = Checker::stopping_after(1);
 
     let _subscription = Using::new(factory(&events), |_| observable).subscribe(observer);
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(events.clone_value(), ["created", "dropped"]);
@@ -217,7 +217,7 @@ fn test_unsub_on_next_by_take() {
     let _subscription = Using::new(factory(&events), |_| observable)
         .take(1)
         .subscribe(observer);
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

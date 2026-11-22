@@ -36,7 +36,7 @@ its own.
 
 A source drops its observer without terminating it:
 
-- after it was disposed, or after `on_next` answered `Flow::Stop`. The context has already stopped
+- after it was disposed, or after `on_next` answered `Flow::Break(())`. The context has already stopped
   then, so nothing changes in these cases;
 - when it never sends anything: `Never` drops its observer as soon as it is subscribed;
 - when the producer goes away: the last handle on a subject is dropped, a callback registration
@@ -55,7 +55,7 @@ is most needed, and in which it stayed silent.
   the race the test suite was made deterministic to rule out
   (see [AGENTS.md](../../AGENTS.md), `ThreadCheckerExecutor`), handed to the users instead.
 - **It contradicted the crate's own reading of a drop.** `Never` drops its observer at once, so
-  dropping an observer means "nothing more will come", not "cancel". The disposal and `Flow::Stop`
+  dropping an observer means "nothing more will come", not "cancel". The disposal and `Flow::Break(())`
   already stop the context before the observer is dropped; neither needs the drop to say anything.
 - **`timeout` could not report the failure it exists for.** A source that falls silent while it
   holds the observer times out. A source that dies, and drops the observer as it does, never did,
@@ -129,7 +129,7 @@ handle shares:
   as safe as before anywhere, under the context's own lock included, and costs nothing on the
   common path. Stopping the context is what disposes the source, since the context owns the
   source subscription (decision 0005).
-- A `Flow::Stop` stops the context from inside the delivery loop, which holds the observer and
+- A `Flow::Break(())` stops the context from inside the delivery loop, which holds the observer and
   drops it itself, as before.
 - A disposal after the source has already let go of its observer — after `abandon`, or after a
   termination that left events for the task — finds no handle of the source left to drop. The

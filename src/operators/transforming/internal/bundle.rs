@@ -42,18 +42,18 @@ impl<T, E> Groups<E> for Bundles<T> {
 
     fn open(&mut self, _: &mut impl Observer<Vec<T>, E>) -> Flow {
         self.bundles.open(Vec::with_capacity(self.room));
-        Flow::Continue
+        Flow::Continue(())
     }
 
     #[inline(always)]
     fn put(&mut self, value: &mut Option<T>, _: &mut impl Observer<Vec<T>, E>) -> Flow {
         self.bundles.send(value, Vec::push);
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn close_oldest(&mut self, observer: &mut impl Observer<Vec<T>, E>) -> Flow {
         let Some(bundle) = self.bundles.close_oldest() else {
-            return Flow::Continue;
+            return Flow::Continue(());
         };
         self.room = bundle.len();
         observer.on_next(bundle)
@@ -64,16 +64,16 @@ impl<T, E> Groups<E> for Bundles<T> {
         termination: &Termination<E>,
         observer: &mut impl Observer<Vec<T>, E>,
     ) -> Flow {
-        // An error discards the bundles: they are dropped with the state, outside any lock.
-        if let Termination::Completed = termination {
-            for bundle in self.bundles.close_all() {
-                // The bundles left after a stop are dropped with the iterator.
-                if !bundle.is_empty() && observer.on_next(bundle).is_stop() {
-                    return Flow::Stop;
-                }
-            }
+        match termination {
+            // The bundles left after a stop are dropped with the iterator.
+            Termination::Completed => self
+                .bundles
+                .close_all()
+                .filter(|bundle| !bundle.is_empty())
+                .try_for_each(|bundle| observer.on_next(bundle)),
+            // An error discards the bundles: they are dropped with the state, outside any lock.
+            Termination::Error(_) => Flow::Continue(()),
         }
-        Flow::Continue
     }
 }
 
@@ -146,7 +146,7 @@ mod tests {
         impl Observer<Vec<i32>, Infallible> for TakeOne {
             fn on_next(&mut self, value: Vec<i32>) -> Flow {
                 self.0.push(value);
-                Flow::Stop
+                Flow::Break(())
             }
 
             fn on_termination(self, _: Termination<Infallible>) {}
@@ -161,7 +161,7 @@ mod tests {
         assert!(
             bundles
                 .end(&Termination::Completed, &mut observer)
-                .is_stop()
+                .is_break()
         );
         assert_eq!(observer.0, [vec![1, 2]]);
     }

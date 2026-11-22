@@ -105,7 +105,7 @@ where
         let Some(accumulated) = self.value.take() else {
             // The callback panicked and the accumulator went with it, so there is nothing left to
             // accumulate into: this observer accepts nothing more.
-            return Flow::Stop;
+            return Flow::Break(());
         };
         let accumulated = (self.callback)(accumulated, value);
         // The one clone: the accumulator is kept and a copy of it goes downstream. It is put back

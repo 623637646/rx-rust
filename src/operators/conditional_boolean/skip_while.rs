@@ -95,7 +95,7 @@ where
             self.skip = (self.callback)(&value);
         }
         if self.skip {
-            Flow::Continue
+            Flow::Continue(())
         } else {
             self.observer.on_next(value)
         }

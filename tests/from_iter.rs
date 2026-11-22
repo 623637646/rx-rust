@@ -262,9 +262,9 @@ fn test_stop_on_next_by_callback() {
         |value| {
             values.push(value);
             if value == 2 {
-                Flow::Stop
+                Flow::Break(())
             } else {
-                Flow::Continue
+                Flow::Continue(())
             }
         },
         |_| terminated = true,

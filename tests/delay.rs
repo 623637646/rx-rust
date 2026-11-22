@@ -1060,7 +1060,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -1077,7 +1077,7 @@ fn test_next_on_unsub() {
 }
 
 /// The same with a delay too long for an `Instant` to represent: the value is never queued, but the
-/// stopped context still answers `Stop`, as it does for a delay in range.
+/// stopped context still answers `Break`, as it does for a delay in range.
 #[test]
 fn test_delay_too_long_next_on_unsub() {
     let time = VirtualTime::new();
@@ -1087,7 +1087,7 @@ fn test_delay_too_long_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 

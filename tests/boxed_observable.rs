@@ -23,7 +23,7 @@ fn test_completed() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_boxed();
+    let observable = observable.into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -46,7 +46,7 @@ fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_boxed();
+    let observable = observable.into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -70,8 +70,8 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable_1 = observable.clone().into_send_boxed();
-    let observable_2 = observable.clone().into_send_boxed();
+    let observable_1 = observable.clone().into_boxed();
+    let observable_2 = observable.clone().into_boxed();
 
     let subscription_1 = observable_1.subscribe(observer_1);
     let _subscription_2 = observable_2.subscribe(observer_2);
@@ -124,7 +124,7 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_boxed();
+    let observable = observable.into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -147,7 +147,7 @@ fn test_mut_ref() {
     let mut value = 111;
 
     let observable = Just::new(&mut value);
-    let observable = observable.into_send_boxed();
+    let observable = observable.into_boxed();
 
     let (checker, observer) = Checker::new();
 
@@ -171,7 +171,7 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, &i32, &str>();
         let (checker, observer) = Checker::new();
 
-        let observable = observable.into_send_boxed();
+        let observable = observable.into_boxed();
 
         let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -204,8 +204,8 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable_1 = observable.clone().into_send_boxed();
-    let observable_2 = observable.clone().into_send_boxed();
+    let observable_1 = observable.clone().into_boxed();
+    let observable_2 = observable.clone().into_boxed();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
@@ -242,14 +242,14 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_boxed().take(1);
+    let observable = observable.into_boxed().take(1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::<Infallible>::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -260,7 +260,7 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.into_send_boxed().into_send_boxed();
+    let observable = observable.into_boxed().into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -320,7 +320,7 @@ fn test_lifetime_sub() {
             }))
         });
 
-        let observable = observable.into_send_boxed();
+        let observable = observable.into_boxed();
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -342,7 +342,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             DisposeOnDrop::default()
         });
-        let observable = observable.into_send_boxed();
+        let observable = observable.into_boxed();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(observer.on_next(&life_marker_2).is_continue());
@@ -368,14 +368,14 @@ fn test_lifetime_oe() {
             DisposeOnDrop::default()
         });
 
-        _observable = create.into_send_boxed();
+        _observable = create.into_boxed();
     }
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let observable = observable.into_send_boxed();
+    let observable = observable.into_boxed();
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -385,7 +385,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let observable = observable.into_send_boxed();
+    let observable = observable.into_boxed();
 
     observable.filter(|_| true);
 }

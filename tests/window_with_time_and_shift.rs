@@ -377,7 +377,7 @@ fn test_no_subscriptions_after_initial_window_stops() {
     let _subscription = source
         .window_with_time_and_shift(SPAN, HALF, time.scheduler())
         .subscribe_with_callback(
-            |_| Flow::Stop,
+            |_| Flow::Break(()),
             |_| panic!("a stopped observer must not be terminated"),
         );
 

@@ -102,7 +102,7 @@ where
     fn on_next(&mut self, value: T0) -> Flow {
         match (self.callback)(value) {
             Some(value) => self.observer.on_next(value),
-            None => Flow::Continue,
+            None => Flow::Continue(()),
         }
     }
 

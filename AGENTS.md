@@ -165,8 +165,8 @@ when they fail.
   state machine, the `Driver` of the crate-private `combining/internal/merge.rs`, with or without
   a limit: with none there is always room, so the
   cursor never waits in the model, whose type then names `Infallible` in its place, and neither
-  the observers nor the disposal name the sources. Both forms release the subscription of a
-  source as it completes. `ConcatEager` is that driver over its sources made `IndexedSource`s
+  the observers nor the disposal name the sources. Both forms release completed sources while
+  the context accepts events. `ConcatEager` is that driver over its sources made `IndexedSource`s
   (`IndexSources`, in `combining/internal/reorder.rs`), which send each value with their
   position, and `ReorderObserver` as the merge's observer: the driver knows nothing of positions.
   None of them requires batch resources. The three public strategy/resource traits are hidden;
@@ -239,7 +239,9 @@ when they fail.
   `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`.
   A module shared inside the crate only is `pub(crate) mod`: `serialized_delivery`,
   `serialized_multicast`, `flagged_lock`, `subscribe_fn`, `pending_events`,
-  `reservation_map`, `id_generator`, `on_panic`, `lazy_subscription`, `positional`. A
+  `reservation_map`, `id_generator`, `on_panic`, `lazy_subscription`, `positional`,
+  `emit_then_terminate` (the values an operator sends as its stream completes — an aggregate's
+  result, a default, the last items kept — then the termination, unless one of them stopped). A
   module stays public only when a public signature names its items or a user writing an operator
   needs them; otherwise it is `pub(crate)`, and so is everything in it — the crate's
   `#![warn(unreachable_pub)]` is what catches a `pub` left behind in one, and CI denies warnings.
@@ -325,7 +327,8 @@ when they fail.
   (`subscribe_with_auto_dispose_on_termination::{ObserverOf, DisposalOf}`), `JoinedModeOf<A, B>` and
   `ChainDisposalOf<A, B>` in `observable` for an operator with two sources, `JoinedSchedulerModeOf<OE, S>`
   and `ChainSchedulerDisposalOf<S, OE>` (the task's disposal, then the source's) for one with a
-  source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a source's mode. All
+  source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a source's mode, `BoxedObservableOf` /
+  `CloneableBoxedObservableOf` for what `into_boxed` / `into_cloneable_boxed` erase a source into. All
   of them are `pub`, so that an operator written outside the crate uses the same shorthand. Use
   them rather than spelling the projections out. Such an alias is written with qualified projections
   (`<OE as ObservableTypes>::Mode`), so it can appear in the bounds of `OE` itself, and it can
@@ -394,33 +397,42 @@ when they fail.
   with its twin, and must still fail for its own reason, not for a type annotation now missing.
 - `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce
   parallel representations.
-- **`Flow`**: `Observer::on_next` returns `Flow::Continue` / `Flow::Stop`. `Stop` is a guarantee —
+- **`Flow`**: `Observer::on_next` returns a `Flow`, an alias of the standard `ControlFlow<()>`:
+  `Flow::Continue(())` / `Flow::Break(())`. `Break` is a guarantee —
   the observer accepts nothing more and must not be terminated, so the caller stops pushing and
   drops it; `Continue` is only a hint ("no stop seen here"), so a source must still honor its
   disposal. An operator that forwards values returns what its own downstream returned, so that the
-  answer reaches the source; an operator that ends its own stream returns `Stop`. A context-based
+  answer reaches the source; an operator that ends its own stream returns `Break`. Being a
+  `ControlFlow`, a flow forwards with `?` (`self.close_oldest(observer)?;`) and drives a loop
+  with `Iterator::try_for_each` (`values.into_iter().try_for_each(|v| observer.on_next(v))`);
+  prefer them to a hand-written `if … .is_break() { return … }`, except where a stop must drop
+  things in a set order (the delivery loops of `serialized_delivery` and `unicast_subject`). A
+  callback that says whether to go on — a scheduler task's step, an inner state machine — answers
+  a `ControlFlow` too, never a `bool`, and breaks with a reason when there is more than one
+  (`observe_on`'s `Interrupt`). A context-based
   operator gets it from the `Updated` an `update` answers (`.flow()`) or from `send_next`;
   `send_termination` answers nothing, since a termination is the last event anyway. The model
   stops its own caller with `UpdateOutcome::answering_stop` (a replaced `switch` inner), never
   with a `Flow` in the update's result. An `on_next` that does more work after its first update —
   subscribing an inner observable or a duration, as the flattening operators and `join` do — takes
-  only the result of the earlier ones (`.result()`, or a match on `Updated::Ran { result, flow }` to
-  skip the work once the flow says `Stop`), and answers what its *last* context call says, the
+  only the result of the earlier ones (`.result()`, or `.continued()` to skip the work once the
+  flow says `Break`), and answers what its *last* context call says, the
   `.flow()` of an `update` or a `send_next`: that work may have ended the stream, and a source still
   emitting from inside its own `subscribe` has no disposal yet, so only the flow stops it. An
-  earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream that is over. A
-  termination queued behind a delivery running on another thread still lets the
-  context's updates run, so such an `on_next` may still start that work — call the selector,
-  subscribe the inner observable — for a value racing that termination; the flow of its last
-  update then stops the source, and the context disposes what it stored once the stream has
-  ended. No `is_active` check in front of that work: it costs a second lock on every value, and
-  narrows a window it cannot close, since the work runs outside the lock anyway. The
-  `#[must_use]` is what catches a
+  earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream that is over.
+  Once a termination is queued or the context stops, `update` returns `Updated::Ended` and
+  drops the unused callback and its captures outside the lock, so a model is final once its
+  stream's end is queued: a decision an operator takes as it ends the stream (`fork_join`'s count
+  of sources left) needs no guard against a later update. Leave in-flight work outside the
+  lock and hand its result to `update` without an extra `is_active` check, which would cost a
+  second lock per value and only narrow a window the update closes anyway. For the resulting
+  disposal order, see [decision 0015](docs/decisions/0015-no-update-behind-a-queued-termination.md).
+  The `#[must_use]` is what catches a
   forgotten forward — `let _ =` only where ignoring it is deliberate. A disposal does not pass
   through the operators — it goes from the subscription to the source — so an operator that sends
   several notifications for one event (`take_last`, `buffer_with_count`) is stopped between two of
   them by the flow alone, and carries no flag of its own for it: the explicit `stop_on_disposal`
-  operator turns a disposal into a `Stop` at the end of a chain that needs it. User callbacks
+  operator turns a disposal into a `Break` at the end of a chain that needs it. User callbacks
   (`subscribe_with_callback`) return `()` or a `Flow`, via `observer::IntoFlow` (a
   diverging `|_| unreachable!()` needs `-> ()`).
 
@@ -456,7 +468,7 @@ Pick the source by what the test needs from it, not by habit:
 
 Tests build in the `Shared` mode, the mode of every `TestScheduler`, through the library's own
 constructors: `Create::shared_boxed`, `PublishSubject::shared()` and the other subjects'
-`shared`, `unicast_subject::shared`; erase with `into_send_boxed` / `SendBoxedObserver`. A source
+`shared`, `unicast_subject::shared`; erase with `into_boxed` / `SendBoxedObserver`. A source
 of another mode that must sit among erased `Shared` observables of one type gets `.into_shared()`.
 Name the mode (`Shared`, from `rx_rust::thread_mode`) only where inference cannot reach it, and
 write `_` in `let` annotations. Keep test state in plain `Arc<Mutex<_>>`, reached through
@@ -488,7 +500,7 @@ decides the interleaving, so assert one exact outcome per step, never "either th
 panic on that thread fails the test from `run_until_stalled`. Real concurrency between the source's
 thread and the delivering one is the job of the `test_race_condition*` tests: a
 `ThreadPoolScheduler`, many rounds, assertions on invariants only (order, exactly once, nothing
-after a `Stop`), and a wait on a channel with a timeout rather than a sleep.
+after a `Break`), and a wait on a channel with a timeout rather than a sleep.
 
 `docs/testing.md` holds the canonical checklist of case names (`test_completed`, `test_error`,
 `test_unsubscribe`, `test_ref`, `test_async`, the hot-observable `test_*_on_next` family, the

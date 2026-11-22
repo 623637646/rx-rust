@@ -116,13 +116,13 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         if self.value.is_none() {
             self.value = Some(value);
-            return Flow::Continue;
+            return Flow::Continue(());
         }
         // A second item: the stream has failed, and the rest of the source is of no use.
         if let Some(observer) = self.observer.take() {
             observer.on_termination(Termination::Error(Error::MoreThanOne));
         }
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

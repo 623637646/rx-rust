@@ -121,7 +121,7 @@ where
             self.stream,
             self.permits,
             // The observer ending its own stream stops polling it, as for `FromStream`.
-            |observer, value, ack| observer.on_next((value, ack)).is_continue(),
+            |observer, value, ack| observer.on_next((value, ack)),
             |observer| observer.on_termination(Termination::Completed),
         );
         self.scheduler.run_task(task, None)

@@ -15,7 +15,7 @@ struct HookOnTerminationObserver<F: FnOnce()>(F);
 
 impl<F: FnOnce()> Observer<i32, Infallible> for HookOnTerminationObserver<F> {
     fn on_next(&mut self, _value: i32) -> Flow {
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, _termination: Termination<Infallible>) {

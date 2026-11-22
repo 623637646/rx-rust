@@ -82,7 +82,7 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         if self.count > 0 {
             self.count -= 1;
-            Flow::Continue
+            Flow::Continue(())
         } else {
             self.observer.on_next(value)
         }

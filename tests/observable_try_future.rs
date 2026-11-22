@@ -36,7 +36,7 @@ fn test_completed() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         // The first value resolves the future and stops the source.
-        assert!(sender.on_next(111).is_stop());
+        assert!(sender.on_next(111).is_break());
         assert_eq!((&mut future).await, Ok(Some(111)));
         // The source is released by the resolution itself, not by the drop of the future.
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -52,7 +52,7 @@ fn test_completed_lazy_subscription() {
     let subscribed_cloned = subscribed.clone();
     let observable = Create::shared_boxed(move |mut observer: SendBoxedObserver<'_, _, &str>| {
         subscribed_cloned.store(true, Ordering::SeqCst);
-        assert!(observer.on_next(111).is_stop());
+        assert!(observer.on_next(111).is_break());
         DisposeOnDrop::default()
     });
 
@@ -147,7 +147,7 @@ fn test_mut_ref() {
         let mut value = 111;
 
         let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, &str>| {
-            assert!(observer.on_next(&mut value).is_stop());
+            assert!(observer.on_next(&mut value).is_break());
             DisposeOnDrop::default()
         });
 
@@ -195,7 +195,7 @@ fn test_without_convenient_api() {
         assert!((&mut future).now_or_never().is_none());
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(111).is_stop());
+        assert!(sender.on_next(111).is_break());
         assert_eq!((&mut future).await, Ok(Some(111)));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
@@ -286,7 +286,7 @@ fn test_next_on_unsub() {
         let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
             DisposeOnDrop::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                assert!(observer.on_next(111).is_stop());
+                assert!(observer.on_next(111).is_break());
             }))
         });
 
@@ -344,7 +344,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, &str>| {
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
             DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
@@ -365,7 +365,7 @@ fn test_lifetime_or() {
 
     {
         let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, &str>| {
-            assert!(observer.on_next(&life_marker_2).is_stop());
+            assert!(observer.on_next(&life_marker_2).is_break());
             life_marker_1 = Some(observer);
             DisposeOnDrop::default()
         });

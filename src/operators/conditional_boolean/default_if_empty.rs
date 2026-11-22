@@ -1,6 +1,7 @@
 //! The [`DefaultIfEmpty`] operator, behind
 //! [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -94,15 +95,7 @@ where
         self.observer.on_next(value)
     }
 
-    fn on_termination(mut self, termination: Termination<E>) {
-        // The final value ends the stream, so a downstream that stopped on it is not completed
-        // on top of that: it has already ended itself.
-        if matches!(termination, Termination::Completed)
-            && let Some(default_value) = self.default_value.take()
-            && self.observer.on_next(default_value).is_stop()
-        {
-            return;
-        }
-        self.observer.on_termination(termination);
+    fn on_termination(self, termination: Termination<E>) {
+        emit_then_terminate(self.observer, self.default_value, termination);
     }
 }

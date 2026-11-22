@@ -245,7 +245,7 @@ fn test_unsub_on_next_by_take() {
 
     let _subscription = observable.subscribe(observer);
     // The second window ends the stream, which drops the sending end of both.
-    assert!(sender.on_next(1).is_stop());
+    assert!(sender.on_next(1).is_break());
     assert_eq!(
         checker.windows(),
         [(vec![1], State::Dropped), (vec![], State::Dropped)]
@@ -295,7 +295,7 @@ fn test_unsubscribe_on_inner_next() {
     subscription.replace_value(Some(made));
 
     assert!(sender.on_next(1).is_continue());
-    assert!(sender.on_next(2).is_stop());
+    assert!(sender.on_next(2).is_break());
     assert_eq!(
         checker.windows(),
         [(vec![1, 2], State::Dropped), (vec![2], State::Dropped)]
@@ -361,7 +361,7 @@ fn test_unsubscribe_on_full_window() {
         .subscribe(observer);
     subscription.replace_value(Some(made));
 
-    assert!(sender.on_next(1).is_stop());
+    assert!(sender.on_next(1).is_break());
     assert_eq!(checker.windows(), [(vec![1], State::Completed)]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

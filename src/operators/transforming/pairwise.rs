@@ -91,7 +91,7 @@ where
             }
             empty @ None => {
                 *empty = Some(value);
-                Flow::Continue
+                Flow::Continue(())
             }
         }
     }

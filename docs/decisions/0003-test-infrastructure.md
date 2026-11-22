@@ -40,7 +40,7 @@ until it was given a scheduler feature.
 - **The tests use the library's own constructors.** With one build, `TestMode` named nothing that
   could change, so it went, together with the wrappers in `tests/tests_utils/modes.rs`. The tests
   call `Create::shared_boxed`, `PublishSubject::shared()` and the other `shared` constructors
-  directly, erase with `into_send_boxed`, and name `Shared` only where inference cannot reach it.
+  directly, erase with `into_boxed`, and name `Shared` only where inference cannot reach it.
   The tests' `AsTestMode` became `ObservableExt::into_shared` in the library, since a user erasing
   a `Local` source next to a `Shared` one meets the same need. The tests' own state is plain
   `Arc`, `Mutex`, `AtomicBool` and `Send`.
@@ -99,7 +99,7 @@ these are E0277 anyway.
 
 - **A `compile_fail` doctest sits on the item that makes the guarantee, next to a twin that
   compiles and differs from it in one place** (`shared()` / `local()`, `TokioScheduler` /
-  `TokioLocalScheduler`, `Rc` / `Arc`, `into_send_boxed` / `into_boxed`). The twin proves the rest
+  `TokioLocalScheduler`, `Rc` / `Arc`, `into_shared().into_boxed()` / `into_boxed()`). The twin proves the rest
   of the example is current, so the one difference is the reason it fails. A twin that cannot run
   outside a runtime is `no_run`: it is still compiled. The examples also tell users what is
   refused and what to write instead, which is why they stay in the docs.

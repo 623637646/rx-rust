@@ -3,7 +3,7 @@ mod tests_utils;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_scheduler::block_on;
-use futures::{SinkExt, stream};
+use futures::{SinkExt, StreamExt, stream};
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableHelper;
@@ -108,6 +108,42 @@ fn test_error_without_next() {
     time.advance_by(Duration::ZERO);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Error("boom".to_owned()));
+}
+
+#[test]
+fn test_stop_on_next() {
+    let time = VirtualTime::new();
+    let stream = stream::iter([Ok(1), Ok(2), Err("unexpected error")]).inspect(|item| {
+        assert!(item.is_ok(), "stream was polled after the observer stopped");
+    });
+    let observable = FromTryStreamAcked::new(stream, time.scheduler()).map(|(value, _)| value);
+    let (checker, observer) = Checker::stopping_after(2);
+
+    let _subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+
+    assert_eq!(checker.values(), [1, 2]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+#[test]
+fn test_stop_on_next_by_take() {
+    let time = VirtualTime::new();
+    let stream = stream::iter([Ok(1), Ok(2), Err("unexpected error")]).inspect(|item| {
+        assert!(item.is_ok(), "stream was polled after take completed");
+    });
+    let observable = FromTryStreamAcked::new(stream, time.scheduler())
+        .map(|(value, _)| value)
+        .take(2);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+
+    assert_eq!(checker.values(), [1, 2]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]

@@ -20,11 +20,8 @@ use crate::{
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
-    utils::{
-        serialized_delivery::Updated,
-        subscribe_with_context::{
-            SubscriptionContext, TwoStepsDisposal, subscribe_with_context_two_steps,
-        },
+    utils::subscribe_with_context::{
+        SubscriptionContext, TwoStepsDisposal, subscribe_with_context_two_steps,
     },
 };
 use std::time::Duration;
@@ -93,7 +90,7 @@ where
         observer,
         Model { groups, timetable },
         |context| {
-            if flow.is_stop() {
+            if flow.is_break() {
                 return None;
             }
             Some(source.subscribe(TimeShiftObserver(context.clone())))
@@ -157,17 +154,11 @@ where
                 Some(Transition::Open) => model.groups.open(events),
                 // A group that closes as the next opens closes first.
                 Some(Transition::Rotate) => model.groups.rotate(events),
-                None => Flow::Continue,
+                None => Flow::Continue(()),
             };
             next
         });
-        match updated {
-            Updated::Ran {
-                result,
-                flow: Flow::Continue,
-            } => result,
-            _ => Next::Finished,
-        }
+        updated.continued().unwrap_or(Next::Finished)
     });
     scheduler.run_task(task, None)
 }

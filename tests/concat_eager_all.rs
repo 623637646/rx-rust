@@ -526,7 +526,7 @@ fn test_next_on_inner_sub() {
             // The source emits the next inner while this one is still being subscribed to: it
             // waits, as this one is running, and is subscribed once this one has completed.
             let _ = observer.on_next(111);
-            let _ = subject_cloned.on_next(subject_2_cloned.into_send_cloneable_boxed());
+            let _ = subject_cloned.on_next(subject_2_cloned.into_cloneable_boxed());
             observer.on_termination(Termination::Completed);
             DisposeOnDrop::default()
         },
@@ -534,7 +534,7 @@ fn test_next_on_inner_sub() {
 
     assert!(
         subject
-            .on_next(observable_1.into_send_cloneable_boxed())
+            .on_next(observable_1.into_cloneable_boxed())
             .is_continue()
     );
     assert_eq!(checker.values(), [111]);
@@ -580,7 +580,7 @@ fn test_next_on_unsub() {
         |observer: SendBoxedObserver<'_, ReceiverObservable<'_, i32, Infallible>, Infallible>| {
             DisposeOnDrop::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                assert!(observer.on_next(observable_1).is_stop());
+                assert!(observer.on_next(observable_1).is_break());
             }))
         },
     );
@@ -775,7 +775,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
     let (_sender_1, observable_1, channel_checker_1) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
     let _subscription = source.concat_eager_all().subscribe(observer);
-    assert!(sender.on_next(observable_1.into_send_boxed()).is_continue());
+    assert!(sender.on_next(observable_1.into_boxed()).is_continue());
 
     // An inner observable fails to subscribe: the stream is given up, and the one still running
     // is unsubscribed from, rather than left with a place taken for good, so that the stream
@@ -785,7 +785,7 @@ fn test_unsubscribe_on_panic_while_subscribing() {
             drop(panic_on_drop);
             DisposeOnDrop::default()
         });
-        let _ = sender.on_next(failing.into_send_boxed());
+        let _ = sender.on_next(failing.into_boxed());
     });
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);

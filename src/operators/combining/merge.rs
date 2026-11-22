@@ -43,7 +43,8 @@ use std::{convert::Infallible, num::NonZeroUsize};
 /// observers and its subscription name their types — they are `Send` in the `Shared` mode only
 /// when those sources are, the iterator included, and a value the iterator borrows outlives the
 /// subscription. Both release the subscription of a source as it completes, so that a long list
-/// holds only those of the sources still running.
+/// holds only those of the sources still running — until an error is queued: from then on, the
+/// subscriptions left are released together, as the merge stops.
 ///
 /// # Examples
 /// ```rust

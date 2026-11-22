@@ -201,13 +201,7 @@ where
             Action::Left(id, value) => {
                 let pair = |right: &R| (self.result_selector)(&value, right);
                 let others = self.rights.values();
-                if self
-                    .stop_view
-                    .send_each(&mut self.observer, others, pair)
-                    .is_stop()
-                {
-                    return Flow::Stop;
-                }
+                self.stop_view.send_each(&mut self.observer, others, pair)?;
                 if let Some(id) = id {
                     self.lefts.insert(id, value);
                 }
@@ -215,13 +209,7 @@ where
             Action::Right(id, value) => {
                 let pair = |left: &L| (self.result_selector)(left, &value);
                 let others = self.lefts.values();
-                if self
-                    .stop_view
-                    .send_each(&mut self.observer, others, pair)
-                    .is_stop()
-                {
-                    return Flow::Stop;
-                }
+                self.stop_view.send_each(&mut self.observer, others, pair)?;
                 if let Some(id) = id {
                     self.rights.insert(id, value);
                 }
@@ -235,7 +223,7 @@ where
             Action::Completed(Side::Left) => self.rights.clear(),
             Action::Completed(Side::Right) => self.lefts.clear(),
         }
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

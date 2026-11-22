@@ -76,12 +76,14 @@ where
     I: IntoIterator<Item = T>,
 {
     fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        for value in self.values.into_iter() {
-            if observer.on_next(value).is_stop() {
-                // The prepended values ended the stream, so the source is never subscribed to and
-                // there is nothing to dispose of.
-                return None.into_dispose_on_drop();
-            }
+        let flow = self
+            .values
+            .into_iter()
+            .try_for_each(|value| observer.on_next(value));
+        if flow.is_break() {
+            // The prepended values ended the stream, so the source is never subscribed to and
+            // there is nothing to dispose of.
+            return None.into_dispose_on_drop();
         }
         self.source
             .subscribe(observer)

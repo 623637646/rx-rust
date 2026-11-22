@@ -179,20 +179,10 @@ fn test_completed_different_retry_observable() {
                 .into_shared()
                 .with_error_type()
                 .concat(Throw::new(0).into_shared().with_item_type())
-                .into_send_boxed(),
+                .into_boxed(),
         ),
-        0 => RetryAction::Retry(
-            Throw::new(1)
-                .with_item_type()
-                .into_shared()
-                .into_send_boxed(),
-        ),
-        1 => RetryAction::Retry(
-            Just::new(333)
-                .with_error_type()
-                .into_shared()
-                .into_send_boxed(),
-        ),
+        0 => RetryAction::Retry(Throw::new(1).with_item_type().into_shared().into_boxed()),
+        1 => RetryAction::Retry(Just::new(333).with_error_type().into_shared().into_boxed()),
         _ => panic!(),
     });
 
@@ -223,15 +213,10 @@ fn test_completed_synchronous_throw() {
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
         match error {
-            -1 => RetryAction::Retry(
-                Throw::new(0)
-                    .with_item_type()
-                    .into_shared()
-                    .into_send_boxed(),
-            ),
+            -1 => RetryAction::Retry(Throw::new(0).with_item_type().into_shared().into_boxed()),
             0 => {
                 let observable = source.clone();
-                RetryAction::Retry(observable.into_send_boxed())
+                RetryAction::Retry(observable.into_boxed())
             }
             _ => panic!(),
         }
@@ -302,7 +287,7 @@ fn throwing(
         nesting.current.fetch_sub(1, Ordering::SeqCst);
         DisposeOnDrop::default()
     })
-    .into_send_boxed()
+    .into_boxed()
 }
 
 #[test]
@@ -315,12 +300,7 @@ fn test_completed_after_many_synchronous_throws() {
         if error < SYNCHRONOUS_THROWS {
             RetryAction::Retry(throwing(error + 1, &nesting_of_callback))
         } else {
-            RetryAction::Retry(
-                Just::new(-1)
-                    .with_error_type()
-                    .into_shared()
-                    .into_send_boxed(),
-            )
+            RetryAction::Retry(Just::new(-1).with_error_type().into_shared().into_boxed())
         }
     });
     let _subscription = observable.subscribe(observer);
@@ -427,7 +407,7 @@ fn test_panicking_source_after_its_synchronous_throw() {
                     drop(fuse.take_value());
                     DisposeOnDrop::default()
                 })
-                .into_send_boxed(),
+                .into_boxed(),
             )
         });
         let _subscription = observable.subscribe(observer);
@@ -466,7 +446,7 @@ fn logged(
             log.with_mut(|log| log.push(format!("dispose {index}")));
         }))
     })
-    .into_send_boxed()
+    .into_boxed()
 }
 
 #[test]
@@ -1090,7 +1070,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(channels.on_next(0, 111).is_stop());
+    assert!(channels.on_next(0, 111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channels.state(0), ChannelState::Unsubscribed);

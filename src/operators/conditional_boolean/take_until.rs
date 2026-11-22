@@ -141,7 +141,7 @@ where
         // after the termination and outside the lock, since dropping it can run arbitrary code.
         drop(value);
         // The first notification ends the stream, so the notifier is of no use afterwards.
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

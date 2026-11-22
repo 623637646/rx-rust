@@ -648,12 +648,9 @@ where
 /// that stays subscribed hands the store over to its completion instead, so a chain of
 /// observables that complete at once never recurses.
 ///
-/// Answers the flow of the last update: the inner observable may have ended the stream while it
-/// was being subscribed. Only a continuing update starts the next waiting observable: an error
-/// queued behind a delivery running elsewhere stops the work that waits, even before it is
-/// delivered. A stream that the disposal of a finished subscription ends after that update still
-/// gets the next one subscribed, like one racing a termination: its fill finds the context
-/// stopped, which disposes the subscription and ends the loop.
+/// Returns the last update's flow. An update that hands out a waiting observable has reserved its
+/// place, so that update cannot complete the stream. If termination is queued before `fill`,
+/// that update drops the late subscription and ends the loop.
 ///
 /// The caller holds the guard of [`stop_on_panic`] whenever an observable may wait.
 fn subscribe_waiting<M, T, E, OR, Q, D, SD, O>(
@@ -670,7 +667,7 @@ where
 {
     while let Updated::Ran {
         result: Some((observable, key)),
-        flow: Flow::Continue,
+        ..
     } = updated
     {
         let subscription = subscribe_queued(

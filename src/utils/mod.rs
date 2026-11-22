@@ -26,6 +26,7 @@
 //! Nothing here is needed to *use* the operators; see the module documentation of each part for
 //! the rules it enforces.
 
+pub(crate) mod emit_then_terminate;
 pub(crate) mod flagged_lock;
 pub(crate) mod id_generator;
 pub(crate) mod lazy_subscription;

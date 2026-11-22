@@ -14,7 +14,10 @@ mod tests_utils;
 use futures::executor::LocalPool;
 use rx_rust::{
     disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableExt, ObservableTypes},
+    observable::{
+        Observable, ObservableExt, ObservableTypes,
+        boxed_observable::{BoxedObservableMode, SendBoxedObservable},
+    },
     observer::{
         Observer, Termination,
         boxed_observer::{ObserverMode, SendBoxedObserver},
@@ -206,6 +209,23 @@ fn test_into_boxed() {
     let (record, _subscription) = record(boxed);
     assert_eq!(record.values(), rcs([11, 12]));
     assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+/// A `Local` source that is `Send` is erased into the `Send` box by its constructor, and moved to
+/// another thread before it is subscribed; it stays `Local`, its events arriving on that thread.
+#[test]
+fn test_send_boxed_local_source() {
+    let boxed: SendBoxedObservable<'_, '_, '_, _, _, Local> =
+        SendBoxedObservable::new(FromIter::new([1, 2]));
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _subscription =
+            boxed.subscribe_with_callback(move |value| sender.send(value).unwrap(), |_| {});
+    })
+    .join()
+    .unwrap();
+    let values: Vec<_> = receiver.try_iter().collect();
+    assert_eq!(values, [1, 2]);
 }
 
 #[test]
@@ -623,6 +643,14 @@ assert_send!(<Shared as ThreadMode>::Flag);
 
 assert_not_send!(<Local as ObserverMode>::BoxedObserver<'static, i32, ()>);
 assert_send!(<Shared as ObserverMode>::BoxedObserver<'static, i32, ()>);
+
+// What `into_boxed` and `into_cloneable_boxed` erase into.
+assert_not_send!(<Local as BoxedObservableMode>::Boxed<'static, 'static, 'static, i32, ()>);
+assert_send!(<Shared as BoxedObservableMode>::Boxed<'static, 'static, 'static, i32, ()>);
+assert_not_send!(
+    <Local as BoxedObservableMode>::CloneableBoxed<'static, 'static, 'static, i32, ()>
+);
+assert_send!(<Shared as BoxedObservableMode>::CloneableBoxed<'static, 'static, 'static, i32, ()>);
 
 // What `Create::local` hands its builder: not `Send` even around a `Send` observer.
 assert_not_send!(Emitter<Local, SendBoxedObserver<'static, i32, ()>>);
@@ -1150,7 +1178,7 @@ fn test_observe_on_panic_on_sub() {
     assert!(result.is_err());
     // Unwinding stops the inbox even if the source keeps its observer. The cancelled task owns
     // downstream until the scheduler drops it, on this thread.
-    assert!(source_observer.as_mut().unwrap().on_next(2).is_stop());
+    assert!(source_observer.as_mut().unwrap().on_next(2).is_break());
     assert_eq!(drops.clone_value(), 0);
     pool.run_until_stalled();
     assert_eq!(drops.clone_value(), 1);

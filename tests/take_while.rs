@@ -37,7 +37,7 @@ fn test_completed_stop() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -162,7 +162,7 @@ fn test_ref() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(&value_2).is_stop());
+    assert!(sender.on_next(&value_2).is_break());
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -287,7 +287,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -310,7 +310,7 @@ fn test_multiple_operation_stop_from_1() {
     for value in 1..=2 {
         assert!(sender.on_next(value).is_continue());
     }
-    assert!(sender.on_next(3).is_stop());
+    assert!(sender.on_next(3).is_break());
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -333,7 +333,7 @@ fn test_multiple_operation_stop_from_2() {
     for value in 1..=2 {
         assert!(sender.on_next(value).is_continue());
     }
-    assert!(sender.on_next(3).is_stop());
+    assert!(sender.on_next(3).is_break());
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

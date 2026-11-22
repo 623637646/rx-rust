@@ -891,7 +891,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
 
-    assert!(sender_2.on_next("111").is_stop());
+    assert!(sender_2.on_next("111").is_break());
     assert_eq!(checker.values(), [(111, "111")]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
@@ -1301,7 +1301,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -1901,7 +1901,7 @@ mod from_iter {
 
         let _subscription = observable.subscribe(observer);
         assert!(channels.on_next(0, 1).is_continue());
-        assert!(channels.on_next(1, 2).is_stop());
+        assert!(channels.on_next(1, 2).is_break());
         assert_eq!(checker.values(), [vec![1, 2]]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channels.state(0), ChannelState::Unsubscribed);
@@ -1968,8 +1968,8 @@ mod from_iter {
             Throw::new("error")
                 .with_item_type()
                 .into_shared()
-                .into_send_boxed(),
-            observable.into_send_boxed(),
+                .into_boxed(),
+            observable.into_boxed(),
         ];
 
         // The first one fails as it is subscribed: the second is not subscribed at all.
@@ -1987,7 +1987,7 @@ mod from_iter {
             Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
                 DisposeOnDrop::new(CallbackDisposal::new(move || {
                     let mut observer = observer;
-                    assert!(observer.on_next(111).is_stop());
+                    assert!(observer.on_next(111).is_break());
                 }))
             });
 

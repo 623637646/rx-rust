@@ -52,7 +52,7 @@ fn test_completed() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(222).is_stop());
+    assert!(subject.on_next(222).is_break());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
@@ -106,7 +106,7 @@ fn test_error() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(222).is_stop());
+    assert!(subject.on_next(222).is_break());
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
@@ -432,7 +432,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_3),
     ));
@@ -537,7 +537,7 @@ fn test_sub_on_next() {
                     subscription_3_cloned
                         .replace_value(Some(observable.clone().subscribe(observer)));
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_1),
     );
@@ -614,7 +614,7 @@ fn test_next_on_next() {
             if value < 3 {
                 // Like the termination above: the send of `1` is queued behind the running
                 // delivery, the send of `2` finds the subject terminated.
-                assert_eq!(subject_cloned.on_next(value + 1).is_stop(), value > 1);
+                assert_eq!(subject_cloned.on_next(value + 1).is_break(), value > 1);
             }
             subject_cloned
                 .clone()
@@ -1385,7 +1385,7 @@ fn a_panicking_observer_kills_the_subject() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert!(subject.termination().is_none());
-    assert!(subject.on_next(222).is_stop());
+    assert!(subject.on_next(222).is_break());
 
     let (late_checker, late_observer) = Checker::new();
     let _subscription = subject.clone().subscribe(late_observer);
@@ -1414,7 +1414,7 @@ fn a_panicking_clone_kills_the_subject() {
     assert!(values.with_ref(Vec::is_empty));
     assert!(terminations.with_ref(Vec::is_empty));
     assert!(subject.termination().is_none());
-    assert!(subject.on_next(CloneProbe::new(222)).is_stop());
+    assert!(subject.on_next(CloneProbe::new(222)).is_break());
     subject.on_termination(Termination::Completed);
     assert!(values.with_ref(Vec::is_empty));
     assert!(terminations.with_ref(Vec::is_empty));

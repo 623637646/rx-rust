@@ -66,7 +66,7 @@ boxed_observer!(
     /// let mut seen = Vec::new();
     /// let mut observer: BoxedObserver<'_, i32, ()> =
     ///     CallbackObserver::new(|value| seen.push(value), |_| {}).into_boxed();
-    /// assert_eq!(observer.on_next(1), Flow::Continue);
+    /// assert_eq!(observer.on_next(1), Flow::Continue(()));
     /// observer.on_termination(Termination::Completed);
     /// assert_eq!(seen, [1]);
     /// ```

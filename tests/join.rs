@@ -69,7 +69,7 @@ fn test_completed() {
     assert_eq!(left_durations.state(1), ChannelState::Subscribed);
 
     // The duration of "a" emits: its window closes, and the duration is not needed any more.
-    assert!(right_durations.on_next(0, ()).is_stop());
+    assert!(right_durations.on_next(0, ()).is_break());
     assert_eq!(checker.values(), [(1, "a"), (2, "a")]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(right_durations.state(0), ChannelState::Unsubscribed);
@@ -118,7 +118,7 @@ fn test_completed() {
     assert_eq!(right_durations.len(), 3);
 
     // The last left window closes: no pair can come any more.
-    assert!(left_durations.on_next(1, ()).is_stop());
+    assert!(left_durations.on_next(1, ()).is_break());
     assert_eq!(
         checker.values(),
         [(1, "a"), (2, "a"), (1, "b"), (2, "b"), (2, "c"), (2, "d")]
@@ -513,7 +513,7 @@ fn test_unsub_on_next_by_take() {
 
     let _subscription = observable.subscribe(observer);
     assert!(left.on_next(111).is_continue());
-    assert!(right.on_next("111").is_stop());
+    assert!(right.on_next("111").is_break());
     assert_eq!(checker.values(), [(111, "111")]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -538,7 +538,7 @@ fn test_stop_on_next() {
     let _subscription = observable.subscribe(observer);
     assert!(right.on_next("a").is_continue());
     assert!(right.on_next("b").is_continue());
-    assert!(left.on_next(1).is_stop());
+    assert!(left.on_next(1).is_break());
     assert_eq!(checker.values(), [(1, "a")]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -573,7 +573,7 @@ fn test_unsub_on_next() {
     subscription.replace_value(Some(observable.subscribe(observer)));
     assert!(right.on_next("a").is_continue());
     assert!(right.on_next("b").is_continue());
-    assert!(left.on_next(1).is_stop());
+    assert!(left.on_next(1).is_break());
     assert_eq!(checker.values(), [(1, "a")]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -605,7 +605,7 @@ fn test_unsub_in_result_selector() {
     subscription.replace_value(Some(observable.subscribe(observer)));
     assert!(right.on_next("a").is_continue());
     assert!(right.on_next("b").is_continue());
-    assert!(left.on_next(1).is_stop());
+    assert!(left.on_next(1).is_break());
     assert_eq!(checker.values(), [] as [(i32, &str); 0]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -636,7 +636,7 @@ fn test_unsub_in_result_selector_from_right() {
     subscription.replace_value(Some(observable.subscribe(observer)));
     assert!(left.on_next(1).is_continue());
     assert!(left.on_next(2).is_continue());
-    assert!(right.on_next("a").is_stop());
+    assert!(right.on_next("a").is_break());
     assert_eq!(checker.values(), [] as [(i32, &str); 0]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -693,7 +693,7 @@ fn test_unsub_from_other_thread_on_next() {
     });
     assert!(right.on_next("a").is_continue());
     assert!(right.on_next("b").is_continue());
-    assert!(left.on_next(1).is_stop());
+    assert!(left.on_next(1).is_break());
     assert_eq!(checker.values(), [(1, "a")]);
     assert_eq!(checker.state(), State::Dropped);
     resume_sender.send(()).unwrap();
@@ -738,9 +738,9 @@ fn test_duration_errors_on_sub_while_delivering() {
 
     let _subscription = observable.subscribe(observer);
     assert!(left.on_next(1).is_continue());
-    let deliverer = thread::spawn(move || right.on_next("a").is_stop());
+    let deliverer = thread::spawn(move || right.on_next("a").is_break());
     delivering.recv_timeout(TIMEOUT).unwrap();
-    assert!(left.on_next(2).is_stop());
+    assert!(left.on_next(2).is_break());
     assert_eq!(checker.values(), [(1, "a")]);
     assert_eq!(checker.state(), State::Active);
 
@@ -858,7 +858,7 @@ fn test_duration_errors_on_sub() {
     );
 
     let _subscription = observable.subscribe(observer);
-    assert_eq!(flow.clone_value(), Some(Flow::Stop));
+    assert_eq!(flow.clone_value(), Some(Flow::Break(())));
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(right_checker.state(), ChannelState::Initialized);
@@ -983,7 +983,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 

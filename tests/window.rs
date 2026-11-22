@@ -1903,7 +1903,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -2527,7 +2527,7 @@ fn test_subscribing_inner_after_outer_termination_is_queued_observes_termination
         move |termination| outer_terminations_cloned.with_mut(|values| values.push(termination)),
     );
 
-    assert!(boundary.on_next(0, ()).is_stop());
+    assert!(boundary.on_next(0, ()).is_break());
 
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Error("error"));
@@ -2574,7 +2574,7 @@ fn test_disposing_outer_subscription_from_old_window_completion_suppresses_new_w
     );
     outer_subscription.replace_value(Some(subscription));
 
-    assert!(boundary.on_next(0, ()).is_stop());
+    assert!(boundary.on_next(0, ()).is_break());
 
     assert_eq!(window_count.clone_value(), 1);
 }
@@ -2659,7 +2659,7 @@ fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inne
         move |termination| outer_terminations_cloned.with_mut(|values| values.push(termination)),
     );
 
-    assert!(source.on_next(0, 111).is_stop());
+    assert!(source.on_next(0, 111).is_break());
 
     assert_eq!(values.clone_value(), [111]);
     assert_eq!(inner_terminations.with_ref(Vec::len), 0);
@@ -3177,7 +3177,7 @@ fn test_no_subscriptions_after_initial_window_stops() {
     let (_, source, source_checker) = test_channel::<'_, i32, Infallible>();
     let (_, boundary, boundary_checker) = test_channel::<'_, (), _>();
     let _subscription = source.window(boundary).subscribe_with_callback(
-        |_| rx_rust::observer::Flow::Stop,
+        |_| rx_rust::observer::Flow::Break(()),
         |_| panic!("a stopped observer must not be terminated"),
     );
 

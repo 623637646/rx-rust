@@ -21,11 +21,11 @@ FromTryStreamAcked::new(chunks, scheduler.clone())
 
 ### Why
 
-- **An observer cannot say "later".** `on_next` is synchronous and answers a `Flow`: `Continue` or
-  `Stop`. `FromStream` polls the stream again once `on_next` returns, which keeps the stream's pace
-  only up to the first asynchronous operator: a `concat_map` over an asynchronous inner returns at
-  once, queues the value, and the stream is read to its end. The `StreamAck` is the "done" an
-  `on_next` cannot give, carried with the item to wherever the work ends.
+- **An observer cannot say "later".** `on_next` is synchronous and returns `Flow::Continue(())`
+  or `Flow::Break(())`. After `Continue`, `FromStream` can poll the stream again as soon as
+  `on_next` returns. A `concat_map` over an asynchronous inner returns at once and queues the
+  value, letting the stream be read to its end. A `StreamAck` travels with the item and can be
+  dropped when its work finishes.
 - **Dropping is acknowledging.** A `StreamAck` that must be called would stall the stream whenever
   one is forgotten, and every operator that drops an item (`filter`, `skip`, `debounce`, `sample`)
   would have to know about it. With the drop, those operators acknowledge on their own, and so

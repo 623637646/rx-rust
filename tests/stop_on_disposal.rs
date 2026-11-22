@@ -205,7 +205,7 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.stop_on_disposal().take(1).subscribe(observer);
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -218,14 +218,14 @@ fn test_stop_on_next() {
 
     let _subscription = observable.stop_on_disposal().subscribe(observer);
     assert!(sender.on_next(111).is_continue());
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 }
 
-/// The observer disposes its own subscription and still answers `Flow::Continue`: the operator
-/// answers `Flow::Stop` in its place.
+/// The observer disposes its own subscription and still answers `Flow::Continue(())`: the operator
+/// answers `Flow::Break(())` in its place.
 #[test]
 fn test_unsub_on_next() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
@@ -248,7 +248,7 @@ fn test_unsub_on_next() {
     subscription.replace_value(Some(made));
 
     assert!(sender.on_next(111).is_continue());
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

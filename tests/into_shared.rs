@@ -245,7 +245,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -304,8 +304,8 @@ fn test_erased_with_shared_source() {
     let (checker, observer) = Checker::new();
 
     let sources: Vec<SendBoxedObservable<'_, '_, '_, i32, Infallible, Shared>> = vec![
-        Just::new(111).into_shared().into_send_boxed(),
-        subject.clone().into_send_boxed(),
+        Just::new(111).into_shared().into_boxed(),
+        subject.clone().into_boxed(),
     ];
     let observable = FromIter::new(sources).concat_all();
 
@@ -332,7 +332,7 @@ fn test_send_boxed_local_chain() {
         .into_shared()
         .with_error_type()
         .concat(Throw::new("error").with_item_type())
-        .into_send_boxed();
+        .into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);

@@ -240,14 +240,14 @@ where
     /// Queues `value`, or the completion when it is `None`, and wakes the timer if it waits for
     /// nothing.
     ///
-    /// Returns [`Flow::Stop`] once the context has stopped: the event was then dropped, and so
+    /// Returns [`Flow::Break`] once the context has stopped: the event was then dropped, and so
     /// would every later one be. What downstream itself answers is only known once the timer
     /// fires, so this is otherwise [`Flow::Continue`].
     fn queue_event(&self, value: Option<T>) -> Flow {
         let Some(deadline) = self.clock.now().checked_add(self.delay) else {
             // The event never comes due, and neither does any later one, since the clock only
             // moves forward: there is nothing to queue, and the values already queued keep their
-            // timer. The context still answers, so that a stopped one says `Stop` as it does for
+            // timer. The context still answers, so that a stopped one says `Break` as it does for
             // an event in range; the event is dropped here, outside its lock.
             return self
                 .context

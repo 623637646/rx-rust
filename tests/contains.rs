@@ -46,7 +46,7 @@ fn test_completed_true() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(888).is_stop());
+    assert!(sender.on_next(888).is_break());
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -181,7 +181,7 @@ fn test_ref() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(&value_2).is_stop());
+    assert!(sender.on_next(&value_2).is_break());
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -285,7 +285,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(777).is_stop());
+    assert!(sender.on_next(777).is_break());
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -331,7 +331,7 @@ fn test_multiple_operation_positive_true() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(666).is_stop());
+    assert!(sender.on_next(666).is_break());
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -359,7 +359,7 @@ fn test_multiple_operation_positive_false() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(666).is_stop());
+    assert!(sender.on_next(666).is_break());
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -453,7 +453,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(666).is_stop());
+    assert!(sender.on_next(666).is_break());
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -471,7 +471,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::shared_boxed(|mut observer| {
-            assert!(observer.on_next(1).is_stop());
+            assert!(observer.on_next(1).is_break());
             observer.on_termination(Termination::<String>::Completed);
             DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();

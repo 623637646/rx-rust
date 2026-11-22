@@ -48,7 +48,7 @@ fn test_mut_ref() {
     impl Observer<&mut i32, &mut i32> for MyObserver {
         fn on_next(&mut self, value: &mut i32) -> Flow {
             *value *= 2;
-            Flow::Continue
+            Flow::Continue(())
         }
 
         fn on_termination(self, termination: Termination<&mut i32>) {

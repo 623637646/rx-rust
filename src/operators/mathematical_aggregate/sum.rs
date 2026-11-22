@@ -1,5 +1,6 @@
 //! The [`Sum`] operator, behind [`ObservableExt::sum`](crate::observable::ObservableExt::sum).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -90,18 +91,10 @@ where
         } else {
             self.sum = Some(value);
         }
-        Flow::Continue
+        Flow::Continue(())
     }
 
-    fn on_termination(mut self, termination: Termination<E>) {
-        // The final value ends the stream, so a downstream that stopped on it is not completed
-        // on top of that: it has already ended itself.
-        if matches!(termination, Termination::Completed)
-            && let Some(sum) = self.sum.take()
-            && self.observer.on_next(sum).is_stop()
-        {
-            return;
-        }
-        self.observer.on_termination(termination)
+    fn on_termination(self, termination: Termination<E>) {
+        emit_then_terminate(self.observer, self.sum, termination);
     }
 }

@@ -62,7 +62,7 @@
 //!
 //! An observer that holds its own sender forms a cycle — observer → sender → observer — that the
 //! disposal does not break. Such an observer must drop the sender itself, when its `on_next`
-//! answers [`Flow::Stop`] and when its subscription is disposed; otherwise both leak.
+//! answers [`Flow::Break`] and when its subscription is disposed; otherwise both leak.
 //!
 //! # Examples
 //! ```rust
@@ -301,7 +301,7 @@ enum Prepared<V> {
 
 impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
     /// Returns whether every later event is dropped: the subscription was disposed, the observer
-    /// answered [`Flow::Stop`] or panicked, or the [`UnicastObservable`] was dropped without being
+    /// answered [`Flow::Break`] or panicked, or the [`UnicastObservable`] was dropped without being
     /// subscribed to.
     ///
     /// It turns true at once, while the observer may stay alive until the sender releases it, as
@@ -315,7 +315,7 @@ impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
     fn prepare_send<V>(&mut self, payload: V, into_event: fn(V) -> Event<T, E>) -> Prepared<V> {
         let state = match &self.state {
             SenderState::Held(_) => return Prepared::Deliver(payload),
-            SenderState::Closed => return Prepared::Answer(Flow::Stop),
+            SenderState::Closed => return Prepared::Answer(Flow::Break(())),
             SenderState::Unheld(state) => state,
         };
         // What is not delivered is handed back, to be dropped after the lock.
@@ -338,7 +338,7 @@ impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
                 // Asserted after the lock, which a failing assertion would otherwise poison.
                 debug_assert!(rejected.is_none());
                 drop(rejected);
-                Prepared::Answer(Flow::Continue)
+                Prepared::Answer(Flow::Continue(()))
             }
             SendAction::Taken(observer, payload) => {
                 self.state = SenderState::Held(observer);
@@ -347,7 +347,7 @@ impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
             SendAction::Discarded(payload, previous_state) => {
                 self.state = SenderState::Closed;
                 drop((payload, previous_state)); // Drop outside the lock
-                Prepared::Answer(Flow::Stop)
+                Prepared::Answer(Flow::Break(()))
             }
         }
     }
@@ -397,14 +397,14 @@ impl<T, E, M: ThreadMode, OR: Observer<T, E>> UnicastSender<T, E, M, OR> {
             let flow = observer.on_next(value); // Notify without the lock
             drop(close_on_panic);
             if flow.is_continue() && !self.is_closed.is_raised() {
-                return Flow::Continue;
+                return Flow::Continue(());
             }
         }
         // The shared state has been released, so raising the flag closes the pipe. An undelivered
         // value is dropped after the observer.
         self.is_closed.raise();
         drop(std::mem::replace(&mut self.state, SenderState::Closed));
-        Flow::Stop
+        Flow::Break(())
     }
 }
 
@@ -503,7 +503,7 @@ enum Step<E, OR> {
 /// the queue, so nothing can still be queued after it. Events the sender adds meanwhile queue up
 /// behind the batch, so they keep their order. No disposal can happen during the replay, since the
 /// subscription is handed out afterwards, so nothing can stop it between two values of a batch but
-/// the observer itself, answering [`Flow::Stop`] or unwinding: the pipe is then closed, dropping
+/// the observer itself, answering [`Flow::Break`] or unwinding: the pipe is then closed, dropping
 /// what is still queued, and the batch and the observer are dropped after it.
 ///
 /// If the sender is already gone without a termination, the parked observer is dropped silently
@@ -548,7 +548,7 @@ fn deliver<T, E, M: ThreadMode, OR: Observer<T, E>>(pipe: &Pipe<T, E, M, OR>, mu
                 let close_on_panic = on_panic(|| pipe.close());
                 while let Some(value) = batch.pop_front() {
                     // Notify outside the lock
-                    if observer.on_next(value).is_stop() {
+                    if observer.on_next(value).is_break() {
                         drop(close_on_panic);
                         pipe.close();
                         drop(batch); // Drop outside the lock

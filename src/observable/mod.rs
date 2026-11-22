@@ -6,7 +6,7 @@
 //! source, and [`ObservableExt`] gives each of them a method, so a pipeline reads as a chain of
 //! calls.
 //!
-//! [`BoxedObservable`] and [`CloneableBoxedObservable`] erase an observable's type;
+//! [`BoxedObservable`](boxed_observable::BoxedObservable) and [`CloneableBoxedObservable`](boxed_observable::CloneableBoxedObservable) erase an observable's type;
 //! [`EitherObservable`](either_observable::EitherObservable) picks one of two types without
 //! boxing. [`future`] and `stream` (with the `futures` feature) hold what an observable becomes as
 //! a `Future` or a `Stream`, through [`into_future`](ObservableExt::into_future), `into_stream` and
@@ -43,17 +43,13 @@ use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
         boxed_observable::{
-            BoxedObservable, BoxedObservableFor, CloneableBoxedObservable,
-            CloneableBoxedObservableFor, SendBoxedObservable, SendBoxedObservableFor,
-            SendCloneableBoxedObservable, SendCloneableBoxedObservableFor,
+            BoxedObservableMode, IntoBoxedObservable, IntoCloneableBoxedObservable,
         },
         future::{ObservableFuture, ObservableTryFuture},
     },
     observer::{
-        Flow, IntoFlow, Observer, Termination,
-        boxed_observer::{BoxedObserver, ObserverMode, SendBoxedObserver},
-        callback_observer::CallbackObserver,
-        emitter::Emitter,
+        Flow, IntoFlow, Observer, Termination, boxed_observer::ObserverMode,
+        callback_observer::CallbackObserver, emitter::Emitter,
     },
     operators::{
         combining::{
@@ -155,6 +151,30 @@ pub type BoxedObserverOf<'a, OE> = <<OE as ObservableTypes>::Mode as ObserverMod
     <OE as ObservableTypes>::Item,
     <OE as ObservableTypes>::Error,
 >;
+
+/// The erased observable of the source `OE`'s mode, for its items and errors: what
+/// [`into_boxed`](ObservableExt::into_boxed) returns, a [`BoxedObservable`](boxed_observable::BoxedObservable) for `Local` and a
+/// [`SendBoxedObservable`](boxed_observable::SendBoxedObservable) for `Shared`.
+pub type BoxedObservableOf<'or, 'sub, 'oe, OE> =
+    <<OE as ObservableTypes>::Mode as BoxedObservableMode>::Boxed<
+        'or,
+        'sub,
+        'oe,
+        <OE as ObservableTypes>::Item,
+        <OE as ObservableTypes>::Error,
+    >;
+
+/// The cloneable erased observable of the source `OE`'s mode: what
+/// [`into_cloneable_boxed`](ObservableExt::into_cloneable_boxed) returns, a
+/// [`CloneableBoxedObservable`](boxed_observable::CloneableBoxedObservable) for `Local` and a [`SendCloneableBoxedObservable`](boxed_observable::SendCloneableBoxedObservable) for `Shared`.
+pub type CloneableBoxedObservableOf<'or, 'sub, 'oe, OE> =
+    <<OE as ObservableTypes>::Mode as BoxedObservableMode>::CloneableBoxed<
+        'or,
+        'sub,
+        'oe,
+        <OE as ObservableTypes>::Item,
+        <OE as ObservableTypes>::Error,
+    >;
 
 /// The disposals of the two sources `A` and `B` chained into one: disposing it disposes `A`'s
 /// subscription first, then `B`'s.
@@ -744,9 +764,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
         IgnoreElements::new(self)
     }
 
-    /// Erases the observable's concrete type. See [`boxed_observable`] for the flavors; the
-    /// lifetimes bound the observer (`'or`), the disposal (`'sub`) and the observable itself
-    /// (`'oe`).
+    /// Erases the observable's concrete type into the box its mode picks: a [`BoxedObservable`](boxed_observable::BoxedObservable)
+    /// for a `Local` source, a [`SendBoxedObservable`](boxed_observable::SendBoxedObservable) for a `Shared` one, which must then be
+    /// `Send`, and so must its disposal and observers. See [`boxed_observable`] for the box of the
+    /// other flavor; the lifetimes bound the observer (`'or`), the disposal (`'sub`) and the
+    /// observable itself (`'oe`).
     ///
     /// The erased observable keeps what it borrows, so it can borrow from the stack, and it cannot
     /// outlive what it borrows:
@@ -791,27 +813,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///     Just::new(1).map(move |value| value + offset).into_boxed()
     /// }
     /// ```
-    fn into_boxed<'or, 'sub, 'oe>(
-        self,
-    ) -> BoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>
-    where
-        Self: Observable<
-                BoxedObserver<
-                    'or,
-                    <Self as ObservableTypes>::Item,
-                    <Self as ObservableTypes>::Error,
-                >,
-            > + 'oe,
-        Self::Disposal: 'sub,
-    {
-        BoxedObservable::new(self)
-    }
-
-    /// Erases the observable's concrete type, keeping it `Send`.
     ///
-    /// Its observer is boxed as a [`SendBoxedObserver`], so it must be `Send` whatever the
-    /// source's mode, even for a `Local` source that [`into_boxed`](Self::into_boxed) would let
-    /// take an `Rc`:
+    /// A `Shared` source gets the `Send` box, so its observers must be `Send`:
     ///
     /// ```compile_fail
     /// use rx_rust::{observable::ObservableExt, operators::creating::just::Just};
@@ -819,9 +822,12 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// let values = Rc::new(RefCell::new(Vec::new()));
     /// let _subscription = Just::new(1)
-    ///     .into_send_boxed()
+    ///     .into_shared()
+    ///     .into_boxed()
     ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
     /// ```
+    ///
+    /// A `Local` one gets the plain box, which takes any observer:
     ///
     /// ```rust
     /// use rx_rust::{observable::ObservableExt, operators::creating::just::Just};
@@ -832,110 +838,26 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///     .into_boxed()
     ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
     /// ```
-    fn into_send_boxed<'or, 'sub, 'oe>(
-        self,
-    ) -> SendBoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>
+    fn into_boxed<'or, 'sub, 'oe>(self) -> BoxedObservableOf<'or, 'sub, 'oe, Self>
     where
-        Self: Observable<
-                SendBoxedObserver<
-                    'or,
-                    <Self as ObservableTypes>::Item,
-                    <Self as ObservableTypes>::Error,
-                >,
-            > + Send
-            + 'oe,
-        Self::Disposal: Send + 'sub,
+        Self: IntoBoxedObservable<'or, 'sub, 'oe, <Self as ObservableTypes>::Mode>,
+        <Self as ObservableTypes>::Mode: BoxedObservableMode,
     {
-        SendBoxedObservable::new(self)
+        IntoBoxedObservable::box_observable(self)
     }
 
-    /// Erases the observable's concrete type except for its observer's, `OR`: only subscribing is
-    /// dynamically dispatched, the events are not.
-    fn into_boxed_for<'sub, 'oe, OR>(
-        self,
-    ) -> BoxedObservableFor<'sub, 'oe, Self::Item, Self::Error, Self::Mode, OR>
-    where
-        OR: Observer<Self::Item, Self::Error>,
-        Self: Observable<OR> + 'oe,
-        Self::Disposal: 'sub,
-    {
-        BoxedObservableFor::new(self)
-    }
-
-    /// [`into_boxed_for`](Self::into_boxed_for), keeping the observable `Send`.
-    fn into_send_boxed_for<'sub, 'oe, OR>(
-        self,
-    ) -> SendBoxedObservableFor<'sub, 'oe, Self::Item, Self::Error, Self::Mode, OR>
-    where
-        OR: Observer<Self::Item, Self::Error>,
-        Self: Observable<OR> + Send + 'oe,
-        Self::Disposal: Send + 'sub,
-    {
-        SendBoxedObservableFor::new(self)
-    }
-
-    /// Erases the observable's concrete type and makes it cloneable.
+    /// Erases the observable's concrete type and makes it cloneable, into the box its mode picks:
+    /// a [`CloneableBoxedObservable`](boxed_observable::CloneableBoxedObservable) for a `Local` source, a [`SendCloneableBoxedObservable`](boxed_observable::SendCloneableBoxedObservable) for
+    /// a `Shared` one, which must then be `Send` and `Sync`. The source must be `Clone`, as it is
+    /// cloned on every subscription; see [`into_boxed`](Self::into_boxed) for the rest.
     fn into_cloneable_boxed<'or, 'sub, 'oe>(
         self,
-    ) -> CloneableBoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>
+    ) -> CloneableBoxedObservableOf<'or, 'sub, 'oe, Self>
     where
-        Self: Observable<
-                BoxedObserver<
-                    'or,
-                    <Self as ObservableTypes>::Item,
-                    <Self as ObservableTypes>::Error,
-                >,
-            > + Clone
-            + 'oe,
-        Self::Disposal: 'sub,
+        Self: IntoCloneableBoxedObservable<'or, 'sub, 'oe, <Self as ObservableTypes>::Mode>,
+        <Self as ObservableTypes>::Mode: BoxedObservableMode,
     {
-        CloneableBoxedObservable::new(self)
-    }
-
-    /// [`into_cloneable_boxed`](Self::into_cloneable_boxed), keeping the observable `Send` and
-    /// `Sync`.
-    fn into_send_cloneable_boxed<'or, 'sub, 'oe>(
-        self,
-    ) -> SendCloneableBoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>
-    where
-        Self: Observable<
-                SendBoxedObserver<
-                    'or,
-                    <Self as ObservableTypes>::Item,
-                    <Self as ObservableTypes>::Error,
-                >,
-            > + Clone
-            + Send
-            + Sync
-            + 'oe,
-        Self::Disposal: Send + 'sub,
-    {
-        SendCloneableBoxedObservable::new(self)
-    }
-
-    /// [`into_boxed_for`](Self::into_boxed_for), making the observable cloneable.
-    fn into_cloneable_boxed_for<'sub, 'oe, OR>(
-        self,
-    ) -> CloneableBoxedObservableFor<'sub, 'oe, Self::Item, Self::Error, Self::Mode, OR>
-    where
-        OR: Observer<Self::Item, Self::Error>,
-        Self: Observable<OR> + Clone + 'oe,
-        Self::Disposal: 'sub,
-    {
-        CloneableBoxedObservableFor::new(self)
-    }
-
-    /// [`into_cloneable_boxed_for`](Self::into_cloneable_boxed_for), keeping the observable `Send`
-    /// and `Sync`.
-    fn into_send_cloneable_boxed_for<'sub, 'oe, OR>(
-        self,
-    ) -> SendCloneableBoxedObservableFor<'sub, 'oe, Self::Item, Self::Error, Self::Mode, OR>
-    where
-        OR: Observer<Self::Item, Self::Error>,
-        Self: Observable<OR> + Clone + Send + Sync + 'oe,
-        Self::Disposal: Send + 'sub,
-    {
-        SendCloneableBoxedObservableFor::new(self)
+        IntoCloneableBoxedObservable::box_cloneable_observable(self)
     }
 
     /// Converts the observable into a future of its first item: `Some(item)`, or `None` when the
@@ -1397,9 +1319,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
         StartWith::new(self, values)
     }
 
-    /// Delivers nothing more once the subscription is disposed, and answers [`Flow::Stop`] from
+    /// Delivers nothing more once the subscription is disposed, and answers [`Flow::Break`] from
     /// then on: for an [`Observer`] that may be disposed from inside one of its notifications
-    /// without answering [`Flow::Stop`] itself.
+    /// without answering [`Flow::Break`] itself.
     fn stop_on_disposal(self) -> StopOnDisposal<Self> {
         StopOnDisposal::new(self)
     }
@@ -1412,10 +1334,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Subscribes with two closures instead of an [`Observer`].
     ///
     /// `on_next` may return nothing, which keeps the source going, or a [`Flow`], which lets it
-    /// end its own stream with [`Flow::Stop`]: the source then stops pushing — a synchronous one
+    /// end its own stream with [`Flow::Break`]: the source then stops pushing — a synchronous one
     /// stops iterating — and drops the callbacks without calling `on_termination`.
     ///
-    /// A callback that disposes its own subscription answers [`Flow::Stop`] as well: the
+    /// A callback that disposes its own subscription answers [`Flow::Break`] as well: the
     /// disposal alone does not hold back what an operator still has to send for the event it is
     /// handling. [`stop_on_disposal`](Self::stop_on_disposal) does, where the callback cannot
     /// answer.
@@ -1607,12 +1529,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
         WindowWithTimeOrCount::new(self, count, time_span, scheduler)
     }
 
-    /// Gives an observable whose error type is `Infallible` a concrete error type.
+    /// Gives an observable whose error type is `Infallible` a concrete error type, so that it
+    /// can be joined to a fallible one (`merge`, `concat`, …), which requires the same error type.
     fn with_error_type<E1>(self) -> WithErrorType<E1, Self> {
         WithErrorType::new(self)
     }
 
-    /// Gives an observable whose item type is `Infallible` a concrete item type.
+    /// Gives an observable whose item type is `Infallible` a concrete item type, so that it can
+    /// be joined to one that emits (`merge`, `concat`, …), which requires the same item type.
     fn with_item_type<T1>(self) -> WithItemType<T1, Self> {
         WithItemType::new(self)
     }

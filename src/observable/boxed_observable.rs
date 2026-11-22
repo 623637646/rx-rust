@@ -13,9 +13,17 @@
 //!   their source, disposal and observers to be `Send` (the cloneable one also `Sync`, since its
 //!   clones share the source).
 //!
-//! Which `Send` flavor to use is a choice about storage, independent of the observable's
-//! [`Mode`](crate::observable::ObservableTypes::Mode): a `Local` source can be boxed into a `Send`
-//! box and moved to another thread before it is subscribed, and erasing never changes the mode.
+//! [`into_boxed`](crate::observable::ObservableExt::into_boxed) and
+//! [`into_cloneable_boxed`](crate::observable::ObservableExt::into_cloneable_boxed) pick the
+//! `Send` flavor from the observable's [`Mode`](crate::observable::ObservableTypes::Mode), the
+//! way [`ObserverMode`] picks the boxed observer: the plain box for [`Local`], the `Send` one for
+//! [`Shared`]. A box of the other flavor is a choice about storage, and its constructor makes it:
+//! [`SendBoxedObservable::new`] moves a `Local` source that is `Send` to another thread before it
+//! is subscribed, and [`BoxedObservable::new`] erases a `Shared` one that is not `Send`. Erasing
+//! never changes the mode.
+//!
+//! The `For` types have no method: their observer type `OR` must be named anyway, and so can the
+//! type itself, `BoxedObservableFor::<_, _, _, _, _, OR>::new(observable)`.
 
 use super::{Observable, ObservableTypes, Observer};
 use crate::{
@@ -23,8 +31,8 @@ use crate::{
         boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
         dispose_on_drop::DisposeOnDrop,
     },
-    observer::boxed_observer::{BoxedObserver, SendBoxedObserver},
-    thread_mode::ThreadMode,
+    observer::boxed_observer::{BoxedObserver, ObserverMode, SendBoxedObserver},
+    thread_mode::{Local, Shared, ThreadMode},
     utils::MarkerType,
 };
 use educe::Educe;
@@ -256,3 +264,123 @@ boxed_observable!(
     SendBoxedDisposal,
     Send
 );
+
+/// What a [thread mode](crate::thread_mode) means for an erased observable: the box
+/// [`into_boxed`](crate::observable::ObservableExt::into_boxed) and
+/// [`into_cloneable_boxed`](crate::observable::ObservableExt::into_cloneable_boxed) erase it into.
+///
+/// It extends [`ObserverMode`], as the box it picks stores the boxed observer of that mode: the
+/// plain boxes for [`Local`], the `Send` ones for [`Shared`]. Code generic over a mode states
+/// `M: BoxedObservableMode` where it erases an observable.
+pub trait BoxedObservableMode: ObserverMode {
+    /// The erased observable of this mode: [`BoxedObservable`] or [`SendBoxedObservable`].
+    type Boxed<'or, 'sub, 'oe, T, E>: ObservableTypes<Item = T, Error = E, Mode = Self>;
+
+    /// The cloneable erased observable of this mode: [`CloneableBoxedObservable`] or
+    /// [`SendCloneableBoxedObservable`].
+    type CloneableBoxed<'or, 'sub, 'oe, T, E>: ObservableTypes<Item = T, Error = E, Mode = Self>
+        + Clone;
+}
+
+impl BoxedObservableMode for Local {
+    type Boxed<'or, 'sub, 'oe, T, E> = BoxedObservable<'or, 'sub, 'oe, T, E, Local>;
+    type CloneableBoxed<'or, 'sub, 'oe, T, E> =
+        CloneableBoxedObservable<'or, 'sub, 'oe, T, E, Local>;
+}
+
+impl BoxedObservableMode for Shared {
+    type Boxed<'or, 'sub, 'oe, T, E> = SendBoxedObservable<'or, 'sub, 'oe, T, E, Shared>;
+    type CloneableBoxed<'or, 'sub, 'oe, T, E> =
+        SendCloneableBoxedObservable<'or, 'sub, 'oe, T, E, Shared>;
+}
+
+/// An observable that can be erased into the [`BoxedObservableMode::Boxed`] of its mode `M`: any
+/// observable for [`Local`], a `Send` one with a `Send` disposal for [`Shared`].
+///
+/// [`into_boxed`](crate::observable::ObservableExt::into_boxed) asks for it, so that what the box
+/// requires, `Send` included, is checked where the mode is concrete.
+pub trait IntoBoxedObservable<'or, 'sub, 'oe, M: BoxedObservableMode>:
+    ObservableTypes + Sized
+{
+    /// Erases the observable; call it as
+    /// [`into_boxed`](crate::observable::ObservableExt::into_boxed).
+    #[doc(hidden)]
+    fn box_observable(self) -> M::Boxed<'or, 'sub, 'oe, Self::Item, Self::Error>;
+}
+
+impl<'or, 'sub, 'oe, OE> IntoBoxedObservable<'or, 'sub, 'oe, Local> for OE
+where
+    OE: ObservableTypes<Mode = Local>
+        + Observable<
+            BoxedObserver<'or, <OE as ObservableTypes>::Item, <OE as ObservableTypes>::Error>,
+        > + 'oe,
+    <OE as ObservableTypes>::Disposal: 'sub,
+{
+    fn box_observable(self) -> BoxedObservable<'or, 'sub, 'oe, OE::Item, OE::Error, Local> {
+        BoxedObservable::new(self)
+    }
+}
+
+impl<'or, 'sub, 'oe, OE> IntoBoxedObservable<'or, 'sub, 'oe, Shared> for OE
+where
+    OE: ObservableTypes<Mode = Shared>
+        + Observable<
+            SendBoxedObserver<'or, <OE as ObservableTypes>::Item, <OE as ObservableTypes>::Error>,
+        > + Send
+        + 'oe,
+    <OE as ObservableTypes>::Disposal: Send + 'sub,
+{
+    fn box_observable(self) -> SendBoxedObservable<'or, 'sub, 'oe, OE::Item, OE::Error, Shared> {
+        SendBoxedObservable::new(self)
+    }
+}
+
+/// An observable that can be erased into the [`BoxedObservableMode::CloneableBoxed`] of its mode
+/// `M`: any `Clone` observable for [`Local`], a `Send` and `Sync` one with a `Send` disposal for
+/// [`Shared`].
+///
+/// [`into_cloneable_boxed`](crate::observable::ObservableExt::into_cloneable_boxed) asks for it;
+/// see [`IntoBoxedObservable`].
+pub trait IntoCloneableBoxedObservable<'or, 'sub, 'oe, M: BoxedObservableMode>:
+    ObservableTypes + Sized
+{
+    /// Erases the observable; call it as
+    /// [`into_cloneable_boxed`](crate::observable::ObservableExt::into_cloneable_boxed).
+    #[doc(hidden)]
+    fn box_cloneable_observable(self)
+    -> M::CloneableBoxed<'or, 'sub, 'oe, Self::Item, Self::Error>;
+}
+
+impl<'or, 'sub, 'oe, OE> IntoCloneableBoxedObservable<'or, 'sub, 'oe, Local> for OE
+where
+    OE: ObservableTypes<Mode = Local>
+        + Observable<
+            BoxedObserver<'or, <OE as ObservableTypes>::Item, <OE as ObservableTypes>::Error>,
+        > + Clone
+        + 'oe,
+    <OE as ObservableTypes>::Disposal: 'sub,
+{
+    fn box_cloneable_observable(
+        self,
+    ) -> CloneableBoxedObservable<'or, 'sub, 'oe, OE::Item, OE::Error, Local> {
+        CloneableBoxedObservable::new(self)
+    }
+}
+
+impl<'or, 'sub, 'oe, OE> IntoCloneableBoxedObservable<'or, 'sub, 'oe, Shared> for OE
+where
+    OE: ObservableTypes<Mode = Shared>
+        + Observable<
+            SendBoxedObserver<'or, <OE as ObservableTypes>::Item, <OE as ObservableTypes>::Error>,
+        > + Clone
+        + Send
+        + Sync
+        + 'oe,
+    <OE as ObservableTypes>::Disposal: Send + 'sub,
+{
+    fn box_cloneable_observable(
+        self,
+    ) -> SendCloneableBoxedObservable<'or, 'sub, 'oe, OE::Item, OE::Error, Shared> {
+        SendCloneableBoxedObservable::new(self)
+    }
+}

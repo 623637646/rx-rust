@@ -1,7 +1,7 @@
 use super::{Next, Task};
 use educe::Educe;
 use futures::Stream;
-use std::task::Poll;
+use std::{ops::ControlFlow, task::Poll};
 
 /// The state of [`Task::from_stream_then`]. `I` is the element type.
 #[derive(Educe)]
@@ -9,7 +9,7 @@ use std::task::Poll;
 pub struct StreamThenContext<C, I> {
     #[educe(Debug(ignore))]
     state: Option<C>,
-    on_item: fn(&mut C, I) -> bool,
+    on_item: fn(&mut C, I) -> ControlFlow<()>,
     on_end: fn(C),
 }
 
@@ -20,16 +20,16 @@ where
     /// Drives `stream` to its end: `on_item(&mut state, item)` for every element, then
     /// `on_end(state)`.
     ///
-    /// `on_item` returning `false` stops right there: the stream is not polled again, `on_end` is
-    /// not called, and the stream and `state` are dropped with the task. There is a yield point
-    /// after every element, even when the stream is always ready.
+    /// If `on_item` returns `ControlFlow::Break(())`, the task drops the stream and `state` without
+    /// polling the stream again or calling `on_end`. After `ControlFlow::Continue(())`, the task
+    /// yields before polling again, even when the stream is always ready.
     ///
     /// Each element is taken, handled and dropped within one call of the handler, so
     /// `Task<StreamThenContext<C, I>, SM>: Send` exactly when `C: Send` and `SM: Send`.
     pub fn from_stream_then(
         state: C,
         stream: SM,
-        on_item: fn(&mut C, I) -> bool,
+        on_item: fn(&mut C, I) -> ControlFlow<()>,
         on_end: fn(C),
     ) -> Self {
         Self::with_pinned(
@@ -49,10 +49,9 @@ where
                             .state
                             .as_mut()
                             .expect("from_stream_then handler called after completion");
-                        if (context.on_item)(state, item) {
-                            Next::Yield
-                        } else {
-                            Next::Finished
+                        match (context.on_item)(state, item) {
+                            ControlFlow::Continue(()) => Next::Yield,
+                            ControlFlow::Break(()) => Next::Finished,
                         }
                     }
                     None => {

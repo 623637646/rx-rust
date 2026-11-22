@@ -143,7 +143,7 @@ where
             // A group whose consumer is gone drops the value instead of buffering it.
             Entry::Occupied(entry) => {
                 let _ = entry.into_mut().on_next(value);
-                Flow::Continue
+                Flow::Continue(())
             }
             Entry::Vacant(entry) => {
                 let (sender, group) = unicast_subject::new_boxed();

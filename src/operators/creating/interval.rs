@@ -97,7 +97,7 @@ where
             observer,
             // The answer is what keeps the schedule running, so an observer that stopped ends it:
             // nothing is completed, since an interval never completes anyway.
-            |observer, count| observer.on_next(count).is_continue(),
+            |observer, count| observer.on_next(count),
             self.period,
             // Fixed-rate, anchored to the time of the subscription plus the initial delay. A delay
             // too long for an `Instant` never ends: the first step never comes, so it needs no

@@ -16,12 +16,12 @@ use educe::Educe;
 /// let mut observer = CallbackObserver::new(
 ///     |value: i32| {
 ///         seen.push(value);
-///         if value == 2 { Flow::Stop } else { Flow::Continue }
+///         if value == 2 { Flow::Break(()) } else { Flow::Continue(()) }
 ///     },
 ///     |_: Termination<()>| unreachable!("a stopped observer is not terminated"),
 /// );
-/// assert_eq!(observer.on_next(1), Flow::Continue);
-/// assert_eq!(observer.on_next(2), Flow::Stop);
+/// assert_eq!(observer.on_next(1), Flow::Continue(()));
+/// assert_eq!(observer.on_next(2), Flow::Break(()));
 /// drop(observer);
 /// assert_eq!(seen, [1, 2]);
 /// ```
