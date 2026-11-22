@@ -1,6 +1,7 @@
 //! The [`TakeLast`] operator, behind
 //! [`ObservableExt::take_last`](crate::observable::ObservableExt::take_last).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -97,16 +98,7 @@ where
         Flow::Continue
     }
 
-    fn on_termination(mut self, termination: Termination<E>) {
-        if matches!(termination, Termination::Completed) {
-            for value in std::mem::take(&mut self.buffer) {
-                if self.observer.on_next(value).is_stop() {
-                    // The replay ended the stream downstream, so it is not completed on top of
-                    // that: it has already ended itself.
-                    return;
-                }
-            }
-        }
-        self.observer.on_termination(termination);
+    fn on_termination(self, termination: Termination<E>) {
+        emit_then_terminate(self.observer, self.buffer, termination);
     }
 }

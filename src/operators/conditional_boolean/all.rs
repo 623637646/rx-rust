@@ -1,5 +1,6 @@
 //! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -125,14 +126,8 @@ where
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        let Some(mut observer) = self.observer.take() else {
-            return;
-        };
-        // The result is the last value of the stream, so a downstream that stopped on it is not
-        // completed on top of that: it has already ended itself.
-        if matches!(termination, Termination::Completed) && observer.on_next(true).is_stop() {
-            return;
+        if let Some(observer) = self.observer.take() {
+            emit_then_terminate(observer, Some(true), termination);
         }
-        observer.on_termination(termination);
     }
 }

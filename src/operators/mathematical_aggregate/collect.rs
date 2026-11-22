@@ -2,6 +2,7 @@
 //! [`ObservableExt::collect`](crate::observable::ObservableExt::collect),
 //! [`ObservableExt::to_vec`](crate::observable::ObservableExt::to_vec).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -101,14 +102,7 @@ where
         Flow::Continue
     }
 
-    fn on_termination(mut self, termination: Termination<E>) {
-        // The final value ends the stream, so a downstream that stopped on it is not completed
-        // on top of that: it has already ended itself.
-        if matches!(termination, Termination::Completed)
-            && self.observer.on_next(self.collection).is_stop()
-        {
-            return;
-        }
-        self.observer.on_termination(termination)
+    fn on_termination(self, termination: Termination<E>) {
+        emit_then_terminate(self.observer, Some(self.collection), termination);
     }
 }
