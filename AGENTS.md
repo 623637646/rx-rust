@@ -49,6 +49,30 @@ Rules of thumb:
 - `RX_TEST_SCHEDULERS=tokio` (see below) runs a test on one scheduler instead of six, which is
   enough while iterating on code that is not scheduler specific.
 
+## Benchmarks: compare a change against a saved baseline
+
+`benches/` holds Criterion benchmarks, one file per shared mechanism — `serialized_delivery`,
+`subject`, `flatten`, `merge` — not one per operator; each file's module doc says which
+mechanism it drives and through which operators. They answer one question: is this change to a
+mechanism faster or slower than the code before it? See
+`docs/decisions/0016-criterion-for-benchmarks.md`.
+
+```bash
+cargo bench --bench flatten -- --save-baseline before   # on the code before the change
+cargo bench --bench flatten -- --baseline before        # after it: Criterion reports the change
+cargo bench --bench flatten -- switch                   # only the cases whose id contains it
+```
+
+- Run them only when the user asks, or when a change is meant to affect speed, and only the files
+  of the mechanisms the change touches. Always name the targets (`--bench <name>`, or
+  `--benches` for all): a bare `cargo bench -- <flags>` also runs the test targets, which reject
+  Criterion's flags.
+- CI compiles them (`cargo clippy --all-targets`) and never runs them; do not add a job that does.
+- A throughput case pushes `bench_utils::N` values per iteration under `Throughput::Elements(N)`,
+  so every case reads in time per value; where the mode changes the lock on the path, it runs as
+  `<case>/local` and `<case>/shared`. What two files share goes in `benches/bench_utils/`.
+- A new mechanism gets a new file and a `[[bench]]` entry with `harness = false` in `Cargo.toml`.
+
 ## Features
 
 The tests need no `--features`: `Cargo.toml` has a dev-dependency on the crate itself that enables

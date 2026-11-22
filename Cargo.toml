@@ -27,6 +27,8 @@ async-io = { version = "2", optional = true }
 tokio = { version = "1", features = ["full"] }
 async-io = "2"
 pastey = "0.1"
+# Benchmarks, compared locally against a saved baseline (decision 0016): no plots, no rayon.
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 # The tests run on every scheduler, so they enable every scheduler feature of the crate itself.
 rx-rust = { path = ".", features = ["futures-scheduler", "tokio-scheduler", "smol-scheduler"] }
 
@@ -37,3 +39,20 @@ default = []
 futures-scheduler = ["futures/thread-pool", "dep:async-io"]
 tokio-scheduler = ["futures", "dep:tokio", "tokio/rt", "tokio/time"]
 smol-scheduler = ["futures", "dep:smol"]
+
+# One benchmark per shared mechanism (decision 0016), each a Criterion `main`.
+[[bench]]
+name = "serialized_delivery"
+harness = false
+
+[[bench]]
+name = "subject"
+harness = false
+
+[[bench]]
+name = "flatten"
+harness = false
+
+[[bench]]
+name = "merge"
+harness = false
