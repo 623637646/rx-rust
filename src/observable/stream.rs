@@ -7,7 +7,7 @@
 //! # Backpressure
 //!
 //! The crate has no `request(n)`: an observable pushes, and the only word its observer has is
-//! [`Flow::Stop`]. Demand-driven consumption is what `Stream` is for, so the pull side lives there
+//! [`Flow::Break`]. Demand-driven consumption is what `Stream` is for, so the pull side lives there
 //! rather than in a second observable type — the `Flowable` of RxJava — and the two meet at the
 //! conversions.
 //!
@@ -270,7 +270,7 @@ where
         }
         // The stream buffers whatever arrives, so it never stops the source itself: dropping the
         // stream disposes the subscription instead.
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

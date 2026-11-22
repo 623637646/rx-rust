@@ -236,7 +236,7 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
 
     impl Observer<(), Infallible> for RecordSourceStateOnDrop {
         fn on_next(&mut self, _: ()) -> Flow {
-            Flow::Continue
+            Flow::Continue(())
         }
 
         fn on_termination(self, _: Termination<Infallible>) {}
@@ -524,7 +524,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channels.state(0), ChannelState::Subscribed);
 
-    assert!(channels.on_next(0, ()).is_stop());
+    assert!(channels.on_next(0, ()).is_break());
     assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channels.state(0), ChannelState::Unsubscribed);
@@ -779,7 +779,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_3),
     ));
@@ -846,7 +846,7 @@ fn test_sub_on_next() {
                     subscription_3_cloned
                         .replace_value(Some(observable.clone().subscribe(observer)));
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_1),
     );
@@ -900,7 +900,7 @@ fn test_next_on_next() {
             if value < 3 {
                 // Like the termination above: the send of `1` is queued behind the running
                 // delivery, the send of `2` finds the subject terminated.
-                assert_eq!(subject_cloned.on_next(()).is_stop(), value > 1);
+                assert_eq!(subject_cloned.on_next(()).is_break(), value > 1);
             }
             subject_cloned
                 .clone()
@@ -2151,7 +2151,7 @@ struct PanicOnNext(Option<crate::tests_utils::panic::PanicOnDrop>);
 impl Observer<i32, Infallible> for PanicOnNext {
     fn on_next(&mut self, _value: i32) -> Flow {
         drop(self.0.take());
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, _termination: Termination<Infallible>) {}

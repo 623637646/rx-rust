@@ -140,7 +140,7 @@ mod tests {
 
     impl<T, E> Observer<T, E> for IgnoreObserver {
         fn on_next(&mut self, _: T) -> Flow {
-            Flow::Continue
+            Flow::Continue(())
         }
 
         fn on_termination(self, _: Termination<E>) {}

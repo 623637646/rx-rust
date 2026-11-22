@@ -487,7 +487,7 @@ fn test_no_subscriptions_after_initial_window_stops() {
             time.scheduler(),
         )
         .subscribe_with_callback(
-            |_| Flow::Stop,
+            |_| Flow::Break(()),
             |_| panic!("a stopped observer must not be terminated"),
         );
 
@@ -954,7 +954,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -1357,7 +1357,7 @@ fn test_unsub_on_full_window_by_take() {
 
     let _subscription = observable.subscribe(observer);
     assert!(sender.on_next(111).is_continue());
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(
         checker.windows(),
         [(vec![111, 222], State::Completed), (vec![], State::Dropped)]

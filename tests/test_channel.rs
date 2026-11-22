@@ -48,7 +48,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_3),
     ));
@@ -64,8 +64,8 @@ fn test_unsub_on_next() {
     assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
 
     assert!(sender_1.on_next(111).is_continue());
-    assert!(sender_2.on_next(111).is_stop());
-    assert!(sender_3.on_next(111).is_stop());
+    assert!(sender_2.on_next(111).is_break());
+    assert!(sender_3.on_next(111).is_break());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);

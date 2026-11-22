@@ -580,7 +580,7 @@ fn test_next_on_unsub() {
         |observer: SendBoxedObserver<'_, ReceiverObservable<'_, i32, Infallible>, Infallible>| {
             DisposeOnDrop::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                assert!(observer.on_next(observable_1).is_stop());
+                assert!(observer.on_next(observable_1).is_break());
             }))
         },
     );

@@ -34,7 +34,7 @@ impl<T, E> Checker<T, E> {
         Self::new_with_stop_after(None)
     }
 
-    /// A checker whose observer answers [`Flow::Stop`] once it has recorded `count` values.
+    /// A checker whose observer answers [`Flow::Break`] once it has recorded `count` values.
     ///
     /// This is how a test plays the role of an operator that ends its own stream, such as `take`:
     /// the observer is not terminated afterwards, so a source that honors the flow drops it, which
@@ -79,7 +79,7 @@ impl<T, E> Checker<T, E> {
 pub(crate) struct CheckerObserver<T, E> {
     values: Arc<Mutex<Vec<T>>>,
     state: Arc<Mutex<State<E>>>,
-    /// How many values this observer accepts before it answers [`Flow::Stop`], if it ever does.
+    /// How many values this observer accepts before it answers [`Flow::Break`], if it ever does.
     stop_after: Option<usize>,
 }
 
@@ -119,8 +119,8 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
             values.len()
         });
         match self.stop_after {
-            Some(stop_after) if count >= stop_after => Flow::Stop,
-            _ => Flow::Continue,
+            Some(stop_after) if count >= stop_after => Flow::Break(()),
+            _ => Flow::Continue(()),
         }
     }
 

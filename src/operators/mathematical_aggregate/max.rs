@@ -94,7 +94,7 @@ where
         } else {
             self.max = Some(value);
         }
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

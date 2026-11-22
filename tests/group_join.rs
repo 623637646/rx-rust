@@ -132,7 +132,7 @@ fn test_completed() {
     assert_eq!(windows.state(1), State::Active);
 
     // "a" closes: the windows keep what they received.
-    assert!(right_durations.on_next(0, ()).is_stop());
+    assert!(right_durations.on_next(0, ()).is_break());
     assert_eq!(windows.values(0), ["a"]);
     assert_eq!(windows.values(1), ["a"]);
     assert_eq!(right_durations.state(0), ChannelState::Unsubscribed);
@@ -166,7 +166,7 @@ fn test_completed() {
     assert_eq!(right_durations.len(), 3);
 
     // The last window completes, and so does the stream.
-    assert!(left_durations.on_next(1, ()).is_stop());
+    assert!(left_durations.on_next(1, ()).is_break());
     assert_eq!(windows.values(1), ["a", "b", "c", "d"]);
     assert_eq!(windows.state(1), State::Completed);
     assert_eq!(checker.state(), State::Completed);
@@ -527,7 +527,7 @@ fn test_unsub_on_next_by_take() {
         .take(1);
 
     let _subscription = observable.subscribe(observer);
-    assert!(left.on_next(111).is_stop());
+    assert!(left.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -545,7 +545,7 @@ fn test_stop_on_next() {
         .map(|(left, _)| left);
 
     let _subscription = observable.subscribe(observer);
-    assert!(left.on_next(111).is_stop());
+    assert!(left.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -575,7 +575,7 @@ fn test_unsub_on_next() {
         observable.subscribe_with_callback(on_next, |_| unreachable!()),
     ));
     assert!(right.on_next("a").is_continue());
-    assert!(left.on_next(1).is_stop());
+    assert!(left.on_next(1).is_break());
     assert_eq!(windows.values(0), ["a"]);
     assert_eq!(windows.state(0), State::Dropped);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
@@ -635,7 +635,7 @@ fn test_unsub_on_next_of_window() {
     )));
     assert!(left.on_next(1).is_continue());
     assert!(left.on_next(2).is_continue());
-    assert!(right.on_next("a").is_stop());
+    assert!(right.on_next("a").is_break());
     windows.with_ref(|windows| {
         assert_eq!(windows[0].0.values(), ["a"]);
         assert_eq!(windows[0].0.state(), State::Dropped);
@@ -668,7 +668,7 @@ fn test_unsub_on_clone() {
             subscription.dispose();
         }
     }));
-    assert!(right.on_next(probe).is_stop());
+    assert!(right.on_next(probe).is_break());
     assert_eq!(windows.lefts(), [1, 2]);
     for index in 0..2 {
         assert!(windows.values(index).is_empty());
@@ -700,7 +700,7 @@ fn test_unsub_on_clone_into_new_window() {
     }));
     // No window is open: the value is kept, not cloned.
     assert!(right.on_next(probe).is_continue());
-    assert!(left.on_next(1).is_stop());
+    assert!(left.on_next(1).is_break());
     assert_eq!(windows.len(), 0);
     assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(right_checker.state(), ChannelState::Unsubscribed);
@@ -885,7 +885,7 @@ fn test_unsub_from_other_thread_on_next() {
     });
     assert!(left.on_next(1).is_continue());
     assert!(left.on_next(2).is_continue());
-    assert!(right.on_next("a").is_stop());
+    assert!(right.on_next("a").is_break());
     windows.with_ref(|windows| {
         assert_eq!(windows[0].0.values(), ["a"]);
         assert_eq!(windows[0].0.state(), State::Dropped);
@@ -972,9 +972,9 @@ fn test_duration_errors_on_sub_while_delivering() {
     let _subscription = observable.subscribe_with_callback(windows.on_next(), |termination| {
         observer.on_termination(termination)
     });
-    let deliverer = thread::spawn(move || left.on_next(1).is_stop());
+    let deliverer = thread::spawn(move || left.on_next(1).is_break());
     delivering.recv_timeout(TIMEOUT).unwrap();
-    assert!(right.on_next("a").is_stop());
+    assert!(right.on_next("a").is_break());
     assert_eq!(windows.lefts(), [1]);
     assert!(windows.values(0).is_empty());
     assert_eq!(checker.state(), State::Active);
@@ -1101,7 +1101,7 @@ fn test_duration_errors_on_sub() {
     let _subscription = observable.subscribe_with_callback(windows.on_next(), |termination| {
         observer.on_termination(termination)
     });
-    assert_eq!(flow.clone_value(), Some(Flow::Stop));
+    assert_eq!(flow.clone_value(), Some(Flow::Break(())));
     assert!(windows.lefts().is_empty());
     assert_eq!(checker.state(), State::Error("error"));
 }
@@ -1234,7 +1234,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 

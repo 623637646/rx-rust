@@ -38,7 +38,7 @@ use crate::{
 /// deliver once the lock is released. A machine with a lock opens its first group before it
 /// creates its context, which nothing else can reach yet, so that one opening emits to the
 /// machine's observer directly, without the lock. A hook answers the flow of the last event it
-/// emitted, [`Flow::Continue`] when it emitted none, and emits nothing after a [`Flow::Stop`],
+/// emitted, [`Flow::Continue`] when it emitted none, and emits nothing after a [`Flow::Break`],
 /// since an observer that stopped accepts nothing more. The [`Events`] always answer [`Flow::Continue`],
 /// the context applying a stop as it delivers them, so a machine with a lock ignores what the
 /// hooks answer.
@@ -68,9 +68,7 @@ pub(crate) trait Groups<E> {
     /// time does.
     #[inline]
     fn rotate(&mut self, observer: &mut impl Observer<Self::Event, E>) -> Flow {
-        if self.close_oldest(observer).is_stop() {
-            return Flow::Stop;
-        }
+        self.close_oldest(observer)?;
         self.open(observer)
     }
 
@@ -135,7 +133,7 @@ impl<Ev, E> Observer<Ev, E> for Events<Ev> {
                 Self::Many(events)
             }
         };
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, _: Termination<E>) {
@@ -216,9 +214,9 @@ mod tests {
         fn on_next(&mut self, value: &'static str) -> Flow {
             self.received.push(value);
             if value == self.stop_on {
-                Flow::Stop
+                Flow::Break(())
             } else {
-                Flow::Continue
+                Flow::Continue(())
             }
         }
 
@@ -241,7 +239,7 @@ mod tests {
             _: &mut Option<()>,
             _: &mut impl Observer<&'static str, Infallible>,
         ) -> Flow {
-            Flow::Continue
+            Flow::Continue(())
         }
 
         fn close_oldest(&mut self, observer: &mut impl Observer<&'static str, Infallible>) -> Flow {
@@ -253,7 +251,7 @@ mod tests {
             _: &Termination<Infallible>,
             _: &mut impl Observer<&'static str, Infallible>,
         ) -> Flow {
-            Flow::Continue
+            Flow::Continue(())
         }
     }
 
@@ -270,7 +268,7 @@ mod tests {
             stop_on: "close",
             received: Vec::new(),
         };
-        assert!(Log.rotate(&mut observer).is_stop());
+        assert!(Log.rotate(&mut observer).is_break());
         assert_eq!(observer.received, ["close"]);
     }
 }

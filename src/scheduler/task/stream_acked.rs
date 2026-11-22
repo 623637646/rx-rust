@@ -4,6 +4,7 @@ use educe::Educe;
 use futures::Stream;
 use std::{
     num::NonZeroUsize,
+    ops::ControlFlow,
     task::{Poll, Waker},
 };
 
@@ -18,7 +19,7 @@ pub struct StreamAckedThenContext<C, I, M: ThreadMode> {
     state: Option<C>,
     #[educe(Debug(ignore))]
     permits: M::Ptr<Permits>,
-    on_item: fn(&mut C, I, StreamAck<M>) -> bool,
+    on_item: fn(&mut C, I, StreamAck<M>) -> ControlFlow<()>,
     on_end: fn(C),
 }
 
@@ -78,9 +79,9 @@ where
     /// element, one given back by every [`StreamAck`] dropped, which wakes the task. The end of the
     /// stream is thus seen only once a permit is back, too.
     ///
-    /// `on_item` returning `false` stops right there: the stream is not polled again, `on_end` is
-    /// not called, and the stream and `state` are dropped with the task. There is a yield point
-    /// after every element, even when the stream is always ready.
+    /// If `on_item` returns `ControlFlow::Break(())`, the task drops the stream and `state` without
+    /// polling the stream again or calling `on_end`. After `ControlFlow::Continue(())`, the task
+    /// yields before polling again, even when the stream is always ready.
     ///
     /// `M` is the thread mode of the permits the task and its acknowledgements share: [`Shared`]
     /// when a `StreamAck` is dropped on another thread than the scheduler's, [`Local`] when
@@ -95,7 +96,7 @@ where
     ///     scheduler::{Scheduler, StreamAck, Task, virtual_time::VirtualTime},
     ///     thread_mode::{Shared, mutable::{MutableExt, MutableHelper}},
     /// };
-    /// use std::{num::NonZeroUsize, sync::{Arc, Mutex}, time::Duration};
+    /// use std::{num::NonZeroUsize, ops::ControlFlow, sync::{Arc, Mutex}, time::Duration};
     ///
     /// let time = VirtualTime::new();
     /// // The elements taken, with the acknowledgements not given yet.
@@ -106,7 +107,7 @@ where
     ///     NonZeroUsize::MIN,
     ///     |taken, item, ack| {
     ///         taken.with_mut(|taken| taken.push((item, ack)));
-    ///         true
+    ///         ControlFlow::Continue(())
     ///     },
     ///     |_| {},
     /// );
@@ -123,7 +124,7 @@ where
         state: C,
         stream: SM,
         permits: NonZeroUsize,
-        on_item: fn(&mut C, I, StreamAck<M>) -> bool,
+        on_item: fn(&mut C, I, StreamAck<M>) -> ControlFlow<()>,
         on_end: fn(C),
     ) -> Self {
         let context = StreamAckedThenContext {
@@ -169,10 +170,9 @@ where
                         .state
                         .as_mut()
                         .expect("from_stream_acked_then handler called after completion");
-                    if (context.on_item)(state, item, ack) {
-                        Next::Yield
-                    } else {
-                        Next::Finished
+                    match (context.on_item)(state, item, ack) {
+                        ControlFlow::Continue(()) => Next::Yield,
+                        ControlFlow::Break(()) => Next::Finished,
                     }
                 }
                 None => {

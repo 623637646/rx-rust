@@ -22,7 +22,7 @@ use educe::Educe;
 /// an observable of any item type.
 ///
 /// The first item of the second observable opens the gate for good, so that observable is answered
-/// [`Flow::Stop`] right then, as ReactiveX unsubscribes from it: whatever it sends afterwards, an
+/// [`Flow::Break`] right then, as ReactiveX unsubscribes from it: whatever it sends afterwards, an
 /// error included, no longer reaches the result.
 ///
 /// # Examples
@@ -171,7 +171,7 @@ where
         // Only the arrival of a notification matters, never its value, which is dropped here,
         // after the update and outside its lock, since dropping it can run arbitrary code.
         drop(value);
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

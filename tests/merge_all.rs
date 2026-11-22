@@ -1115,7 +1115,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(111).is_stop());
+    assert!(sender_1.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1376,7 +1376,7 @@ fn test_next_on_unsub() {
         |observer: SendBoxedObserver<'_, ReceiverObservable<'_, i32, Infallible>, Infallible>| {
             DisposeOnDrop::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                assert!(observer.on_next(observable_1).is_stop());
+                assert!(observer.on_next(observable_1).is_break());
             }))
         },
     );
@@ -1607,12 +1607,12 @@ fn test_next_while_terminating() {
 
     let _subscription = observable.subscribe(observer);
     assert!(sender.on_next(observable_1).is_continue());
-    let deliverer = thread::spawn(move || sender_1.on_next(111).is_stop());
+    let deliverer = thread::spawn(move || sender_1.on_next(111).is_break());
     delivering.recv_timeout(TIMEOUT).unwrap();
     assert!(sender.on_next(observable_2).is_continue());
     // Queued behind the delivery of 111, which is still running on the other thread.
     sender_2.on_termination(Termination::Error("error"));
-    assert!(sender.on_next(observable_3).is_stop());
+    assert!(sender.on_next(observable_3).is_break());
     assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
@@ -2029,7 +2029,7 @@ mod max_concurrency {
         let _subscription = observable.subscribe(observer);
         assert!(sender.on_next(inner.clone()).is_continue());
         assert!(sender.on_next(inner.clone()).is_continue());
-        assert!(inner_channels.on_next(1, 111).is_stop());
+        assert!(inner_channels.on_next(1, 111).is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -2220,7 +2220,7 @@ mod max_concurrency {
         let queued_state = queued_checker.state();
 
         resume_sender.send(()).unwrap();
-        assert!(deliverer.join().unwrap().is_stop());
+        assert!(deliverer.join().unwrap().is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(queued_state, ChannelState::Initialized);
@@ -2275,7 +2275,7 @@ mod max_concurrency {
         let queued_state = queued_checker.state();
 
         resume_sender.send(()).unwrap();
-        assert!(deliverer.join().unwrap().is_stop());
+        assert!(deliverer.join().unwrap().is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(queued_state, ChannelState::Initialized);
@@ -2321,7 +2321,7 @@ mod max_concurrency {
             >| {
                 DisposeOnDrop::new(CallbackDisposal::new(move || {
                     let mut observer = observer;
-                    assert!(observer.on_next(observable_1).is_stop());
+                    assert!(observer.on_next(observable_1).is_break());
                 }))
             },
         );

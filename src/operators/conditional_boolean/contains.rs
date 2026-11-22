@@ -99,16 +99,16 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         if self.item != value {
-            return Flow::Continue;
+            return Flow::Continue(());
         }
         // The item was found, so the result is decided and the rest of the source is of no use.
         let Some(mut observer) = self.observer.take() else {
-            return Flow::Stop;
+            return Flow::Break(());
         };
         if observer.on_next(true).is_continue() {
             observer.on_termination(Termination::Completed);
         }
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

@@ -298,7 +298,7 @@ where
                     // here.
                     let Updated::Ran {
                         result: Some(kept),
-                        flow: Flow::Continue,
+                        flow: Flow::Continue(()),
                     } = updated
                     else {
                         return;
@@ -372,7 +372,7 @@ where
         match updated {
             Updated::Ran {
                 result: (next, released),
-                flow: Flow::Continue,
+                flow: Flow::Continue(()),
             } => {
                 // Disposing a synchronously completed source can re-enter and stop the stream
                 // after the update decided its flow. Check only when that disposal ran.
@@ -425,7 +425,7 @@ where
                 // keeps the next source from being pulled, even before it is delivered.
                 if let Updated::Ran {
                     result: Some(cursor),
-                    flow: Flow::Continue,
+                    flow: Flow::Continue(()),
                 } = next
                 {
                     // Disposing the finished subscription can re-enter and stop the stream after

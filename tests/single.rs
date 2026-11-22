@@ -69,7 +69,7 @@ fn test_more_than_one() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     // The second item fails the stream at once, without waiting for the completion.
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Error(Error::MoreThanOne));
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

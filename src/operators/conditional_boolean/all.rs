@@ -110,19 +110,19 @@ where
         // A source that does not honor the flow or the disposal keeps emitting; the callback is
         // the caller's and may have side effects, so it must not run once the result was decided.
         if self.observer.is_none() {
-            return Flow::Stop;
+            return Flow::Break(());
         }
         if (self.callback)(value) {
-            return Flow::Continue;
+            return Flow::Continue(());
         }
         // One value that fails decides the result, so the rest of the source is of no use.
         let Some(mut observer) = self.observer.take() else {
-            return Flow::Stop;
+            return Flow::Break(());
         };
         if observer.on_next(false).is_continue() {
             observer.on_termination(Termination::Completed);
         }
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

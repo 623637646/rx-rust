@@ -24,9 +24,9 @@ pub enum Updated<R> {
     /// The callback ran and gave back `result`.
     ///
     /// `flow` is what delivering the events it queued answered or, when it queued none, whether
-    /// the delivery still accepts events: [`Flow::Stop`] once a termination is queued behind a
+    /// the delivery still accepts events: [`Flow::Break`] once a termination is queued behind a
     /// delivery running elsewhere. An outcome that [answers a stop](UpdateOutcome::answering_stop)
-    /// makes it [`Flow::Stop`] whatever the delivery answered.
+    /// makes it [`Flow::Break`] whatever the delivery answered.
     Ran {
         /// What the callback gave back with [`UpdateOutcome::new`].
         result: R,
@@ -41,11 +41,11 @@ pub enum Updated<R> {
 }
 
 impl<R> Updated<R> {
-    /// Whether the caller may go on sending: [`Flow::Stop`] for a delivery that had stopped.
+    /// Whether the caller may go on sending: [`Flow::Break`] for a delivery that had stopped.
     pub fn flow(&self) -> Flow {
         match self {
             Self::Ran { flow, .. } => *flow,
-            Self::Stopped => Flow::Stop,
+            Self::Stopped => Flow::Break(()),
         }
     }
 
@@ -78,7 +78,7 @@ pub struct DropDecided<T>(Option<T>);
 pub struct UpdateOutcome<T, E, R = (), DO = DropUndecided, const EVENTS_DECIDED: bool = false> {
     events: Option<EventBatch<T, E>>,
     drop_outside: DO,
-    /// [`Flow::Stop`] once [`Self::answering_stop`] was called.
+    /// [`Flow::Break`] once [`Self::answering_stop`] was called.
     flow: Flow,
     result: R,
 }
@@ -90,7 +90,7 @@ impl<T, E, R> UpdateOutcome<T, E, R> {
         Self {
             events: None,
             drop_outside: DropUndecided,
-            flow: Flow::Continue,
+            flow: Flow::Continue(()),
             result,
         }
     }
@@ -137,14 +137,14 @@ impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_
         (self.events, self.drop_outside, self.flow, self.result)
     }
 
-    /// Makes the update answer [`Flow::Stop`], whatever delivering its events answers.
+    /// Makes the update answer [`Flow::Break`], whatever delivering its events answers.
     ///
     /// This is the host deciding that the caller must send nothing more, while the delivery goes
     /// on for the others: an inner source that has been superseded, say. It can only tighten the
     /// flow: there is no way to answer [`Flow::Continue`] for a delivery that stopped.
     pub fn answering_stop(self) -> Self {
         Self {
-            flow: Flow::Stop,
+            flow: Flow::Break(()),
             ..self
         }
     }

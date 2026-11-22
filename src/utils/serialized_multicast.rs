@@ -169,7 +169,7 @@ where
     /// it runs under the lock. Answers [`Updated::Stopped`], without running `update`, once the
     /// delivery has stopped.
     ///
-    /// The flow is [`Flow::Stop`] only once the multicast has terminated — including by this very
+    /// The flow is [`Flow::Break`] only once the multicast has terminated — including by this very
     /// update — or when the host's outcome
     /// [answers a stop](UpdateOutcome::answering_stop): a multicast with no subscriber left is
     /// still open, and a subscriber that stops takes only itself away.
@@ -275,13 +275,9 @@ where
                 let mut observer = observer.take().expect("the update left the observer here");
                 // A replayed value can stop the newcomer, which is then dropped where it is
                 // instead of being terminated.
-                let mut flow = Flow::Continue;
-                for value in values {
-                    flow = observer.on_next(value);
-                    if flow.is_stop() {
-                        break;
-                    }
-                }
+                let flow = values
+                    .into_iter()
+                    .try_for_each(|value| observer.on_next(value));
                 if flow.is_continue() {
                     observer.on_termination(termination);
                 }
@@ -379,7 +375,7 @@ where
         }
         // A subscriber that stops takes only itself away, so the multicast itself never stops:
         // it stays open for the subscribers it still has and for the ones still to come.
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, _: Termination<E>) {
@@ -415,7 +411,7 @@ where
             if entry.is_disposed.is_raised() {
                 return; // Unsubscribed, possibly during this very replay.
             }
-            if entry.observer.on_next(value).is_stop() {
+            if entry.observer.on_next(value).is_break() {
                 return; // Stopped by the replay itself, so it never joins.
             }
         }
@@ -515,12 +511,12 @@ mod tests {
             |_| {},
         ));
 
-        assert_eq!(multicast.send(EventBatch::Next(1)), Flow::Continue);
+        assert_eq!(multicast.send(EventBatch::Next(1)), Flow::Continue(()));
         first.dispose();
-        assert_eq!(multicast.send(EventBatch::Next(2)), Flow::Continue);
+        assert_eq!(multicast.send(EventBatch::Next(2)), Flow::Continue(()));
         assert_eq!(
             multicast.send(EventBatch::Termination(Termination::Completed)),
-            Flow::Stop
+            Flow::Break(())
         );
         assert_eq!(
             seen.clone_value(),
@@ -536,7 +532,7 @@ mod tests {
         let multicast = SerializedMulticast::<i32, (), Local, _>::idle(());
         assert_eq!(
             multicast.send(EventBatch::Termination(Termination::Completed)),
-            Flow::Stop
+            Flow::Break(())
         );
 
         let terminations_seen = Arc::clone(&terminations);

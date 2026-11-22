@@ -1319,9 +1319,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
         StartWith::new(self, values)
     }
 
-    /// Delivers nothing more once the subscription is disposed, and answers [`Flow::Stop`] from
+    /// Delivers nothing more once the subscription is disposed, and answers [`Flow::Break`] from
     /// then on: for an [`Observer`] that may be disposed from inside one of its notifications
-    /// without answering [`Flow::Stop`] itself.
+    /// without answering [`Flow::Break`] itself.
     fn stop_on_disposal(self) -> StopOnDisposal<Self> {
         StopOnDisposal::new(self)
     }
@@ -1334,10 +1334,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Subscribes with two closures instead of an [`Observer`].
     ///
     /// `on_next` may return nothing, which keeps the source going, or a [`Flow`], which lets it
-    /// end its own stream with [`Flow::Stop`]: the source then stops pushing — a synchronous one
+    /// end its own stream with [`Flow::Break`]: the source then stops pushing — a synchronous one
     /// stops iterating — and drops the callbacks without calling `on_termination`.
     ///
-    /// A callback that disposes its own subscription answers [`Flow::Stop`] as well: the
+    /// A callback that disposes its own subscription answers [`Flow::Break`] as well: the
     /// disposal alone does not hold back what an operator still has to send for the event it is
     /// handling. [`stop_on_disposal`](Self::stop_on_disposal) does, where the callback cannot
     /// answer.

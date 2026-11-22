@@ -167,7 +167,7 @@ fn test_completed_both_empty_first_next() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Completed);
 
-    assert!(sender.on_next(333).is_stop());
+    assert!(sender.on_next(333).is_break());
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -218,7 +218,7 @@ fn test_completed_both_empty_second_next() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(333).is_stop());
+    assert!(sender_1.on_next(333).is_break());
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -560,7 +560,7 @@ fn test_completed_first_some_completed_second_next_different() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(444).is_stop());
+    assert!(sender_1.on_next(444).is_break());
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -680,7 +680,7 @@ fn test_completed_second_some_completed_first_next_different() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Completed);
 
-    assert!(sender.on_next(444).is_stop());
+    assert!(sender.on_next(444).is_break());
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -798,7 +798,7 @@ fn test_completed_with_different() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(222).is_stop());
+    assert!(sender_1.on_next(222).is_break());
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1117,7 +1117,7 @@ fn test_mut_ref() {
 
     assert!(sender.on_next(&mut value_1).is_continue());
     assert!(sender.on_next(&mut value_2).is_continue());
-    assert!(sender_1.on_next(&mut value_3).is_stop());
+    assert!(sender_1.on_next(&mut value_3).is_break());
 
     drop(subscription);
     drop(sender);
@@ -1445,7 +1445,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(333).is_stop());
+    assert!(sender_1.on_next(333).is_break());
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1515,7 +1515,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 

@@ -61,7 +61,7 @@ where
         observer,
         groups,
         |context| {
-            if flow.is_stop() {
+            if flow.is_break() {
                 return None;
             }
             Some(boundary.subscribe(BoundaryObserver(context.clone())))

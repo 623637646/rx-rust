@@ -270,7 +270,7 @@ macro_rules! impl_source_observer {
                 });
                 let Updated::Ran {
                     result: Some(id),
-                    flow: Flow::Continue,
+                    flow: Flow::Continue(()),
                 } = updated
                 else {
                     return updated.flow();
@@ -401,7 +401,7 @@ where
     fn on_next(&mut self, _: T) -> Flow {
         close(&self.context, self.side, self.id);
         // The window is closed: nothing more is needed from the duration.
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

@@ -89,7 +89,7 @@ where
         if self.buffer.len() > self.count {
             self.observer.on_next(self.buffer.pop_front().unwrap())
         } else {
-            Flow::Continue
+            Flow::Continue(())
         }
     }
 

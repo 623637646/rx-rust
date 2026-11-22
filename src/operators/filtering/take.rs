@@ -107,15 +107,15 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         let Some(observer) = &mut self.observer else {
-            return Flow::Stop;
+            return Flow::Break(());
         };
         let flow = observer.on_next(value);
         self.count -= 1;
-        if flow.is_stop() {
+        if flow.is_break() {
             // Downstream ended the stream first, so nothing is completed here: the observer is
             // released like a disposed one.
             drop(self.observer.take());
-            return Flow::Stop;
+            return Flow::Break(());
         }
         if self.count == 0 {
             self.observer
@@ -124,9 +124,9 @@ where
                 .on_termination(Termination::Completed);
             // The count is reached, so the source is told to stop instead of running to its own
             // end, which is what lets a synchronous one — an infinite one included — return.
-            return Flow::Stop;
+            return Flow::Break(());
         }
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

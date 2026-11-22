@@ -393,18 +393,26 @@ when they fail.
   with its twin, and must still fail for its own reason, not for a type annotation now missing.
 - `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce
   parallel representations.
-- **`Flow`**: `Observer::on_next` returns `Flow::Continue` / `Flow::Stop`. `Stop` is a guarantee —
+- **`Flow`**: `Observer::on_next` returns a `Flow`, an alias of the standard `ControlFlow<()>`:
+  `Flow::Continue(())` / `Flow::Break(())`. `Break` is a guarantee —
   the observer accepts nothing more and must not be terminated, so the caller stops pushing and
   drops it; `Continue` is only a hint ("no stop seen here"), so a source must still honor its
   disposal. An operator that forwards values returns what its own downstream returned, so that the
-  answer reaches the source; an operator that ends its own stream returns `Stop`. A context-based
+  answer reaches the source; an operator that ends its own stream returns `Break`. Being a
+  `ControlFlow`, a flow forwards with `?` (`self.close_oldest(observer)?;`) and drives a loop
+  with `Iterator::try_for_each` (`values.into_iter().try_for_each(|v| observer.on_next(v))`);
+  prefer them to a hand-written `if … .is_break() { return … }`, except where a stop must drop
+  things in a set order (the delivery loops of `serialized_delivery` and `unicast_subject`). A
+  callback that says whether to go on — a scheduler task's step, an inner state machine — answers
+  a `ControlFlow` too, never a `bool`, and breaks with a reason when there is more than one
+  (`observe_on`'s `Interrupt`). A context-based
   operator gets it from the `Updated` an `update` answers (`.flow()`) or from `send_next`;
   `send_termination` answers nothing, since a termination is the last event anyway. The model
   stops its own caller with `UpdateOutcome::answering_stop` (a replaced `switch` inner), never
   with a `Flow` in the update's result. An `on_next` that does more work after its first update —
   subscribing an inner observable or a duration, as the flattening operators and `join` do — takes
   only the result of the earlier ones (`.result()`, or a match on `Updated::Ran { result, flow }` to
-  skip the work once the flow says `Stop`), and answers what its *last* context call says, the
+  skip the work once the flow says `Break`), and answers what its *last* context call says, the
   `.flow()` of an `update` or a `send_next`: that work may have ended the stream, and a source still
   emitting from inside its own `subscribe` has no disposal yet, so only the flow stops it. An
   earlier flow, or a `let _ =` on that last update, answers `Continue` for a stream that is over. A
@@ -419,7 +427,7 @@ when they fail.
   through the operators — it goes from the subscription to the source — so an operator that sends
   several notifications for one event (`take_last`, `buffer_with_count`) is stopped between two of
   them by the flow alone, and carries no flag of its own for it: the explicit `stop_on_disposal`
-  operator turns a disposal into a `Stop` at the end of a chain that needs it. User callbacks
+  operator turns a disposal into a `Break` at the end of a chain that needs it. User callbacks
   (`subscribe_with_callback`) return `()` or a `Flow`, via `observer::IntoFlow` (a
   diverging `|_| unreachable!()` needs `-> ()`).
 
@@ -487,7 +495,7 @@ decides the interleaving, so assert one exact outcome per step, never "either th
 panic on that thread fails the test from `run_until_stalled`. Real concurrency between the source's
 thread and the delivering one is the job of the `test_race_condition*` tests: a
 `ThreadPoolScheduler`, many rounds, assertions on invariants only (order, exactly once, nothing
-after a `Stop`), and a wait on a channel with a timeout rather than a sleep.
+after a `Break`), and a wait on a channel with a timeout rather than a sleep.
 
 `docs/testing.md` holds the canonical checklist of case names (`test_completed`, `test_error`,
 `test_unsubscribe`, `test_ref`, `test_async`, the hot-observable `test_*_on_next` family, the

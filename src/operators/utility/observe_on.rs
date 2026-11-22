@@ -13,7 +13,8 @@ use crate::{
     thread_mode::ThreadMode,
 };
 use educe::Educe;
-use inbox::{AfterValue, InboxHandle, Pushed};
+use inbox::{InboxHandle, Interrupt, Pushed};
+use std::ops::ControlFlow;
 
 /// Specifies the `Scheduler` on which an observer will observe this observable: every event is
 /// delivered from a task of that scheduler, in order.
@@ -104,6 +105,7 @@ mod inbox {
         utils::{flagged_lock::FlaggedLock, take_leaving_room},
     };
     use educe::Educe;
+    use std::ops::ControlFlow;
 
     /// What the source's observer, the task and the disposal share: the events not delivered yet.
     /// It holds no observer, so it is `Send` as soon as the events are.
@@ -123,11 +125,9 @@ mod inbox {
         Stopped,
     }
 
-    /// What [`InboxHandle::check_after_value`] tells the task after each value it delivers: what
-    /// the next event of the step is.
-    pub(super) enum AfterValue<E> {
-        /// Nothing preempts the next event: deliver it.
-        Continue,
+    /// What can interrupt a delivery step. [`InboxHandle::check_after_value`] checks for these
+    /// conditions between notifications.
+    pub(super) enum Interrupt<E> {
         /// An error queued since the step took its values, taken: it is delivered instead of those
         /// left.
         Preempted(Termination<E>),
@@ -140,7 +140,7 @@ mod inbox {
     /// of the rest of the operator, so that nothing else can take that lock.
     ///
     /// The inbox is `None` once the delivery has stopped: disposed, or ended by downstream or by a
-    /// termination. The source's observer then answers [`Flow::Stop`](crate::observer::Flow::Stop),
+    /// termination. The source's observer then answers [`Flow::Break`](crate::observer::Flow::Break),
     /// and nothing more is queued.
     ///
     /// The flag of the lock is raised as the delivery stops and as an error is queued: whatever
@@ -222,16 +222,18 @@ mod inbox {
         /// and no error is queued, so the next event is delivered. A stop or an error that lands
         /// right after the flag is read is seen after the next value, as one that lands right after
         /// the lock would be.
-        pub(super) fn check_after_value(&self) -> AfterValue<E> {
+        pub(super) fn check_after_value(&self) -> ControlFlow<Interrupt<E>> {
             self.0
                 .if_raised(|slot| match slot {
-                    None => AfterValue::Stopped,
+                    None => ControlFlow::Break(Interrupt::Stopped),
                     Some(inbox) => inbox
                         .termination
                         .take_if(|termination| matches!(termination, Termination::Error(_)))
-                        .map_or(AfterValue::Continue, AfterValue::Preempted),
+                        .map_or(ControlFlow::Continue(()), |error| {
+                            ControlFlow::Break(Interrupt::Preempted(error))
+                        }),
                 })
-                .unwrap_or(AfterValue::Continue)
+                .unwrap_or(ControlFlow::Continue(()))
         }
 
         /// Marks the delivery stopped, and drops what is still queued, outside the lock.
@@ -306,9 +308,9 @@ where
             values.clear();
         }
         let termination = match self.deliver(values) {
-            AfterValue::Continue => termination,
-            AfterValue::Preempted(error) => Some(error),
-            AfterValue::Stopped => return Next::Finished,
+            ControlFlow::Continue(()) => termination,
+            ControlFlow::Break(Interrupt::Preempted(error)) => Some(error),
+            ControlFlow::Break(Interrupt::Stopped) => return Next::Finished,
         };
         if let Some(termination) = termination {
             // Dropping values preempted by an error may itself dispose the subscription.
@@ -328,27 +330,22 @@ where
         }
     }
 
-    /// Delivers `values` in order, and answers what the inbox says after the last one: whether the
-    /// termination the step took may follow, or an error preempts it.
+    /// Delivers `values` in order, and continues when the termination the step took may follow
+    /// them; otherwise it breaks with what interrupted it: the observer or a disposal stopped the
+    /// delivery, or an error preempts the values left.
     ///
     /// The first value follows the `take` that brought it, each other a check after the value
     /// before it. A disposal from a callback stops the next notification; one from another thread
     /// may race a notification that passed its check. An error queued since the step took
     /// `values` preempts those left once the next check sees it.
-    fn deliver(&mut self, values: Vec<T>) -> AfterValue<E> {
+    fn deliver(&mut self, values: Vec<T>) -> ControlFlow<Interrupt<E>> {
         let Some(observer) = self.observer.as_mut() else {
-            return AfterValue::Stopped;
+            return ControlFlow::Break(Interrupt::Stopped);
         };
-        for value in values {
-            if observer.on_next(value).is_stop() {
-                return AfterValue::Stopped;
-            }
-            match self.inbox.check_after_value() {
-                AfterValue::Continue => {}
-                stopped_or_preempted => return stopped_or_preempted,
-            }
-        }
-        AfterValue::Continue
+        values.into_iter().try_for_each(|value| {
+            observer.on_next(value).map_break(|()| Interrupt::Stopped)?;
+            self.inbox.check_after_value()
+        })
     }
 }
 
@@ -441,17 +438,17 @@ pub struct ObserveOnObserver<M: ThreadMode, T, E> {
 impl<M: ThreadMode, T, E> ObserveOnObserver<M, T, E> {
     /// Queues `event` for the observing scheduler, and wakes its task if nothing was queued.
     ///
-    /// Returns [`Flow::Stop`] once the delivery has stopped: the event is then dropped, and so
+    /// Returns [`Flow::Break`] once the delivery has stopped: the event is then dropped, and so
     /// would every later one be. What downstream itself answers is only known once the task
     /// delivers, so this is otherwise [`Flow::Continue`].
     fn queue_event(&self, event: Event<T, E>) -> Flow {
         match self.inbox.push(event) {
             Pushed::Wake => {
                 self.waker.wake();
-                Flow::Continue
+                Flow::Continue(())
             }
-            Pushed::Behind => Flow::Continue,
-            Pushed::Stopped => Flow::Stop,
+            Pushed::Behind => Flow::Continue(()),
+            Pushed::Stopped => Flow::Break(()),
         }
     }
 }

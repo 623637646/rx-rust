@@ -1178,7 +1178,7 @@ fn test_observe_on_panic_on_sub() {
     assert!(result.is_err());
     // Unwinding stops the inbox even if the source keeps its observer. The cancelled task owns
     // downstream until the scheduler drops it, on this thread.
-    assert!(source_observer.as_mut().unwrap().on_next(2).is_stop());
+    assert!(source_observer.as_mut().unwrap().on_next(2).is_break());
     assert_eq!(drops.clone_value(), 0);
     pool.run_until_stalled();
     assert_eq!(drops.clone_value(), 1);

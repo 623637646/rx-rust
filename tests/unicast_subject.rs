@@ -79,7 +79,7 @@ fn test_unsubscribe() {
     assert!(sender.is_closed());
 
     // The events after the disposal are dropped, and so is the observer.
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
 
@@ -136,7 +136,7 @@ fn test_unsubscribe_before_next() {
     assert_eq!(checker.state(), State::Active);
     assert!(sender.is_closed());
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Dropped);
 
@@ -211,11 +211,11 @@ fn test_unsubscribe_from_another_thread() {
         assert!(sender.is_closed());
 
         // The first event releases the observer, the next ones find the pipe closed.
-        assert!(sender.on_next(222).is_stop());
+        assert!(sender.on_next(222).is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
 
-        assert!(sender.on_next(333).is_stop());
+        assert!(sender.on_next(333).is_break());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
 
@@ -291,7 +291,7 @@ fn test_drop_observable_without_subscribe() {
     drop(observable);
     assert!(sender.is_closed());
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     sender.on_termination(Termination::Completed);
 }
 
@@ -468,7 +468,7 @@ fn race_subscription_with_next(stop_after: Option<usize>) {
         assert!(sender.on_next(1).is_continue());
         resume.send(()).unwrap();
         for value in 2..VALUES {
-            if sender.on_next(value).is_stop() {
+            if sender.on_next(value).is_break() {
                 assert!(stop_after.is_some(), "the observer has not stopped");
                 break;
             }
@@ -552,12 +552,12 @@ fn test_stop_on_next() {
 
     // The observer ended its own stream, so the sender releases it right away and every later
     // value is dropped instead of being delivered.
-    assert!(Observer::on_next(&mut sender, 111).is_stop());
+    assert!(Observer::on_next(&mut sender, 111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert!(sender.is_closed());
 
-    assert!(Observer::on_next(&mut sender, 222).is_stop());
+    assert!(Observer::on_next(&mut sender, 222).is_break());
     assert_eq!(checker.values(), [111]);
 }
 
@@ -672,17 +672,17 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = subscription_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer),
     ));
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert!(sender.is_closed());
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
 }
@@ -694,12 +694,12 @@ fn test_unsub_on_next_by_take() {
 
     let _subscription = observable.take(1).subscribe(observer);
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert!(sender.is_closed());
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
@@ -719,7 +719,7 @@ fn test_take_during_replay() {
     assert_eq!(checker.state(), State::Completed);
     assert!(sender.is_closed());
 
-    assert!(sender.on_next(444).is_stop());
+    assert!(sender.on_next(444).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
@@ -842,7 +842,7 @@ fn test_drop_replayed_values_after_a_stop_outside_lock() {
     // re-enters with is queued behind them, and dropped as the stop closes the pipe; the two left
     // in the batch are dropped after it, each re-entering the closed pipe, which drops what they
     // send.
-    let _subscription = observable.subscribe_with_callback(|_value| Flow::Stop, |_| {});
+    let _subscription = observable.subscribe_with_callback(|_value| Flow::Break(()), |_| {});
     assert_eq!(drops.get(), 6);
     assert!(sender_holder.take_value().unwrap().is_closed());
 }
@@ -901,7 +901,7 @@ fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
     assert!(
         sender
             .on_next(reentrant_probe(&sender_holder, &drops))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(drops.get(), 1);
     assert!(sender.is_closed());
@@ -911,7 +911,7 @@ fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
     assert!(
         sender
             .on_next(reentrant_probe(&sender_holder, &drops))
-            .is_stop()
+            .is_break()
     );
     assert_eq!(drops.get(), 2);
 }
@@ -960,7 +960,7 @@ fn test_panicking_replay_closes_the_pipe() {
     // The panic took the observer away with it, so the pipe is over instead of queuing the events
     // that follow for a replay that will never resume.
     assert!(sender.is_closed());
-    assert!(sender.on_next(None).is_stop());
+    assert!(sender.on_next(None).is_break());
     assert!(sender.is_closed());
 }
 
@@ -980,5 +980,5 @@ fn test_panicking_next_closes_the_pipe() {
 
     // The panic closed the pipe, as it does during the replay.
     assert!(sender.is_closed());
-    assert!(sender.on_next(None).is_stop());
+    assert!(sender.on_next(None).is_break());
 }

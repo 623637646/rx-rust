@@ -248,7 +248,7 @@ fn test_unsub_on_next_by_take() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [(111, 222)]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -261,7 +261,7 @@ fn test_stop_on_next() {
 
     let _subscription = observable.pairwise().subscribe(observer);
     assert!(sender.on_next(111).is_continue());
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [(111, 222)]);
     // The stop goes back to the sender, which drops the observer: a pass-through operator
     // disposes nothing of its own.

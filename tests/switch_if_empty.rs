@@ -269,7 +269,7 @@ fn test_unsub_on_next_by_take_with_values() {
         .take(1);
 
     let _subscription = observable.subscribe(observer);
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -285,7 +285,7 @@ fn test_unsub_on_next_by_take_without_values() {
 
     let _subscription = observable.subscribe(observer);
     sender.on_termination(Termination::Completed);
-    assert!(fallback_sender.on_next(111).is_stop());
+    assert!(fallback_sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);

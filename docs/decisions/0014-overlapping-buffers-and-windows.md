@@ -97,9 +97,9 @@ Every hook emits to an observer it gets by reference, `put` included, so that a 
 both kinds alike: one `update_groups` per change, which runs the hooks under the context's lock and
 queues what they emitted. That observer is an `Events`, which holds one event without a `Vec`, or,
 for `count`, which has no lock, the observer itself. Each hook answers the flow of the last event
-it emitted and emits nothing after a `Stop`, so that `count` needs no adapter to keep the observer
-from being sent anything once it stopped; the `Events` answer `Continue`, and the context applies
-the stop as it delivers them.
+it emitted and stops emitting on `Flow::Break(())`. This lets `count` deliver directly to the
+observer. The `Events` answer `Flow::Continue(())`, and the context handles the observer's flow
+when it delivers them.
 
 ### The bar: no new lock, no dynamic dispatch
 

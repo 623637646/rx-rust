@@ -93,7 +93,7 @@ where
         observer,
         Model { groups, timetable },
         |context| {
-            if flow.is_stop() {
+            if flow.is_break() {
                 return None;
             }
             Some(source.subscribe(TimeShiftObserver(context.clone())))
@@ -157,14 +157,14 @@ where
                 Some(Transition::Open) => model.groups.open(events),
                 // A group that closes as the next opens closes first.
                 Some(Transition::Rotate) => model.groups.rotate(events),
-                None => Flow::Continue,
+                None => Flow::Continue(()),
             };
             next
         });
         match updated {
             Updated::Ran {
                 result,
-                flow: Flow::Continue,
+                flow: Flow::Continue(()),
             } => result,
             _ => Next::Finished,
         }

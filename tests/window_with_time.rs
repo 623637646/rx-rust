@@ -443,7 +443,7 @@ fn test_no_subscriptions_after_initial_window_stops() {
     let _subscription = source
         .window_with_time(DURATION_100_MS, time.scheduler())
         .subscribe_with_callback(
-            |_| Flow::Stop,
+            |_| Flow::Break(()),
             |_| panic!("a stopped observer must not be terminated"),
         );
 
@@ -845,7 +845,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 

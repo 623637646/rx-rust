@@ -91,13 +91,13 @@ where
             Event::Next(value) => match self.0.as_mut() {
                 Some(observer) => {
                     let flow = observer.on_next(value);
-                    if flow.is_stop() {
+                    if flow.is_break() {
                         drop(self.0.take());
                     }
                     flow
                 }
                 // The materialized termination already ended the stream downstream.
-                None => Flow::Stop,
+                None => Flow::Break(()),
             },
             Event::Termination(termination) => {
                 if let Some(observer) = self.0.take() {
@@ -105,7 +105,7 @@ where
                 }
                 // The stream ends with the value that carried the termination, so whatever the
                 // source has left is of no use anymore.
-                Flow::Stop
+                Flow::Break(())
             }
         }
     }

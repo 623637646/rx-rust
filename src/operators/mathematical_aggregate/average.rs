@@ -162,7 +162,7 @@ macro_rules! average_observer_impl {
         {
             fn on_next(&mut self, value: $t) -> Flow {
                 self.accumulator.push(value as f64);
-                Flow::Continue
+                Flow::Continue(())
             }
 
             fn on_termination(self, termination: Termination<E>) {

@@ -216,7 +216,7 @@ where
         match action {
             Action::Left(id, value) => {
                 let (mut sender, window) = unicast_subject::new_boxed();
-                // A `Flow::Stop` ends the window's share of the right values only. When a clone
+                // A `Flow::Break(())` ends the window's share of the right values only. When a clone
                 // disposed the subscription, the stop view stops the emission of the window below.
                 let _ = self
                     .stop_view
@@ -260,7 +260,7 @@ where
                 }
             }
         }
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

@@ -11,6 +11,7 @@ use rx_rust::{
 };
 use std::{
     future::Future,
+    ops::ControlFlow,
     time::{Duration, Instant},
 };
 
@@ -51,7 +52,7 @@ pub(crate) trait SchedulerExt: SchedulerTypes + Clone {
         )
     }
 
-    /// Runs `task(count)` every `period`, from now plus `delay`, until it returns `false`. Runs
+    /// Runs `task(count)` every `period`, from now plus `delay`, until it returns `ControlFlow::Break(())`. Runs
     /// that fall behind are caught up back to back, never skipped.
     ///
     /// # Panics
@@ -64,7 +65,7 @@ pub(crate) trait SchedulerExt: SchedulerTypes + Clone {
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal>
     where
-        F: FnMut(usize) -> bool,
+        F: FnMut(usize) -> ControlFlow<()>,
         Self: Scheduler<PeriodicContext<F>>,
     {
         // An anchor out of range is a delay that never ends: the first run never comes, so it
@@ -87,12 +88,12 @@ pub(crate) trait SchedulerExt: SchedulerTypes + Clone {
 
     /// Drives `stream` to its end: `callback(Some(item))` for each element, then `callback(None)`.
     ///
-    /// `callback` returning `false`, or a disposal, stops the stream right there, without the
+    /// `callback` returning `ControlFlow::Break(())`, or a disposal, stops the stream right there, without the
     /// final `None`. The task yields after each element, even when the stream is always ready.
     fn schedule_stream<SM, F>(&self, stream: SM, callback: F) -> DisposeOnDrop<Self::Disposal>
     where
         SM: Stream,
-        F: FnMut(Option<SM::Item>) -> bool,
+        F: FnMut(Option<SM::Item>) -> ControlFlow<()>,
         Self: Scheduler<StreamThenContext<F, SM::Item>, SM>,
     {
         self.run_task(
@@ -101,7 +102,8 @@ pub(crate) trait SchedulerExt: SchedulerTypes + Clone {
                 stream,
                 |callback, item| callback(Some(item)),
                 |mut callback| {
-                    callback(None);
+                    // The stream is over: there is nothing left for a break to stop.
+                    let _ = callback(None);
                 },
             ),
             None,

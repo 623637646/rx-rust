@@ -18,14 +18,14 @@ built (`test_channel()`, `Checker`, and which source fits which case) and how to
 
 ## Flow
 
-Downstream ends its own stream with `Flow::Stop`; the source must stop and must not call
+Downstream ends its own stream with `Flow::Break(())`; the source must stop and must not call
 `on_termination`.
 
 1. `test_stop_on_next` — the observer itself stops, via `Checker::stopping_after`: it receives no
    further values, is not terminated, and is dropped.
-2. `Stop` travelling back to the source through `take`: operators and subjects do not get a
+2. `Break` travelling back to the source through `take`: operators and subjects do not get a
    separate case. Instead, `test_unsub_on_next_by_take` asserts that the send which lets `take`
-   complete answers `is_stop()` (operators that go through a scheduler answer `is_continue()`, since
+   complete answers `is_break()` (operators that go through a scheduler answer `is_continue()`, since
    the value is delivered later). Only sources (`from_iter` etc., which have no sender to ask) get a
    separate `test_stop_on_next_by_take`, asserting that the source stopped producing: a synchronous
    source must stop, and an infinite iterator must not loop forever.

@@ -21,7 +21,7 @@ All notable changes to this project are documented here. The format follows
   subscribing to the source or starting the scheduler task takes time.
 - Operators that subscribe two sources, or a source and a timer, skip the second subscription
   once their result stream is over while they are being assembled: a source that terminates as it
-  is subscribed, a notifier that fires at once, a downstream answering `Flow::Stop`, or the first
+  is subscribed, a notifier that fires at once, a downstream answering `Flow::Break(())`, or the first
   window of `window` being refused.
 - `Task::periodic` waits for its anchor before its first step, even without an initial delay.
 - `observe_on` no longer delivers an error after the subscription is disposed by the drop of a
@@ -37,10 +37,10 @@ All notable changes to this project are documented here. The format follows
 - `buffer_with_time_and_shift` and `window_with_time_and_shift` open groups at fixed intervals.
   Groups overlap when the interval is shorter than their duration and leave gaps when it is longer.
 - `stop_on_disposal` delivers nothing more to its observer once the subscription is disposed and
-  answers `Flow::Stop` from then on. A disposal alone does not stop an operator that sends
+  answers `Flow::Break(())` from then on. A disposal alone does not stop an operator that sends
   several notifications for one event of its source — the replay and the completion of
   `take_last`, the last bundle of `buffer_with_count` — so this is for a subscription that may be
-  disposed from inside one of its notifications by something that cannot answer `Flow::Stop`.
+  disposed from inside one of its notifications by something that cannot answer `Flow::Break(())`.
 - `audit` emits the latest item of each source-triggered time span, `delay_subscription` defers
   subscribing on a scheduler, and `do_finally` runs cleanup once the stream ends for any reason.
 - `CombineLatest`, `Zip`, `Merge` and `Concat` accept tuples of one to eight sources and expose
@@ -103,6 +103,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `Flow` is an alias of the standard `ControlFlow<()>`, so that a flow forwards with
+  `?` and drives `Iterator::try_for_each`. Replace `Flow::Continue` with `Flow::Continue(())`,
+  `Flow::Stop` with `Flow::Break(())` and `is_stop()` with `is_break()`. To import the variants
+  directly, use `std::ops::ControlFlow::{Break, Continue}`. Callbacks passed to `Task::periodic`,
+  `Task::from_stream_then` and `Task::from_stream_acked_then` now return `ControlFlow<()>`.
+  Replace `true` with `ControlFlow::Continue(())` and `false` with `ControlFlow::Break(())`.
+  An observer's `on_next` already returns this type.
 - **Breaking:** `into_boxed` and `into_cloneable_boxed` erase an observable into the box its mode
   picks (`BoxedObservableMode`): `BoxedObservable` / `CloneableBoxedObservable` for `Local`,
   `SendBoxedObservable` / `SendCloneableBoxedObservable` for `Shared`

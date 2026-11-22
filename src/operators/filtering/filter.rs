@@ -91,7 +91,7 @@ where
         if (self.callback)(&value) {
             self.observer.on_next(value)
         } else {
-            Flow::Continue
+            Flow::Continue(())
         }
     }
 

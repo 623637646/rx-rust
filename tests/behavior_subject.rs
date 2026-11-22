@@ -55,7 +55,7 @@ fn test_completed() {
     assert_eq!(subject.value(), 111);
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(222).is_stop());
+    assert!(subject.on_next(222).is_break());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [-1, 111]);
     assert_eq!(checker.state(), State::Completed);
@@ -114,7 +114,7 @@ fn test_error() {
     assert_eq!(subject.value(), 111);
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(222).is_stop());
+    assert!(subject.on_next(222).is_break());
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker.values(), [-1, 111]);
     assert_eq!(checker.state(), State::Error("error"));
@@ -362,7 +362,7 @@ fn test_complete_on_next() {
     ));
     assert_eq!(subject.value(), -1);
 
-    assert!(subject.on_next(111).is_stop());
+    assert!(subject.on_next(111).is_break());
     assert_eq!(checker.values(), [-1]);
     assert_eq!(checker.state(), State::Completed);
     assert!(matches!(
@@ -408,7 +408,7 @@ fn test_error_on_next() {
     ));
     assert_eq!(subject.value(), -1);
 
-    assert!(subject.on_next(111).is_stop());
+    assert!(subject.on_next(111).is_break());
     assert_eq!(checker.values(), [-1]);
     assert_eq!(checker.state(), State::Error("error"));
     assert!(matches!(
@@ -464,7 +464,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_3),
     ));
@@ -520,7 +520,7 @@ fn test_sub_on_next() {
                     subscription_3_cloned
                         .replace_value(Some(observable.clone().subscribe(observer)));
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_1),
     );
@@ -569,7 +569,7 @@ fn test_next_on_next() {
             if value < 3 {
                 // Like the termination above: the send of `0` is queued behind the running
                 // delivery, the later ones find the subject terminated.
-                assert_eq!(subject_cloned.on_next(value + 1).is_stop(), value > -1);
+                assert_eq!(subject_cloned.on_next(value + 1).is_break(), value > -1);
             }
             subject_cloned
                 .clone()
@@ -585,7 +585,7 @@ fn test_next_on_next() {
     ));
     assert_eq!(subject.value(), 0);
 
-    assert!(subject.on_next(1).is_stop());
+    assert!(subject.on_next(1).is_break());
     assert_eq!(checker.values(), [-1, 0]);
     assert_eq!(checker.state(), State::Completed);
     assert!(matches!(

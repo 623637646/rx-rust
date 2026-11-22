@@ -96,16 +96,16 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         if self.index > 0 {
             self.index -= 1;
-            return Flow::Continue;
+            return Flow::Continue(());
         }
         // The wanted element was reached, so the rest of the source is of no use.
         let Some(mut observer) = self.observer.take() else {
-            return Flow::Stop;
+            return Flow::Break(());
         };
         if observer.on_next(value).is_continue() {
             observer.on_termination(Termination::Completed);
         }
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

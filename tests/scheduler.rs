@@ -22,6 +22,7 @@ use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use std::convert::Infallible;
 use std::future::Future;
+use std::ops::ControlFlow;
 use std::pin::pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -104,7 +105,7 @@ fn test_periodic_anchor_with_late_first_poll() {
             ticks.clone(),
             |ticks, _| {
                 ticks.fetch_add(1, Ordering::SeqCst);
-                true
+                ControlFlow::Continue(())
             },
             DURATION_100_MS,
             Some(time.now() + DURATION_100_MS),
@@ -656,10 +657,10 @@ fn test_schedule_periodically_without_delay() {
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
-                    false
+                    ControlFlow::Break(())
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    true
+                    ControlFlow::Continue(())
                 }
             },
             DURATION_10_MS,
@@ -687,10 +688,10 @@ fn test_schedule_periodically_with_delay() {
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
-                    false
+                    ControlFlow::Break(())
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    true
+                    ControlFlow::Continue(())
                 }
             },
             DURATION_10_MS,
@@ -722,13 +723,13 @@ fn test_schedule_periodically_catches_up_after_an_overrun() {
             move |index| {
                 if index == 6 {
                     tx.take().unwrap();
-                    return false;
+                    return ControlFlow::Break(());
                 }
                 tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
                 if index == 0 {
                     thread::sleep(overrun);
                 }
-                true
+                ControlFlow::Continue(())
             },
             DURATION_10_MS,
             None,
@@ -759,7 +760,8 @@ fn test_schedule_periodically_catches_up_after_an_overrun() {
 #[should_panic(expected = "period must be non-zero")]
 fn test_schedule_periodically_rejects_zero_period() {
     block_on(|scheduler| async move {
-        let _disposal = scheduler.schedule_periodically(|_| false, Duration::ZERO, None);
+        let _disposal =
+            scheduler.schedule_periodically(|_| ControlFlow::Break(()), Duration::ZERO, None);
     });
 }
 
@@ -796,7 +798,7 @@ fn test_schedule_stream() {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let _disposal = scheduler.schedule_stream(futures::stream::iter([1, 2, 3]), move |item| {
             tx.unbounded_send(item).unwrap();
-            true
+            ControlFlow::Continue(())
         });
         let mut results = Vec::new();
         while let Some(result) = rx.next().await {
@@ -808,16 +810,20 @@ fn test_schedule_stream() {
 }
 
 #[test]
-fn test_schedule_stream_stops_on_false() {
+fn test_schedule_stream_stops_on_break() {
     block_on(|scheduler| async move {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let stream = futures::stream::iter(1..);
         let _disposal = scheduler.schedule_stream(stream, move |item| {
             let item = item.unwrap();
             tx.unbounded_send(item).unwrap();
-            item < 2
+            if item < 2 {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
         });
-        // A `false` answer ends the task, which drops `tx` and closes the channel. If the loop
+        // A `Break` answer ends the task, which drops `tx` and closes the channel. If the loop
         // kept polling the infinite stream, this would hang forever.
         let mut results = Vec::new();
         while let Some(result) = rx.next().await {

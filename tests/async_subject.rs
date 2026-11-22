@@ -55,7 +55,7 @@ fn test_completed() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [222]);
     assert_eq!(checker.state(), State::Completed);
@@ -114,7 +114,7 @@ fn test_error() {
     ));
 
     // on_next and on_termination after termination
-    assert!(subject.on_next(333).is_stop());
+    assert!(subject.on_next(333).is_break());
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Error("error"));
@@ -363,7 +363,7 @@ fn test_complete_on_next() {
     let _subscription = observable.subscribe_with_callback(
         move |value| {
             if value < 3 {
-                assert!(subject_cloned.on_next(value + 1).is_stop());
+                assert!(subject_cloned.on_next(value + 1).is_break());
                 subject_cloned
                     .clone()
                     .on_termination(Termination::Completed);
@@ -467,7 +467,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                Flow::Continue
+                Flow::Continue(())
             })
             .subscribe(observer_3),
     ));
@@ -530,7 +530,7 @@ fn test_sub_on_next() {
             if let Some(observer) = observer_3.take() {
                 subscription_3_cloned.replace_value(Some(observable.clone().subscribe(observer)));
             }
-            Flow::Continue
+            Flow::Continue(())
         })
         .subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -589,7 +589,7 @@ fn test_next_on_next() {
             // terminated when that value is delivered.
             assert!(subject_cloned.termination().is_some());
             if value < 3 {
-                assert!(subject_cloned.on_next(value + 1).is_stop());
+                assert!(subject_cloned.on_next(value + 1).is_break());
                 subject_cloned
                     .clone()
                     .on_termination(Termination::Completed);
@@ -930,7 +930,7 @@ fn test_next_on_replayed_next() {
             terminated_cloned
                 .with_mut(|values| values.push(subject_cloned.termination().is_some()));
             if value == 111 {
-                assert!(subject_cloned.on_next(222).is_stop());
+                assert!(subject_cloned.on_next(222).is_break());
             }
         },
         move |_| {},
@@ -1033,7 +1033,7 @@ fn test_next_on_sub() {
     let _subscription = observable.clone().subscribe_with_callback(
         move |value| {
             if value == 111 {
-                assert!(subject_cloned.on_next(222).is_stop());
+                assert!(subject_cloned.on_next(222).is_break());
             }
         },
         move |_| {},

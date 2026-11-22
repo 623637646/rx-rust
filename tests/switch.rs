@@ -1223,7 +1223,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    assert!(sender_1.on_next(111).is_stop());
+    assert!(sender_1.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1498,7 +1498,7 @@ fn test_next_on_unsub() {
         |observer: SendBoxedObserver<'_, ReceiverObservable<'_, i32, Infallible>, Infallible>| {
             DisposeOnDrop::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                assert!(observer.on_next(observable_1).is_stop());
+                assert!(observer.on_next(observable_1).is_break());
             }))
         },
     );
@@ -1649,7 +1649,7 @@ fn test_race_condition_next_after_unsub() {
     assert_eq!(checker.state(), State::Active);
 
     // The superseded inner ignored its disposal: its value is dropped, and it is told to stop.
-    assert!(sender_1.as_mut().unwrap().on_next(-1).is_stop());
+    assert!(sender_1.as_mut().unwrap().on_next(-1).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -1876,12 +1876,12 @@ fn test_next_while_terminating() {
 
     let _subscription = observable.subscribe(observer);
     assert!(sender.on_next(observable_1).is_continue());
-    let deliverer = thread::spawn(move || sender_1.on_next(111).is_stop());
+    let deliverer = thread::spawn(move || sender_1.on_next(111).is_break());
     delivering.recv_timeout(TIMEOUT).unwrap();
     assert!(sender.on_next(observable_2).is_continue());
     // Queued behind the delivery of 111, which is still running on the other thread.
     sender_2.on_termination(Termination::Error("error"));
-    assert!(sender.on_next(observable_3).is_stop());
+    assert!(sender.on_next(observable_3).is_break());
     assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
@@ -1957,7 +1957,7 @@ fn test_unsubscribe_on_replaced_inner_unsub() {
     // `test_next_while_terminating`), and disposed at once, since the stream has ended.
     let first = first.do_after_disposal(move || subscription.dispose());
     assert!(sender.on_next(first.into_boxed()).is_continue());
-    assert!(sender.on_next(second.into_boxed()).is_stop());
+    assert!(sender.on_next(second.into_boxed()).is_break());
     assert_eq!(source_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(second_checker.state(), ChannelState::Unsubscribed);
     assert!(checker.values().is_empty());

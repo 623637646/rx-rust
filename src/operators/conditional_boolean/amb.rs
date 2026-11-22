@@ -306,7 +306,7 @@ where
         match &mut self.0 {
             AmbObserverState::Won(observer) => observer.on_next(value),
             // This source lost the race, so nothing it emits is wanted anymore.
-            AmbObserverState::Lost | AmbObserverState::Racing { .. } => Flow::Stop,
+            AmbObserverState::Lost | AmbObserverState::Racing { .. } => Flow::Break(()),
         }
     }
 

@@ -59,7 +59,7 @@ fn dispose_during_batch_stops_remaining_events() {
             // Dropping the subscription disposes it.
             drop(dispose_slot.take_value());
         }
-        Flow::Continue
+        Flow::Continue(())
     })
     .subscribe(observer);
     reservation_slot.replace_value(Some(subscription));
@@ -92,7 +92,7 @@ fn dispose_during_batch_suppresses_pending_termination() {
         if value == 2 {
             drop(dispose_slot.take_value());
         }
-        Flow::Continue
+        Flow::Continue(())
     })
     .subscribe(observer);
     reservation_slot.replace_value(Some(subscription));
@@ -125,7 +125,7 @@ fn reentrant_send_is_queued_after_pending_events() {
             let context = send_slot.clone_value().unwrap();
             let _ = context.send_next(10);
         }
-        Flow::Continue
+        Flow::Continue(())
     })
     .subscribe(observer);
     let context = context_out.unwrap();
@@ -231,13 +231,13 @@ fn dispose_during_batch_unsubscribes_upstream() {
             if value == 2 {
                 drop(dispose_slot.take_value());
             }
-            Flow::Continue
+            Flow::Continue(())
         })
         .subscribe(observer);
     reservation_slot.replace_value(Some(subscription));
 
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(sender.on_next(1).is_stop());
+    assert!(sender.on_next(1).is_break());
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -271,7 +271,7 @@ fn is_active_sees_a_termination_queued_during_a_delivery() {
             context.is_active(),
             context.update(|_: &mut ()| UpdateOutcome::new(()).without_events()),
         )));
-        Flow::Continue
+        Flow::Continue(())
     })
     .subscribe(observer);
     let context = context_out.unwrap();
@@ -286,7 +286,7 @@ fn is_active_sees_a_termination_queued_during_a_delivery() {
             false,
             Updated::Ran {
                 result: (),
-                flow: Flow::Stop
+                flow: Flow::Break(())
             }
         ))
     );

@@ -3,7 +3,7 @@
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::{Scheduler, SchedulerTypes, StreamThenContext, Task},
 };
 use educe::Educe;
@@ -79,13 +79,13 @@ where
                 // not driven for values that have nothing to be delivered to.
                 Ok(value) => observer
                     .as_mut()
-                    .is_some_and(|observer| observer.on_next(value).is_continue()),
+                    .map_or(Flow::Break(()), |observer| observer.on_next(value)),
                 // An error is terminal for an observable, so the stream is left wherever it is.
                 Err(error) => {
                     if let Some(observer) = observer.take() {
                         observer.on_termination(Termination::Error(error));
                     }
-                    false
+                    Flow::Break(())
                 }
             },
             |observer| {

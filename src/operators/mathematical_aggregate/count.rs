@@ -89,7 +89,7 @@ where
 {
     fn on_next(&mut self, _: T) -> Flow {
         self.count += 1;
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

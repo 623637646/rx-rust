@@ -1,6 +1,9 @@
 use super::{Next, Task};
 use educe::Educe;
-use std::time::{Duration, Instant};
+use std::{
+    ops::ControlFlow,
+    time::{Duration, Instant},
+};
 
 /// The state of [`Task::periodic`].
 #[derive(Educe)]
@@ -8,7 +11,7 @@ use std::time::{Duration, Instant};
 pub struct PeriodicContext<C> {
     #[educe(Debug(ignore))]
     state: C,
-    step: fn(&mut C, usize) -> bool,
+    step: fn(&mut C, usize) -> ControlFlow<()>,
     period: Duration,
     /// When the next step is due. `None` until the first step, whose time then anchors the rate.
     next_time: Option<Instant>,
@@ -17,21 +20,21 @@ pub struct PeriodicContext<C> {
 
 impl<C> Task<PeriodicContext<C>> {
     /// Calls `step(&mut state, count)` — `count` starting at 0 — at a fixed rate, until it returns
-    /// `false`.
+    /// `ControlFlow::Break(())`.
     ///
     /// The n-th step is due at `anchor + n * period`, on the scheduler's clock; without an anchor,
     /// the time of the first step is the anchor. A step that overruns the period is followed by the
     /// missed ones back to back, never skipped, each after a yield point.
     ///
     /// A step due later than an [`Instant`] can represent never comes: the task finishes after the
-    /// step before it, and drops `state`, as it does when `step` returns `false`.
+    /// step before it, and drops `state`, as it does when `step` breaks.
     ///
     /// # Panics
     ///
     /// Panics if `period` is zero.
     pub fn periodic(
         state: C,
-        step: fn(&mut C, usize) -> bool,
+        step: fn(&mut C, usize) -> ControlFlow<()>,
         period: Duration,
         anchor: Option<Instant>,
     ) -> Self {
@@ -49,7 +52,7 @@ impl<C> Task<PeriodicContext<C>> {
                 if now < *next_time {
                     return Next::SleepUntil(*next_time);
                 }
-                if !(context.step)(&mut context.state, context.count) {
+                if (context.step)(&mut context.state, context.count).is_break() {
                     return Next::Finished;
                 }
                 context.count += 1;

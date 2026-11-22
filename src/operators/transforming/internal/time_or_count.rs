@@ -120,7 +120,7 @@ where
         observer,
         model,
         |context| {
-            if flow.is_stop() {
+            if flow.is_break() {
                 return None;
             }
             Some(source.subscribe(TimeOrCountObserver {

@@ -1,5 +1,5 @@
-//! The end of a stream that an operator closes with values of its own: an aggregate's result, a
-//! default value, the last items kept.
+//! Delivery of values followed by completion, for a synchronous source or an operator that emits
+//! values as it completes.
 
 use crate::observer::{Observer, Termination};
 
@@ -16,12 +16,12 @@ pub(crate) fn emit_then_terminate<T, E>(
 ) {
     match termination {
         Termination::Completed => {
-            for value in values {
-                if observer.on_next(value).is_stop() {
-                    return;
-                }
+            let flow = values
+                .into_iter()
+                .try_for_each(|value| observer.on_next(value));
+            if flow.is_continue() {
+                observer.on_termination(termination);
             }
-            observer.on_termination(termination);
         }
         Termination::Error(_) => {
             observer.on_termination(termination);
@@ -48,9 +48,9 @@ mod tests {
         fn on_next(&mut self, value: Value<'_>) -> Flow {
             self.log.borrow_mut().push(format!("next {}", value.0));
             if self.stop_on == Some(value.0) {
-                Flow::Stop
+                Flow::Break(())
             } else {
-                Flow::Continue
+                Flow::Continue(())
             }
         }
 

@@ -68,7 +68,7 @@ fn test_completed_reach_index() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(333).is_stop());
+    assert!(sender.on_next(333).is_break());
     assert_eq!(checker.values(), [333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -86,7 +86,7 @@ fn test_completed_0_index() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -163,7 +163,7 @@ fn test_ref() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(&value_2).is_stop());
+    assert!(sender.on_next(&value_2).is_break());
     assert_eq!(checker.values(), [&value_2]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -192,7 +192,7 @@ fn test_mut_ref() {
     assert!(sender.on_next(&mut value_1).is_continue());
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(&mut value_2).is_stop());
+    assert!(sender.on_next(&mut value_2).is_break());
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 
     drop(sender);
@@ -277,8 +277,8 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(channels.on_next(0, 222).is_stop());
-    assert!(channels.on_next(1, 222).is_stop());
+    assert!(channels.on_next(0, 222).is_break());
+    assert!(channels.on_next(1, 222).is_break());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(channels.state(0), ChannelState::Unsubscribed);
@@ -309,7 +309,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(333).is_stop());
+    assert!(sender.on_next(333).is_break());
     assert_eq!(checker.values(), [333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -332,7 +332,7 @@ fn test_multiple_operation_1_0() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(222).is_stop());
+    assert!(sender.on_next(222).is_break());
     assert_eq!(checker.values(), [222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -350,7 +350,7 @@ fn test_multiple_operation_0_1() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

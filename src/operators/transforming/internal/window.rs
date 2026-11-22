@@ -60,7 +60,7 @@ impl<T, E: Clone> Groups<E> for Windows<T> {
     ) -> Flow {
         match value.take() {
             Some(value) => observer.on_next(Action::ForwardValue(value)),
-            None => Flow::Continue,
+            None => Flow::Continue(()),
         }
     }
 
@@ -113,13 +113,13 @@ where
                 self.windows.send(&mut Some(value), |sender, value| {
                     let _ = sender.on_next(value);
                 });
-                Flow::Continue
+                Flow::Continue(())
             }
             Action::CompleteOldest => {
                 if let Some(sender) = self.windows.close_oldest() {
                     sender.on_termination(Termination::Completed);
                 }
-                Flow::Continue
+                Flow::Continue(())
             }
             Action::TerminateAll(termination) => {
                 // The last window takes the termination itself: one clone fewer.
@@ -130,7 +130,7 @@ where
                     }
                     last.on_termination(termination);
                 }
-                Flow::Continue
+                Flow::Continue(())
             }
             Action::EmitWindow => {
                 let (sender, window) = unicast_subject::new_boxed();

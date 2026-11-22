@@ -8,7 +8,7 @@
 //!
 //! The context owns the source subscription, so that it disposes the source as soon as it stops,
 //! whatever stopped it: a disposal, a termination — from the source, a notifier, a scheduler task
-//! or another source — or a downstream that answered [`Flow::Stop`].
+//! or another source — or a downstream that answered [`Flow::Break`].
 //!
 //! [`subscribe_with_context_two_steps`] subscribes two sources, or a source and a scheduler task,
 //! in order. It skips the second step if the first ended the stream and disposes the steps in
@@ -163,7 +163,7 @@ impl<M: ThreadMode, T, E, MD, D: Disposable> Disposable for Disposal<M, T, E, MD
 ///
 /// `builder` subscribes the sources with observers holding clones of the context, and returns
 /// their subscription, which the context then owns: it is disposed once the context stops — by a
-/// disposal, by a termination, or because downstream answered [`Flow::Stop`] — including when
+/// disposal, by a termination, or because downstream answered [`Flow::Break`] — including when
 /// that happens synchronously while `builder` is running. So the source is not left running once
 /// the operator has ended its stream, whichever thread ended it.
 ///
@@ -418,7 +418,7 @@ where
     /// The callback must not call external APIs or drop values that can re-enter this context.
     /// Return such values through [`UpdateOutcome::with_drop_outside`] instead.
     ///
-    /// Answers the result of the callback and the flow: [`Flow::Stop`] when the outcome
+    /// Answers the result of the callback and the flow: [`Flow::Break`] when the outcome
     /// [answers a stop](UpdateOutcome::answering_stop), when delivering the events it queued
     /// answered it, or when the stream is over, so an operator observer can return
     /// [`Updated::flow`] directly. If the context has stopped, the callback is not invoked and
@@ -440,14 +440,14 @@ where
     ///
     /// Nothing is answered: a termination is the last event, so the caller is done whether it
     /// was delivered, queued behind a running delivery, or rejected by a context that had already
-    /// stopped — [`Self::send`] would say [`Flow::Stop`] in every case.
+    /// stopped — [`Self::send`] would say [`Flow::Break`] in every case.
     pub fn send_termination(&self, termination: Termination<E>) {
         let _ = self.send(EventBatch::Termination(termination));
     }
 
     /// Sends `events` downstream, delivering them now or queueing them behind a running delivery.
     ///
-    /// Returns whether downstream still accepts events. [`Flow::Stop`] means the events were
+    /// Returns whether downstream still accepts events. [`Flow::Break`] means the events were
     /// rejected and dropped, because the context has stopped or a termination is already queued,
     /// or that the stream is over: `events` carried a termination, or delivering them ended it.
     pub fn send(&self, events: EventBatch<T, E>) -> Flow {

@@ -670,7 +670,7 @@ where
 {
     while let Updated::Ran {
         result: Some((observable, key)),
-        flow: Flow::Continue,
+        flow: Flow::Continue(()),
     } = updated
     {
         let subscription = subscribe_queued(

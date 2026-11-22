@@ -43,7 +43,7 @@ when stopping from inside the notification, or possibly while the stopping threa
 them when stopping concurrently.
 `test_stop_from_on_next_drops_the_values_that_are_still_queued` pins the new order.
 
-A stop of the loop's own — its observer answering `Flow::Stop`, or unwinding — drops in the same
+A stop of the loop's own — its observer answering `Flow::Break(())`, or unwinding — drops in the same
 order: it stops the core, which drops the queue and the resources, then drops its batch and its
 observer (the unwind does, after a panic). One order for both stops, rather than the loop dropping
 its batch first, is what lets every stop be the one `stop_core`, and the panic guard nothing but a
@@ -60,7 +60,7 @@ values still queued, the later ones, are dropped before the batch, the earlier o
 Status: adopted.
 
 A delivery is stopped by a `DeliveryStop`, from outside, or by its loop, as the observer it holds
-answers `Flow::Stop` or unwinds, both through `stop_core`. The first cannot name the observer's
+answers `Flow::Break(())` or unwinds, both through `stop_core`. The first cannot name the observer's
 type, and the second holds the observer, so neither takes it out of its cell, and `stop_core` only
 swaps the core for `Stopped` and drops what it held once the lock is released. A stop of the
 delivery's own that took a parked observer out of the cell used to exist too, but only the loop
@@ -76,7 +76,7 @@ observable end is subscribed, used to take the lock of its pipe once per buffere
 takes the values queued so far with `take_values_into` too, and delivers them without the lock;
 values the sender queues meanwhile wait behind the batch, and the termination stays in the queue.
 No disposal exists during the replay, so only the observer can stop it between two values of a
-batch, by answering `Flow::Stop` or unwinding. The pipe is then closed, which drops what is still
+batch, by answering `Flow::Break(())` or unwinding. The pipe is then closed, which drops what is still
 queued, and the replay drops the rest of its batch, then the observer: the same order as above.
 `test_drop_replayed_values_after_a_stop_outside_lock` pins it.
 

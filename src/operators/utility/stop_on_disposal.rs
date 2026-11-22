@@ -14,15 +14,15 @@ use crate::{
 use educe::Educe;
 
 /// Delivers nothing more to the observer once the subscription is disposed, and answers
-/// [`Flow::Stop`] from then on.
+/// [`Flow::Break`] from then on.
 ///
 /// A disposal goes from the subscription straight to the source: the operators in between do not
 /// see it. One that sends several notifications for a single event of its source — the buffered
 /// values and the completion of
 /// [`take_last`](crate::observable::ObservableExt::take_last), the last bundle of
 /// [`buffer_with_count`](crate::observable::ObservableExt::buffer_with_count) — is stopped
-/// between two of them only by a [`Flow::Stop`]. An observer that disposes its own subscription
-/// from `on_next` says so by answering [`Flow::Stop`]; this operator is for what cannot: a
+/// between two of them only by a [`Flow::Break`]. An observer that disposes its own subscription
+/// from `on_next` says so by answering [`Flow::Break`]; this operator is for what cannot: a
 /// callback that returns `()`, or a disposal made by someone else, such as a closure further up
 /// the chain ([`do_before_next`](crate::observable::ObservableExt::do_before_next), say). It
 /// goes last in the chain, right before the subscription.
@@ -52,7 +52,7 @@ use educe::Educe;
 /// let made = subject.take_last(2).stop_on_disposal().subscribe(CallbackObserver::new(
 ///     move |value| {
 ///         on_next_events.with_mut(|events| events.push(value));
-///         // Disposed on the first of them, by a callback that does not answer `Flow::Stop`.
+///         // Disposed on the first of them, by a callback that does not answer `Flow::Break(())`.
 ///         drop(subscription_cloned.take_value());
 ///     },
 ///     move |_| on_termination_events.with_mut(|events| events.push(0)),
@@ -129,12 +129,12 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         if self.disposed.is_raised() {
-            return Flow::Stop;
+            return Flow::Break(());
         }
         let flow = self.observer.on_next(value);
         // The observer may have disposed the subscription while it handled the value.
         if self.disposed.is_raised() {
-            Flow::Stop
+            Flow::Break(())
         } else {
             flow
         }

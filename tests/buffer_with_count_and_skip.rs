@@ -274,7 +274,7 @@ fn test_unsub_on_next_by_take() {
 
     let _subscription = observable.subscribe(observer);
     assert!(sender.on_next(1).is_continue());
-    assert!(sender.on_next(2).is_stop());
+    assert!(sender.on_next(2).is_break());
     assert_eq!(checker.values(), [vec![1, 2]]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -329,7 +329,7 @@ fn test_unsubscribe_on_next_during_completion() {
         assert!(sender.on_next(1).is_continue());
         assert!(sender.on_next(2).is_continue());
         // With `stop_on_disposal` the disposal stops the remaining bundles and the completion,
-        // even though the callback returns `()` rather than `Flow::Stop`.
+        // even though the callback returns `()` rather than `Flow::Break(())`.
         sender.on_termination(Termination::Completed);
         assert_eq!(checker.values(), [vec![1, 2], vec![2]][..stop_after]);
         assert_eq!(checker.state(), State::Dropped);

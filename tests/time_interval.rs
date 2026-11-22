@@ -510,7 +510,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
-    assert!(sender.on_next(111).is_stop());
+    assert!(sender.on_next(111).is_break());
     check_values(checker.values(), vec![(111, DURATION_30_MS)]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

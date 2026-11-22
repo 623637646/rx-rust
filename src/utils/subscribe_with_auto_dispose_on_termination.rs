@@ -2,7 +2,7 @@
 //!
 //! `take`, `first`, `all` and friends terminate downstream on their own, and must then dispose
 //! their source. [`subscribe_with_auto_dispose_on_termination`] wraps the downstream observer so
-//! that terminating it — or its answering [`Flow::Stop`] — disposes the source subscription,
+//! that terminating it — or its answering [`Flow::Break`] — disposes the source subscription,
 //! including when that happens synchronously while the source is still being subscribed to.
 //!
 //! An operator with shared state uses
@@ -53,7 +53,7 @@ delegate_disposal!(
 ///                 observer.on_termination(Termination::Completed); // Disposes the source.
 ///             }
 ///         }
-///         Flow::Stop
+///         Flow::Break(())
 ///     }
 ///     fn on_termination(self, termination: Termination<E>) {
 ///         if let Some(observer) = self.0 {
@@ -142,7 +142,7 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         let flow = self.observer.on_next(value);
-        if flow.is_stop() {
+        if flow.is_break() {
             // The observer ended its own stream, which is what a termination does too, so the
             // subscription is disposed here as well: the source is asked to stop by the flow this
             // returns, and released by the disposal whether or not it honors it.

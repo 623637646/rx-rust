@@ -145,7 +145,7 @@ where
             panic!("the channel ends only while it is subscribed to");
         };
         // A subscribed channel always has an observer to terminate, and terminating ends the
-        // delivery, so the flow it answers is `Flow::Stop` either way and says nothing more.
+        // delivery, so the flow it answers is `Flow::Break(())` either way and says nothing more.
         let _ = delivery.send(EventBatch::Termination(termination)); // Notify outside the lock
     }
 }

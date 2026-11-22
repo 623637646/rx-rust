@@ -496,7 +496,7 @@ where
     }
 
     fn observer(&mut self, _: TupleIndex<INDEX>) -> Option<Self::Observer> {
-        // An update that queues nothing answers `Stop` once a termination is queued, so it tells
+        // An update that queues nothing answers `Break` once a termination is queued, so it tells
         // that the stream is over as well.
         let wanted = matches!(
             self.update(|model| {
@@ -504,7 +504,7 @@ where
             }),
             Updated::Ran {
                 result: true,
-                flow: Flow::Continue,
+                flow: Flow::Continue(()),
             }
         );
         wanted.then(|| WhenObserver(self.clone()))

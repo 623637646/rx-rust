@@ -18,7 +18,7 @@ use educe::Educe;
 /// - the source terminates: after downstream was notified;
 /// - the subscription is disposed: after the source's subscription was;
 /// - the source drops the observer without a termination: because downstream answered
-///   [`Flow::Stop`], say, or the source let go of it with nothing more to send.
+///   [`Flow::Break`], say, or the source let go of it with nothing more to send.
 ///
 /// [`do_after_termination`](crate::observable::ObservableExt::do_after_termination) covers the
 /// first case alone, and

@@ -610,7 +610,7 @@ fn test_stop_on_next_releases_observer_last() {
 
     impl Observer<i32, Infallible> for StopObserver {
         fn on_next(&mut self, _: i32) -> Flow {
-            Flow::Stop
+            Flow::Break(())
         }
 
         fn on_termination(self, _: Termination<Infallible>) {}
@@ -709,7 +709,7 @@ fn test_unsub_on_next() {
                     if let Some(subscription) = subscription_cloned.take_value() {
                         Disposable::dispose(subscription);
                     }
-                    Flow::Continue
+                    Flow::Continue(())
                 });
         subscription.replace_value(Some(observable.subscribe(observer)));
 
@@ -1670,7 +1670,7 @@ fn test_next_on_unsub() {
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            assert!(observer.on_next(111).is_stop());
+            assert!(observer.on_next(111).is_break());
         }))
     });
 
@@ -1771,7 +1771,7 @@ fn test_race_condition_between_next_and_delivery() {
     }
 }
 
-/// `take` ends the stream on a pool thread while the test thread is still sending. `Stop` is a
+/// `take` ends the stream on a pool thread while the test thread is still sending. `Break` is a
 /// guarantee: a send answered with it comes after the taken values were delivered, and nothing
 /// sent afterwards, or racing the disposal, reaches the observer.
 #[test]
@@ -1797,8 +1797,8 @@ fn test_race_condition_unsub_on_next_by_take() {
 
         let _subscription = observable.subscribe(observer);
         let mut sender = sender.unwrap();
-        // Whether a send is answered `Stop`, and which one, depends on the interleaving.
-        if let Some(stopped_at) = (0..100).find(|value| sender.on_next(*value).is_stop()) {
+        // Whether a send is answered `Break`, and which one, depends on the interleaving.
+        if let Some(stopped_at) = (0..100).find(|value| sender.on_next(*value).is_break()) {
             assert!(stopped_at >= TAKEN - 1);
             assert_eq!(checker.values(), (0..TAKEN).collect::<Vec<_>>());
         }

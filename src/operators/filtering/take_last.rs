@@ -89,13 +89,13 @@ where
         // The buffer is only replayed on completion, so the source must run to its end even when
         // nothing is kept: stopping it here would leave downstream without its termination.
         if self.count == 0 {
-            return Flow::Continue;
+            return Flow::Continue(());
         }
         self.buffer.push_back(value);
         if self.buffer.len() > self.count {
             self.buffer.pop_front();
         }
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

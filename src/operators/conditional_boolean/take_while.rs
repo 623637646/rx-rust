@@ -101,16 +101,16 @@ where
         // A source that does not honor the flow or the disposal keeps emitting; the callback is
         // the caller's and may have side effects, so it must not run once the window has closed.
         let Some(observer) = self.observer.as_mut() else {
-            return Flow::Stop;
+            return Flow::Break(());
         };
         if !(self.callback)(&value) {
             if let Some(observer) = self.observer.take() {
                 observer.on_termination(Termination::Completed);
             }
-            return Flow::Stop;
+            return Flow::Break(());
         }
         let flow = observer.on_next(value);
-        if flow.is_stop() {
+        if flow.is_break() {
             drop(self.observer.take());
         }
         flow

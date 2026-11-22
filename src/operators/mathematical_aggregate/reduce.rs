@@ -105,10 +105,10 @@ where
         let Some(accumulated) = self.value.take() else {
             // The callback panicked and the accumulator went with it, so there is nothing left to
             // accumulate into: this observer accepts nothing more.
-            return Flow::Stop;
+            return Flow::Break(());
         };
         self.value = Some((self.callback)(accumulated, value));
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

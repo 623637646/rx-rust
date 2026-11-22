@@ -216,7 +216,7 @@ impl<T, E> Observer<T, E> for ObservableTryFutureObserver<T, E> {
         self.resolve(Ok(Some(value)));
         // The first item is all the future wants: the source stops here and does not terminate
         // this observer, which has already resolved the future.
-        Flow::Stop
+        Flow::Break(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

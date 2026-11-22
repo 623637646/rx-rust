@@ -183,7 +183,7 @@ where
             let completed = IndexedEvent::Completed {
                 position: self.position,
             };
-            if self.observer.on_next(completed).is_stop() {
+            if self.observer.on_next(completed).is_break() {
                 return;
             }
         }
@@ -237,15 +237,14 @@ impl<M: ThreadMode, T, OR> ReorderObserver<M, T, OR> {
             self.current_position += 1;
             let Some(Buffered { values, completed }) = self.buffered.remove(&self.current_position)
             else {
-                return Flow::Continue;
+                return Flow::Continue(());
             };
             // Several values for the one event the merge sent: a disposal in between, by the
             // downstream observer or from another thread, is checked for before each of them.
-            let flow = self
-                .stop_view
-                .send_each(&mut self.observer, values, identity);
-            if flow.is_stop() || !completed {
-                return flow;
+            self.stop_view
+                .send_each(&mut self.observer, values, identity)?;
+            if !completed {
+                return Flow::Continue(());
             }
         }
     }
@@ -266,14 +265,14 @@ where
                     .or_default()
                     .values
                     .push(value);
-                Flow::Continue
+                Flow::Continue(())
             }
             IndexedEvent::Completed { position } if position == self.current_position => {
                 self.advance()
             }
             IndexedEvent::Completed { position } => {
                 self.buffered.entry(position).or_default().completed = true;
-                Flow::Continue
+                Flow::Continue(())
             }
         }
     }

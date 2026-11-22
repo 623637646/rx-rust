@@ -99,7 +99,7 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.collection.extend(Some(value));
-        Flow::Continue
+        Flow::Continue(())
     }
 
     fn on_termination(self, termination: Termination<E>) {

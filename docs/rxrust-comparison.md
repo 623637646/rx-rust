@@ -14,7 +14,7 @@ Aspect            | rx-rust | rxRust
 ----------------- | ------- | ------
 Thread mode       | a `Mode` on every observable; an operator with several sources is `Shared` as soon as one of them is | a `Local` or `Shared` context the chain starts from (`Local::from_iter(…)`)
 Schedulers        | passed by value to each time-based operator; Tokio, smol or the `futures` executors, each behind a feature, none by default | part of the context's type, built with `Default` and spawned on the ambient Tokio runtime (an `_with` variant takes one); browser timers on wasm, or your own
-Stopping a source | `on_next` returns `Flow::Stop`                     | the source asks `observer.is_closed()`
+Stopping a source | `on_next` returns `Flow::Break(())`                     | the source asks `observer.is_closed()`
 Borrowed items    | items are owned                                    | `&mut T` can be lent to each subscriber in turn (`multicast_mut_ref`)
 Virtual time      | `VirtualTime`, a value: any number per test        | `TestScheduler`, one clock per thread
 `unsafe`          | `#![forbid(unsafe_code)]`                          | a few `Pin` projections
@@ -106,10 +106,10 @@ there is no subscription to drop yet. Each library lets the observer stop it.
 
 In rxRust the source asks: `Observer::is_closed()` returns `true` once the observer takes nothing
 more, and `from_iter` checks it before each item. In rx-rust the observer answers:
-`Observer::on_next` returns `Flow::Stop`, a promise that it accepts nothing more, not even a
+`Observer::on_next` returns `Flow::Break(())`, a promise that it accepts nothing more, not even a
 termination, and the source stops pushing and drops it. An operator forwards its downstream's
 answer, so `take`, `first` and `take_until` stop their source the same way, and the
-`#[must_use]` on `Flow` catches an operator that forgets to forward it.
+`#[must_use]` on the underlying `ControlFlow` warns when an operator discards the return value.
 
 ## Borrowed items
 

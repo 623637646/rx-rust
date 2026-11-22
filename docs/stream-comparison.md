@@ -12,7 +12,7 @@ inside an async task, and its state is whatever that task holds between two `awa
 
 An **observable is pushed**. The source calls its observer each time something happens, at the
 source's own pace. A subject or `share()` delivers each value to every subscriber at once. There is
-no backpressure: an observer takes what arrives, or answers `Flow::Stop`, or is unsubscribed. (The
+no backpressure: an observer takes what arrives, or answers `Flow::Break(())`, or is unsubscribed. (The
 one exception starts from a stream: `FromStreamAcked`, below, polls it again only once the item
 before has been handled.) An observable whose source is synchronous, such as a subject fed from a
 GUI callback, needs no async runtime at all. The state of each step (the pending value of a

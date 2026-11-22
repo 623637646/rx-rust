@@ -439,7 +439,7 @@ fn test_unsub_on_next_by_take() {
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
-    assert!(boxed_observer.as_mut().unwrap().on_next(111).is_stop());
+    assert!(boxed_observer.as_mut().unwrap().on_next(111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert!(disposed.load(Ordering::SeqCst));

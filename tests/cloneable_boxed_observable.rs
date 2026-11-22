@@ -229,7 +229,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channels.state(0), ChannelState::Subscribed);
 
-    assert!(channels.on_next(0, 111).is_stop());
+    assert!(channels.on_next(0, 111).is_break());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::<Infallible>::Completed);
     assert_eq!(channels.state(0), ChannelState::Unsubscribed);

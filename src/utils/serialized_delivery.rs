@@ -98,7 +98,7 @@ pub(crate) struct DeliveryStop<M: ThreadMode, T, E, R> {
 
 /// Sends to an observer only while a delivery has not been stopped other than by its termination,
 /// a stop it reads without a lock: one by a [`DeliveryStop`], or by the delivery's own loop, as its
-/// observer answers [`Flow::Stop`] or panics.
+/// observer answers [`Flow::Break`] or panics.
 ///
 /// While the observer runs, only the first can happen, so the observer learns through this view
 /// that its subscription has been disposed — from inside one of its own notifications, or from
@@ -123,7 +123,7 @@ impl<M: ThreadMode> StopView<M> {
 
     /// Sends `observer` the value that `value` makes, unless the delivery is stopped before
     /// `value` runs or while it runs — user code, a selector or a `Clone`, which may dispose the
-    /// subscription. [`Flow::Stop`] when it is stopped, and the value is then not made, or dropped
+    /// subscription. [`Flow::Break`] when it is stopped, and the value is then not made, or dropped
     /// unsent, or when `observer` answered it.
     pub(crate) fn send<T, E>(
         &self,
@@ -131,17 +131,17 @@ impl<M: ThreadMode> StopView<M> {
         value: impl FnOnce() -> T,
     ) -> Flow {
         if self.is_stopped() {
-            return Flow::Stop;
+            return Flow::Break(());
         }
         let value = value();
         if self.is_stopped() {
-            return Flow::Stop;
+            return Flow::Break(());
         }
         observer.on_next(value)
     }
 
     /// Sends the value that `value` makes for each of `items`, until the delivery is stopped or
-    /// `observer` answers [`Flow::Stop`]. Each value is made inside [`send`](Self::send), so a stop
+    /// `observer` answers [`Flow::Break`]. Each value is made inside [`send`](Self::send), so a stop
     /// before it is needed skips the user's code too.
     pub(crate) fn send_each<T, E, V>(
         &self,
@@ -149,12 +149,9 @@ impl<M: ThreadMode> StopView<M> {
         items: impl IntoIterator<Item = V>,
         mut value: impl FnMut(V) -> T,
     ) -> Flow {
-        for item in items {
-            if self.send(observer, || value(item)).is_stop() {
-                return Flow::Stop;
-            }
-        }
-        Flow::Continue
+        items
+            .into_iter()
+            .try_for_each(|item| self.send(observer, || value(item)))
     }
 
     /// [`send`](Self::send) for the termination that `termination` makes: `observer` is dropped
@@ -217,7 +214,7 @@ enum EnqueueAction<T, E, OR> {
     /// Start a delivery loop with the observer taken out of its cell.
     Start { observer: OR, first_next: Option<T> },
     /// The batch was queued for a running delivery, or needed no work, and answers this flow:
-    /// [`Flow::Stop`] exactly when it queued the termination, or, for an update that queued
+    /// [`Flow::Break`] exactly when it queued the termination, or, for an update that queued
     /// nothing, when one was queued already.
     Queued(Flow),
     /// The delivery was already stopped or a termination was already queued. `observer` is the one
@@ -290,7 +287,7 @@ where
 {
     /// Queues `events` and delivers whatever became deliverable because of them.
     ///
-    /// Returns whether the observer still accepts events. [`Flow::Stop`] means the delivery has
+    /// Returns whether the observer still accepts events. [`Flow::Break`] means the delivery has
     /// stopped or a termination was already queued, so the events were rejected and dropped outside
     /// the lock; it also means `events` itself carried a termination, since nothing can be queued
     /// after it. A value queued behind a delivery running elsewhere is reported as
@@ -330,8 +327,8 @@ where
             let (events, drop_outside, flow, result) = update(resources).into_parts();
             let action = match events {
                 Some(events) => core.enqueue_batch(events, &self.observer),
-                None if core.is_active() => EnqueueAction::Queued(Flow::Continue),
-                None => EnqueueAction::Queued(Flow::Stop),
+                None if core.is_active() => EnqueueAction::Queued(Flow::Continue(())),
+                None => EnqueueAction::Queued(Flow::Break(())),
             };
             Ok((action, drop_outside, flow, result))
         });
@@ -345,8 +342,8 @@ where
         };
         let delivered = self.perform(action);
         drop(drop_outside); // Drop after sending or queueing the events, outside the lock.
-        let flow = if answered.is_stop() {
-            Flow::Stop
+        let flow = if answered.is_break() {
+            Flow::Break(())
         } else {
             delivered
         };
@@ -355,8 +352,8 @@ where
 
     /// Carries out, with the lock released, what `enqueue_batch` decided under it.
     ///
-    /// A batch that carries a termination answers [`Flow::Stop`] on every path: a delivery it
-    /// starts ends by terminating, one it is queued behind answers `Queued(Flow::Stop)`, and a
+    /// A batch that carries a termination answers [`Flow::Break`] on every path: a delivery it
+    /// starts ends by terminating, one it is queued behind answers `Queued(Flow::Break(()))`, and a
     /// rejection is a stop.
     fn perform(&self, action: EnqueueAction<T, E, OR>) -> Flow {
         match action {
@@ -368,7 +365,7 @@ where
             EnqueueAction::Rejected { events, observer } => {
                 drop(events); // Drop outside the lock to avoid potential deadlock
                 drop(observer);
-                Flow::Stop
+                Flow::Break(())
             }
         }
     }
@@ -385,7 +382,7 @@ where
     /// lock, between values of its batch, and finds `Stopped` when it locks for the next batch.
     /// The loop then drops its batch and observer instead of feeding it further. The batch is out
     /// of the stop's reach, so it may be dropped while a stopping thread still releases the queued
-    /// events and resources. A stop of the loop's own — its observer answering [`Flow::Stop`], or
+    /// events and resources. A stop of the loop's own — its observer answering [`Flow::Break`], or
     /// unwinding — drops in the same order: the queue and the resources, then the batch and the
     /// observer. A value selected before the stop may still be delivered: stopping does not wait
     /// for an in-flight notification.
@@ -395,7 +392,7 @@ where
     /// from the guard is safe on the panicking thread for that very reason. `on_termination` needs
     /// no guard: the state is already stopped when it runs, and the unwind drops the resources.
     ///
-    /// Returns [`Flow::Stop`] when this delivery ended — the observer stopped, it was terminated,
+    /// Returns [`Flow::Break`] when this delivery ended — the observer stopped, it was terminated,
     /// or the delivery had stopped already — and [`Flow::Continue`] when the observer was parked
     /// back for the next event.
     fn deliver(&self, mut observer: OR, mut next: Option<T>) -> Flow {
@@ -409,14 +406,14 @@ where
                 let guard = on_panic(|| stop_core(&self.core));
                 let flow = observer.on_next(value);
                 drop(guard);
-                if flow.is_stop() {
+                if flow.is_break() {
                     // It has ended its own stream or been disposed, so it is released like a
                     // disposed observer instead of being terminated: after what the state held and
                     // the batch, as a `DeliveryStop` leaves them.
                     stop_core(&self.core);
                     drop(batch);
                     drop(observer);
-                    return Flow::Stop;
+                    return Flow::Break(());
                 }
             }
 
@@ -427,7 +424,7 @@ where
                     // Out of the stop's reach, so dropped here, outside the lock.
                     drop(batch);
                     drop(observer);
-                    return Flow::Stop;
+                    return Flow::Break(());
                 }
                 next = batch.pop_front();
                 continue;
@@ -450,12 +447,12 @@ where
                     // The resources outlive the terminal notification, so a host can dispose its
                     // source only after its downstream was told the stream ended.
                     drop(resources);
-                    return Flow::Stop;
+                    return Flow::Break(());
                 }
-                Step::Parked => return Flow::Continue,
+                Step::Parked => return Flow::Continue(()),
                 Step::Stopped(observer) => {
                     drop(observer); // Drop outside the lock to avoid potential deadlock
-                    return Flow::Stop;
+                    return Flow::Break(());
                 }
             }
         }
@@ -523,8 +520,8 @@ impl<T, E, R> Core<T, E, R> {
                     events,
                     observer: None,
                 },
-                None if pending.is_terminated() => EnqueueAction::Queued(Flow::Stop),
-                None => EnqueueAction::Queued(Flow::Continue),
+                None if pending.is_terminated() => EnqueueAction::Queued(Flow::Break(())),
+                None => EnqueueAction::Queued(Flow::Continue(())),
             },
             // A `DeliveryStop` may have left the observer parked.
             Self::Stopped => EnqueueAction::Rejected {
@@ -538,7 +535,7 @@ impl<T, E, R> Core<T, E, R> {
                 let (first_next, pending) = PendingEvents::from_batch(events);
                 if first_next.is_none() && pending.is_empty() {
                     // An empty `NextBatch` is a no-op, consistent with the delivering state.
-                    return EnqueueAction::Queued(Flow::Continue);
+                    return EnqueueAction::Queued(Flow::Continue(()));
                 }
 
                 // The batch is known to need a delivery only now, so the observer is taken out of
@@ -890,7 +887,7 @@ mod tests {
         fn on_next(&mut self, value: i32) -> Flow {
             record(&self.log, Record::Next(value));
             (self.on_next)(value);
-            Flow::Continue
+            Flow::Continue(())
         }
 
         fn on_termination(self, termination: Termination<TestError>) {
@@ -913,7 +910,7 @@ mod tests {
         handle: DeliveryHandle,
         on_next: FN,
         on_termination: Option<FT>,
-        /// How many values this observer accepts before it answers [`Flow::Stop`], if it ever does.
+        /// How many values this observer accepts before it answers [`Flow::Break`], if it ever does.
         stop_after: Option<usize>,
         received: usize,
     }
@@ -931,8 +928,8 @@ mod tests {
             }
             self.received += 1;
             match self.stop_after {
-                Some(stop_after) if self.received >= stop_after => Flow::Stop,
-                _ => Flow::Continue,
+                Some(stop_after) if self.received >= stop_after => Flow::Break(()),
+                _ => Flow::Continue(()),
             }
         }
 
@@ -1015,7 +1012,7 @@ mod tests {
             }
         }
 
-        /// Makes the observer answer [`Flow::Stop`] once it has received `count` values.
+        /// Makes the observer answer [`Flow::Break`] once it has received `count` values.
         fn stop_after(mut self, count: usize) -> Self {
             self.stop_after = Some(count);
             self
@@ -1159,7 +1156,7 @@ mod tests {
         let log = new_log();
         let delivery = builder(&log).build();
 
-        assert!(delivery.send(completed()).is_stop());
+        assert!(delivery.send(completed()).is_break());
         assert_eq!(
             records(&log),
             [
@@ -1181,7 +1178,7 @@ mod tests {
                     vec![Value::new(1), Value::new(2)],
                     Termination::Error(ERROR),
                 ))
-                .is_stop()
+                .is_break()
         );
         assert_eq!(
             records(&log),
@@ -1206,7 +1203,7 @@ mod tests {
                     Value::new(1),
                     Termination::Completed,
                 ))
-                .is_stop()
+                .is_break()
         );
         assert_eq!(
             records(&log),
@@ -1254,10 +1251,10 @@ mod tests {
         let log = new_log();
         let delivery = builder(&log).build();
 
-        assert!(delivery.send(completed()).is_stop());
-        assert!(delivery.send(next(1)).is_stop());
-        assert!(delivery.send(errored()).is_stop());
-        assert!(delivery.send(EventBatch::NextBatch(vec![])).is_stop());
+        assert!(delivery.send(completed()).is_break());
+        assert!(delivery.send(next(1)).is_break());
+        assert!(delivery.send(errored()).is_break());
+        assert!(delivery.send(EventBatch::NextBatch(vec![])).is_break());
         assert_eq!(
             records(&log),
             [
@@ -1274,8 +1271,8 @@ mod tests {
         let delivery = builder(&log).build();
 
         delivery.stop_handle().stop();
-        assert!(delivery.send(next(1)).is_stop());
-        assert!(delivery.send(completed()).is_stop());
+        assert!(delivery.send(next(1)).is_break());
+        assert!(delivery.send(completed()).is_break());
         assert_eq!(
             records(&log),
             [Record::ResourcesDropped, Record::ObserverDropped]
@@ -1286,14 +1283,14 @@ mod tests {
     fn test_rejected_events_are_dropped_outside_the_lock() {
         let log = new_log();
         let delivery = builder(&log).build();
-        assert!(delivery.send(completed()).is_stop());
+        assert!(delivery.send(completed()).is_break());
 
         let rejected = Value::new(1).on_drop(note_and_reenter(
             &DeliveryHandle::of(&delivery),
             &log,
             "rejected dropped",
         ));
-        assert!(delivery.send(EventBatch::Next(rejected)).is_stop());
+        assert!(delivery.send(EventBatch::Next(rejected)).is_break());
 
         // The note proves the rejected value was dropped, and the delivery it re-entered from that
         // drop rejected what it sent instead of deadlocking on the lock of `send`.
@@ -1310,7 +1307,7 @@ mod tests {
         let delivery = builder(&log)
             .on_termination(|delivery, _termination| {
                 // The state is stopped before the terminal notification, so nothing can follow it.
-                assert!(delivery.send(next(1)).is_stop());
+                assert!(delivery.send(next(1)).is_break());
                 assert_eq!(
                     delivery.update(|_resources| UpdateOutcome::empty()),
                     Updated::Stopped
@@ -1318,7 +1315,7 @@ mod tests {
             })
             .build();
 
-        assert!(delivery.send(completed()).is_stop());
+        assert!(delivery.send(completed()).is_break());
         assert_eq!(values(&log), []);
     }
 
@@ -1341,8 +1338,8 @@ mod tests {
         );
 
         // The observer is released by the next event, once, and never notified.
-        assert!(delivery.send(next(1)).is_stop());
-        assert!(delivery.send(next(2)).is_stop());
+        assert!(delivery.send(next(1)).is_break());
+        assert!(delivery.send(next(2)).is_break());
         assert_eq!(
             records(&log),
             [Record::ResourcesDropped, Record::ObserverDropped]
@@ -1399,7 +1396,7 @@ mod tests {
                     Value::new(2),
                     Value::new(3).on_drop(note(&log, "3 dropped")),
                 ]))
-                .is_stop()
+                .is_break()
         );
 
         assert_eq!(values(&log), [1, 2]);
@@ -1415,7 +1412,7 @@ mod tests {
                 Record::ObserverDropped,
             ]
         );
-        assert!(delivery.send(next(4)).is_stop());
+        assert!(delivery.send(next(4)).is_break());
     }
 
     #[test]
@@ -1430,10 +1427,10 @@ mod tests {
                     Value::new(2),
                     Value::new(3).on_drop(note(&log, "3 dropped")),
                 ]))
-                .is_stop()
+                .is_break()
         );
 
-        // Answering `Flow::Stop` stops the delivery, exactly as a `DeliveryStop` does: 3, which the
+        // Answering `Flow::Break(())` stops the delivery, exactly as a `DeliveryStop` does: 3, which the
         // loop took with 2, and the observer the loop holds are released after what the state held.
         assert_eq!(values(&log), [1, 2]);
         assert_eq!(
@@ -1444,7 +1441,7 @@ mod tests {
                 Record::ObserverDropped,
             ]
         );
-        assert!(delivery.send(next(4)).is_stop());
+        assert!(delivery.send(next(4)).is_break());
     }
 
     #[test]
@@ -1464,7 +1461,7 @@ mod tests {
             .result()
             .expect("the delivery is idle");
 
-        assert!(delivery.send(next(1)).is_stop());
+        assert!(delivery.send(next(1)).is_break());
 
         // Both drops re-entered the delivery, so neither of them ran while the state was locked.
         assert_eq!(
@@ -1484,7 +1481,7 @@ mod tests {
         let log = new_log();
         let delivery = builder(&log).stop_after(1).build();
 
-        assert!(delivery.send(next_batch_and_completed([1, 2])).is_stop());
+        assert!(delivery.send(next_batch_and_completed([1, 2])).is_break());
         assert_eq!(
             records(&log),
             [
@@ -1507,7 +1504,7 @@ mod tests {
             })
             .build();
 
-        assert!(delivery.send(next_batch_and_completed([1, 2])).is_stop());
+        assert!(delivery.send(next_batch_and_completed([1, 2])).is_break());
         assert_eq!(
             records(&log),
             [
@@ -1533,7 +1530,7 @@ mod tests {
         assert_eq!(records(&log), [Record::ResourcesDropped]);
 
         let rejected = Value::new(1).on_drop(note(&log, "1 dropped"));
-        assert!(delivery.send(EventBatch::Next(rejected)).is_stop());
+        assert!(delivery.send(EventBatch::Next(rejected)).is_break());
         // The drop of the observer re-entered the delivery, so it ran with the lock released.
         assert_eq!(
             records(&log),
@@ -1545,7 +1542,7 @@ mod tests {
             ]
         );
 
-        assert!(delivery.send(next(2)).is_stop());
+        assert!(delivery.send(next(2)).is_break());
         assert_eq!(records(&log).len(), 4, "the observer is released only once");
     }
 
@@ -1637,7 +1634,7 @@ mod tests {
             }),
             Updated::Ran {
                 result: (),
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(records(&log), []);
@@ -1654,7 +1651,7 @@ mod tests {
             })
             .build();
 
-        assert!(delivery.send(next_batch_and_completed([1, 2])).is_stop());
+        assert!(delivery.send(next_batch_and_completed([1, 2])).is_break());
         // The loop holds the observer, and drops it once it sees the stopped state.
         assert_eq!(
             records(&log),
@@ -1666,7 +1663,7 @@ mod tests {
             "the observer must be dropped instead of being terminated"
         );
 
-        assert!(delivery.send(next(3)).is_stop());
+        assert!(delivery.send(next(3)).is_break());
         assert_eq!(records(&log).len(), 3, "the observer is released only once");
     }
 
@@ -1721,7 +1718,7 @@ mod tests {
             })
             .build();
 
-        assert!(delivery.send(next(1)).is_stop());
+        assert!(delivery.send(next(1)).is_break());
         assert_eq!(
             records(&log)[..3],
             [
@@ -1741,7 +1738,7 @@ mod tests {
         let stop_view = builder.stop_view();
         let delivery = builder.build();
 
-        assert!(delivery.send(completed()).is_stop());
+        assert!(delivery.send(completed()).is_break());
 
         assert_eq!(
             records(&log),
@@ -1776,7 +1773,7 @@ mod tests {
             })
             .build();
 
-        assert!(delivery.send(completed()).is_stop());
+        assert!(delivery.send(completed()).is_break());
 
         assert_eq!(
             records(&log)[..2],
@@ -1828,9 +1825,9 @@ mod tests {
         let sent = new_log();
         let mut target = target(&sent, |_| {});
 
-        assert!(stop_view.send(&mut target, || unreachable!()).is_stop());
+        assert!(stop_view.send(&mut target, || unreachable!()).is_break());
         let flow = stop_view.send_each(&mut target, [1], |_| -> i32 { unreachable!() });
-        assert!(flow.is_stop());
+        assert!(flow.is_break());
         stop_view.terminate(target, || unreachable!());
 
         assert!(records(&sent).is_empty());
@@ -1852,7 +1849,7 @@ mod tests {
             delivery.stop_handle().stop();
             1
         });
-        assert!(flow.is_stop());
+        assert!(flow.is_break());
         stop_view.terminate(target, || Termination::Completed);
 
         assert!(records(&sent).is_empty());
@@ -1881,7 +1878,7 @@ mod tests {
             n
         });
 
-        assert!(flow.is_stop());
+        assert!(flow.is_break());
         assert_eq!(made, [1, 2]);
         assert_eq!(values(&sent), [1, 2]);
     }
@@ -1913,15 +1910,15 @@ mod tests {
             .on_next(|delivery, number| {
                 if number == 1 {
                     // Queued behind this very delivery, the termination is delivered for certain,
-                    // so the answer is already `Stop` — and nothing can be queued after it, even
+                    // so the answer is already `Break` — and nothing can be queued after it, even
                     // before it is delivered.
-                    assert!(delivery.send(completed()).is_stop());
-                    assert!(delivery.send(next(10)).is_stop());
+                    assert!(delivery.send(completed()).is_break());
+                    assert!(delivery.send(next(10)).is_break());
                 }
             })
             .build();
 
-        assert!(delivery.send(next_batch([1, 2, 3])).is_stop());
+        assert!(delivery.send(next_batch([1, 2, 3])).is_break());
         assert_eq!(
             records(&log),
             [
@@ -1949,14 +1946,14 @@ mod tests {
             }),
             Updated::Ran {
                 result: 11,
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(
             delivery.update(|resources| UpdateOutcome::new(resources.model)),
             Updated::Ran {
                 result: 11,
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(records(&log), [], "an update alone delivers nothing");
@@ -1974,7 +1971,7 @@ mod tests {
                     }),
                     Updated::Ran {
                         result: number * (number + 1) / 2,
-                        flow: Flow::Continue
+                        flow: Flow::Continue(())
                     }
                 );
             })
@@ -1985,7 +1982,7 @@ mod tests {
             delivery.update(|resources| UpdateOutcome::new(resources.model)),
             Updated::Ran {
                 result: 6,
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
     }
@@ -1996,7 +1993,7 @@ mod tests {
         let delivery = builder(&log)
             .on_next(|delivery, number| {
                 if number == 1 {
-                    assert!(delivery.send(completed()).is_stop());
+                    assert!(delivery.send(completed()).is_break());
                     // The update still runs, since the resources live until the termination is
                     // delivered, but the stream it updates is over, which its flow says.
                     assert_eq!(
@@ -2006,14 +2003,14 @@ mod tests {
                         }),
                         Updated::Ran {
                             result: 10,
-                            flow: Flow::Stop
+                            flow: Flow::Break(())
                         }
                     );
                 }
             })
             .build();
 
-        assert!(delivery.send(next(1)).is_stop());
+        assert!(delivery.send(next(1)).is_break());
         assert_eq!(
             records(&log),
             [
@@ -2030,7 +2027,7 @@ mod tests {
         let log = new_log();
         let delivery = builder(&log).build();
 
-        assert!(delivery.send(completed()).is_stop());
+        assert!(delivery.send(completed()).is_break());
         assert_eq!(
             delivery.update(|resources| UpdateOutcome::new(resources.model)),
             Updated::Stopped
@@ -2078,7 +2075,7 @@ mod tests {
             }),
             Updated::Ran {
                 result: "first",
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(
@@ -2088,7 +2085,7 @@ mod tests {
             }),
             Updated::Ran {
                 result: (),
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(values(&log), [1, 2, 3]);
@@ -2110,7 +2107,7 @@ mod tests {
             result,
             Updated::Ran {
                 result: (),
-                flow: Flow::Stop
+                flow: Flow::Break(())
             }
         );
         assert_eq!(
@@ -2146,7 +2143,7 @@ mod tests {
             result,
             Updated::Ran {
                 result: (),
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(
@@ -2171,14 +2168,14 @@ mod tests {
             }),
             Updated::Ran {
                 result: (),
-                flow: Flow::Stop
+                flow: Flow::Break(())
             }
         );
         assert_eq!(
             delivery.update(|_resources| UpdateOutcome::empty()),
             Updated::Stopped
         );
-        assert!(delivery.send(next(1)).is_stop());
+        assert!(delivery.send(next(1)).is_break());
     }
 
     #[test]
@@ -2194,7 +2191,7 @@ mod tests {
                         }),
                         Updated::Ran {
                             result: 1,
-                            flow: Flow::Continue
+                            flow: Flow::Continue(())
                         }
                     );
                 }
@@ -2214,7 +2211,7 @@ mod tests {
                 if number != 1 {
                     return;
                 }
-                assert!(delivery.send(completed()).is_stop());
+                assert!(delivery.send(completed()).is_break());
                 // The update still runs against the resources, but the termination is already
                 // queued, so its events are dropped instead of being delivered, and its flow says
                 // so.
@@ -2226,13 +2223,13 @@ mod tests {
                     }),
                     Updated::Ran {
                         result: 1,
-                        flow: Flow::Stop
+                        flow: Flow::Break(())
                     }
                 );
             })
             .build();
 
-        assert!(delivery.send(next_batch([1, 2])).is_stop());
+        assert!(delivery.send(next_batch([1, 2])).is_break());
         assert_eq!(values(&log), [1, 2]);
         assert!(records(&log).contains(&Record::Note("10 dropped")));
     }
@@ -2253,7 +2250,7 @@ mod tests {
             updated,
             Updated::Ran {
                 result: 1,
-                flow: Flow::Stop
+                flow: Flow::Break(())
             }
         );
         assert_eq!(updated.result(), Some(1));
@@ -2286,14 +2283,14 @@ mod tests {
             update(),
             Updated::Ran {
                 result: 1,
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(
             update(),
             Updated::Ran {
                 result: 2,
-                flow: Flow::Continue
+                flow: Flow::Continue(())
             }
         );
         assert_eq!(
@@ -2312,7 +2309,7 @@ mod tests {
 
         assert!(clone.send(next(1)).is_continue());
         delivery.stop_handle().stop();
-        assert!(clone.send(next(2)).is_stop());
+        assert!(clone.send(next(2)).is_break());
         assert_eq!(values(&log), [1]);
     }
 
@@ -2377,7 +2374,7 @@ mod tests {
                 Record::ObserverDropped,
             ]
         );
-        assert!(delivery.send(next(4)).is_stop());
+        assert!(delivery.send(next(4)).is_break());
     }
 
     #[cfg(panic = "unwind")]
@@ -2403,7 +2400,7 @@ mod tests {
                                 queued,
                                 Termination::Completed
                             ))
-                            .is_stop()
+                            .is_break()
                     );
                     resume_unwind(Box::new(()));
                 }
@@ -2442,7 +2439,7 @@ mod tests {
                 Record::Note("observer dropped"),
             ]
         );
-        assert!(delivery.send(next(5)).is_stop());
+        assert!(delivery.send(next(5)).is_break());
     }
 
     #[cfg(panic = "unwind")]
@@ -2465,7 +2462,7 @@ mod tests {
                 Record::ResourcesDropped,
             ]
         );
-        assert!(delivery.send(next(1)).is_stop());
+        assert!(delivery.send(next(1)).is_break());
     }
 
     // MARK: - Concurrency
@@ -2511,7 +2508,7 @@ mod tests {
                         queued,
                         Termination::Completed
                     ))
-                    .is_stop()
+                    .is_break()
             );
 
             stop.stop();
@@ -2526,7 +2523,7 @@ mod tests {
             );
 
             resume.send(()).expect("delivery is waiting to resume");
-            assert!(worker.join().expect("delivery must not panic").is_stop());
+            assert!(worker.join().expect("delivery must not panic").is_break());
         });
         assert_eq!(
             records(&log),
@@ -2540,7 +2537,7 @@ mod tests {
                 Record::Note("observer dropped"),
             ]
         );
-        assert!(delivery.send(next(5)).is_stop());
+        assert!(delivery.send(next(5)).is_break());
     }
 
     #[test]
