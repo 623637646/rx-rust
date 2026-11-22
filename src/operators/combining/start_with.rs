@@ -75,16 +75,19 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let flow = self
-            .values
-            .into_iter()
-            .try_for_each(|value| observer.on_next(value));
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        // The observer is declared last, so that a stop drops it before the values left, an unwind
+        // included (decision 0011).
+        let (mut values, mut observer) = (self.values.into_iter(), observer);
+        let flow = values.try_for_each(|value| observer.on_next(value));
         if flow.is_break() {
             // The prepended values ended the stream, so the source is never subscribed to and
             // there is nothing to dispose of.
             return None.into_dispose_on_drop();
         }
+        // No value is left, but the iterator may hold more than values: gone before the source
+        // starts.
+        drop(values);
         self.source
             .subscribe(observer)
             .map_inner(Some)

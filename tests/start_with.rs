@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
@@ -12,9 +13,11 @@ use rx_rust::operators::combining::start_with::StartWith;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
+    thread_mode::mutable::{MutableExt, MutableHelper},
 };
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -262,6 +265,66 @@ fn test_stop_on_next() {
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Initialized);
+}
+
+/// Records what happens, in order.
+type Log = Arc<Mutex<Vec<&'static str>>>;
+
+/// A probe that records `name` in `log` when it is dropped.
+fn logged_probe(log: &Log, name: &'static str) -> DropProbe {
+    let log = log.clone();
+    DropProbe::new().on_drop(Box::new(move || log.with_mut(|log| log.push(name))))
+}
+
+/// An observer that drops each value, then stops, and records its own drop.
+struct StopObserver(#[allow(dead_code)] DropProbe);
+
+impl Observer<DropProbe, Infallible> for StopObserver {
+    fn on_next(&mut self, _: DropProbe) -> Flow {
+        Flow::Break(())
+    }
+
+    fn on_termination(self, _: Termination<Infallible>) {}
+}
+
+#[test]
+fn test_stop_on_next_releases_observer_before_values() {
+    let log = Log::default();
+    let (_sender, observable, channel_checker) = test_channel();
+    let values = ["1 dropped", "2 dropped", "3 dropped"].map(|name| logged_probe(&log, name));
+
+    let _subscription = observable
+        .start_with(values)
+        .subscribe(StopObserver(logged_probe(&log, "observer dropped")));
+    // The values ended the stream, so the source is never subscribed to.
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
+    assert_eq!(
+        log.clone_value(),
+        ["1 dropped", "observer dropped", "2 dropped", "3 dropped"]
+    );
+}
+
+#[test]
+fn test_subscribe_after_iterator_is_dropped() {
+    let log = Log::default();
+    let held = logged_probe(&log, "iterator dropped");
+    let mut values = [1, 2].into_iter();
+    let iterator = std::iter::from_fn(move || {
+        let _held = &held;
+        values.next()
+    });
+    let (_sender, observable, _channel_checker) = test_channel::<i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let log_of_subscription = log.clone();
+    let _subscription = observable
+        .do_before_subscription(move || {
+            log_of_subscription.with_mut(|log| log.push("subscribed"));
+        })
+        .start_with(iterator)
+        .subscribe(observer);
+    assert_eq!(checker.values(), [1, 2]);
+    assert_eq!(log.clone_value(), ["iterator dropped", "subscribed"]);
 }
 
 #[test]

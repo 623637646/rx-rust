@@ -2,7 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::DropProbe;
+use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::test_channel::{ChannelState, test_channels};
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
@@ -103,6 +103,24 @@ fn test_unsubscribe() {
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(events.clone_value(), ["created", "dropped"]);
+}
+
+#[test]
+fn test_unsubscribe_releases_observer_last() {
+    let drops = DropCount::new();
+    let (_sender, observable, _channel_checker) = test_channel::<i32, Infallible>();
+    let (checker, observer) = Checker::new();
+    let checker_cloned = checker.clone();
+    let resource = drops.probe().on_drop(Box::new(move || {
+        assert_eq!(checker_cloned.state(), State::Active);
+    }));
+
+    let subscription = Using::new(|| Ok(resource), |_| observable).subscribe(observer);
+    assert_eq!(drops.get(), 0);
+
+    subscription.dispose();
+    assert_eq!(drops.get(), 1);
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]

@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::drop_probe::DropCount;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_scheduler::block_on;
@@ -333,6 +334,26 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [vec![111, 222, 333], vec![444, 555]]);
     assert_eq!(checker_2.state(), State::Completed);
     assert_eq!(channels.state(1), ChannelState::Completed);
+}
+
+#[test]
+fn test_unsubscribe_releases_observer_before_values() {
+    let drops = DropCount::new();
+    let (mut sender, observable, _channel_checker) = test_channel::<_, Infallible>();
+    let (checker, observer) = Checker::new();
+    let checker_cloned = checker.clone();
+    let value = drops.probe().on_drop(Box::new(move || {
+        assert_eq!(checker_cloned.state(), State::Dropped);
+    }));
+
+    let subscription = observable
+        .buffer_with_count(NonZeroUsize::new(3).unwrap())
+        .subscribe(observer);
+    assert!(sender.on_next(value).is_continue());
+    assert_eq!(drops.get(), 0);
+
+    subscription.dispose();
+    assert_eq!(drops.get(), 1);
 }
 
 #[test]

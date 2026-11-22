@@ -28,7 +28,8 @@ use educe::Educe;
 /// again from that termination — [`retry`](crate::observable::ObservableExt::retry) on an error
 /// that arrives after the subscription was made — then creates the next resource only once the
 /// previous one is gone, which an exclusive resource such as a file lock or a bound port needs; and
-/// whatever downstream does on the termination sees the resource released.
+/// whatever downstream does on the termination sees the resource released. A subscription that ends
+/// without a termination drops the resource before the downstream observer too.
 /// [`hold`](crate::observable::ObservableExt::hold) attaches a value that already exists instead
 /// of creating one, and drops it *after* the termination, which is what an acknowledgement such as
 /// a `StreamAck` needs.
@@ -166,8 +167,9 @@ where
 
 #[doc(hidden)]
 pub struct UsingObserver<OR, R> {
-    observer: OR,
+    // Declared first, so that it is dropped before the observer is, as it is before a termination.
     resource: R,
+    observer: OR,
 }
 
 impl<T, E, OR, R> Observer<T, E> for UsingObserver<OR, R>

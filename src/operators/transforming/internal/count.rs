@@ -21,8 +21,9 @@ use std::num::NonZeroUsize;
 /// to.
 #[doc(hidden)]
 pub struct CountObserver<G, OR> {
-    groups: G,
+    // Declared first, so that it is dropped before the items of the groups (decision 0011).
     observer: OR,
+    groups: G,
     skip: NonZeroUsize,
     /// The items left before the oldest group closes: `count` for the first, then `skip`, since
     /// the groups open `skip` items apart and all last `count` items.
