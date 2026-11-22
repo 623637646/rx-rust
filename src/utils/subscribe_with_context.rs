@@ -339,7 +339,8 @@ struct ContextResources<MD, D: Disposable> {
 
 type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, ContextResources<MD, D>>;
 
-/// The shared state of an operator: its model and its downstream observer, behind one lock.
+/// The shared state of an operator: its model, under the lock that queues its events, and its
+/// downstream observer, which the context's serialized delivery notifies one event at a time.
 ///
 /// Handed to the builder of [`subscribe_with_context`], cloned into each of the operator's
 /// observers, and driven through [`update`](Self::update), [`send_next`](Self::send_next) and

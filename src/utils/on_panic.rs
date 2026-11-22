@@ -14,14 +14,20 @@
 //!   run the ordinary disposals that dropping them entails, but it should not call further into
 //!   code that is free to unwind.
 //! - **It must not take a lock the panicking thread already holds**, which in this crate means it
-//!   is only ever wrapped around callbacks that run with no lock held — observer notifications and
-//!   external subscriptions. A guard that has to lock is safe exactly where the returning path
-//!   locks too.
+//!   is only ever armed with no lock held, around callbacks — observer notifications and external
+//!   subscriptions. A lock taken inside the guarded scope is released by the unwind before the
+//!   action runs: the serialized delivery's loop notifies its observer under the lock of the
+//!   observer's cell, which its guard takes again. A guard that has to lock is safe exactly where
+//!   the returning path locks too.
 //!
 //! The guard is armed for the scope it is bound to, so it must be bound: `let _guard = …`, and
 //! `drop(guard)` where the scope ends before the enclosing block. When the returning path needs
 //! something back from the guard, park it in the guard's state and take it with
-//! [`OnPanic::disarm`], which ends the scope and hands the state over.
+//! [`OnPanic::disarm`], which ends the scope and hands the state over. A guard on a hot path is
+//! disarmed too, which spares its drop a query of the runtime, and carries no state: what the
+//! scope works with stays a local of its own, declared where the unwind drops it in the order the
+//! action needs, rather than in the guard: the serialized delivery's loop, whose batch the guard
+//! once held, measured about a tenth of its time per value lost to it.
 //!
 //! A guard armed while its thread is already unwinding — by a `Drop` that runs during the unwind,
 //! disposing a subscription that delivers something — guards a scope that panic did not start in,
@@ -63,7 +69,8 @@ impl<T, F: FnOnce(T)> OnPanic<T, F> {
             .0
     }
 
-    /// Ends the guarded scope the returning way, handing the state back untouched.
+    /// Ends the guarded scope the returning way, handing the state back untouched. The guard's
+    /// drop then has nothing to decide, so it does not ask whether the thread is unwinding.
     pub(crate) fn disarm(mut self) -> T {
         let (state, _action) = self
             .armed
@@ -75,12 +82,14 @@ impl<T, F: FnOnce(T)> OnPanic<T, F> {
 
 impl<T, F: FnOnce(T)> Drop for OnPanic<T, F> {
     fn drop(&mut self) {
+        // Disarmed: nothing to run, and no need to ask the runtime whether the thread unwinds.
+        let Some((state, action)) = self.armed.take() else {
+            return;
+        };
         if self.armed_while_panicking || !std::thread::panicking() {
             return;
         }
-        if let Some((state, action)) = self.armed.take() {
-            action(state);
-        }
+        action(state);
     }
 }
 

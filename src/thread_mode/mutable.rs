@@ -40,6 +40,11 @@
 //! and speed. Not reaching back into the subject or pipeline that runs them is a contract on the
 //! user's code instead; see `docs/decisions/0008-user-code-under-a-lock.md`.
 //!
+//! One lock is held across user code by design rather than by exemption: the serialized delivery
+//! under every context-based operator and subject notifies its observer in place, under the lock
+//! of the observer's own cell, which no one but the running delivery loop takes, so nothing the
+//! observer reaches can take it again; see `docs/decisions/0011-serialized-delivery-in-batches.md`.
+//!
 //! Debug builds check the rule at runtime: taking a lock the current thread already holds panics
 //! at the offending call site instead of deadlocking.
 //!
