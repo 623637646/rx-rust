@@ -1523,12 +1523,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
         WindowWithTimeOrCount::new(self, count, time_span, scheduler)
     }
 
-    /// Gives an observable whose error type is `Infallible` a concrete error type.
+    /// Gives an observable whose error type is `Infallible` a concrete error type, so that it
+    /// can be joined to a fallible one (`merge`, `concat`, …), which requires the same error type.
     fn with_error_type<E1>(self) -> WithErrorType<E1, Self> {
         WithErrorType::new(self)
     }
 
-    /// Gives an observable whose item type is `Infallible` a concrete item type.
+    /// Gives an observable whose item type is `Infallible` a concrete item type, so that it can
+    /// be joined to one that emits (`merge`, `concat`, …), which requires the same item type.
     fn with_item_type<T1>(self) -> WithItemType<T1, Self> {
         WithItemType::new(self)
     }

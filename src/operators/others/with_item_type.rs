@@ -12,22 +12,39 @@ use std::{convert::Infallible, marker::PhantomData};
 
 /// Gives an observable whose item type is `Infallible` a concrete item type.
 ///
+/// A source that never emits an item — `Empty`, `Never`, `Throw` — says so with
+/// `Item = Infallible`. The operators that join several observables (`merge`, `concat`, `amb`,
+/// `switch_if_empty`, the inner observables of `catch`, `retry` and the `*_map` operators) require
+/// their items to be the same type, though, and Rust does not turn `Infallible` into another type
+/// on its own: this operator is that step, done explicitly where the types meet. It does nothing
+/// at run time.
+///
+/// It is the same as `map(|item| match item {})`, without the closure. The item type is usually
+/// inferred from the observable it is joined to; name it (`with_item_type::<T>()`) only when
+/// nothing else does.
+///
+/// [`with_error_type`](crate::observable::ObservableExt::with_error_type) is the twin for the
+/// error type.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
 ///     observer::Termination,
-///     operators::creating::empty::Empty,
+///     operators::creating::{from_result::FromResult, throw::Throw},
 /// };
 ///
 /// let mut values = Vec::new();
 ///
-/// Empty.with_item_type::<i32>().subscribe_with_callback(
-///     |value| values.push(value),
-///     |termination| assert_eq!(termination, Termination::Completed),
-/// );
+/// // `Throw` never emits an item, `FromResult` emits an `i32`: `concat` needs one item type.
+/// FromResult::new(Ok(1))
+///     .concat(Throw::new("boom").with_item_type())
+///     .subscribe_with_callback(
+///         |value| values.push(value),
+///         |termination| assert_eq!(termination, Termination::Error("boom")),
+///     );
 ///
-/// assert!(values.is_empty());
+/// assert_eq!(values, vec![1]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
