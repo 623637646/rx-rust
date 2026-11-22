@@ -840,11 +840,94 @@ fn test_drop_replayed_values_after_a_stop_outside_lock() {
 
     // The replay takes the three values together and stops after the first. The value its drop
     // re-enters with is queued behind them, and dropped as the stop closes the pipe; the two left
-    // in the batch are dropped after it, each re-entering the closed pipe, which drops what they
+    // in the batch are dropped after it and the observer, each re-entering the closed pipe, which drops what they
     // send.
     let _subscription = observable.subscribe_with_callback(|_value| Flow::Break(()), |_| {});
     assert_eq!(drops.get(), 6);
     assert!(sender_holder.take_value().unwrap().is_closed());
+}
+
+/// Records what is dropped, in order.
+type DropLog = Arc<Mutex<Vec<&'static str>>>;
+
+/// A probe that records `name` in `log` when it is dropped.
+fn logged_probe(log: &DropLog, name: &'static str) -> DropProbe {
+    let log = log.clone();
+    DropProbe::new().on_drop(Box::new(move || log.with_mut(|log| log.push(name))))
+}
+
+#[test]
+fn test_stop_on_next_while_replaying_releases_observer_before_values() {
+    let log = DropLog::default();
+    let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
+    for name in ["1 dropped", "2 dropped", "3 dropped"] {
+        assert!(sender.on_next(logged_probe(&log, name)).is_continue());
+    }
+
+    let probe = logged_probe(&log, "observer dropped");
+    let _subscription = observable.subscribe_with_callback(
+        move |_| {
+            let _ = &probe;
+            Flow::Break(())
+        },
+        |_| {},
+    );
+    assert_eq!(
+        log.clone_value(),
+        ["1 dropped", "observer dropped", "2 dropped", "3 dropped"]
+    );
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_replay_releases_observer_before_values() {
+    use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
+
+    let log = DropLog::default();
+    let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
+    for name in ["1 dropped", "2 dropped", "3 dropped"] {
+        assert!(sender.on_next(logged_probe(&log, name)).is_continue());
+    }
+
+    let probe = logged_probe(&log, "observer dropped");
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let _subscription = observable.subscribe_with_callback(
+            move |value| -> () {
+                let _ = &probe;
+                drop(value);
+                // It does not run the panic hook, which would print.
+                resume_unwind(Box::new(()));
+            },
+            |_| {},
+        );
+    }));
+    assert!(result.is_err());
+    assert!(sender.is_closed());
+    assert_eq!(
+        log.clone_value(),
+        ["1 dropped", "observer dropped", "2 dropped", "3 dropped"]
+    );
+}
+
+#[test]
+fn test_unsubscribe_before_next_releases_observer_before_value() {
+    let log = DropLog::default();
+    let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
+    let probe = logged_probe(&log, "observer dropped");
+    let subscription = observable.subscribe_with_callback(
+        move |_| {
+            let _ = &probe;
+        },
+        |_| {},
+    );
+
+    // The observer is parked, and the disposal only raises a flag.
+    subscription.dispose();
+    assert!(log.clone_value().is_empty());
+
+    let value = logged_probe(&log, "value dropped");
+    assert!(sender.on_next(value).is_break());
+    assert_eq!(log.clone_value(), ["observer dropped", "value dropped"]);
 }
 
 #[test]

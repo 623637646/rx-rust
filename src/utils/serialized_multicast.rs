@@ -21,9 +21,9 @@
 //!
 //! The observers live inside `Subscribers`, which the delivery loop owns while it delivers, so
 //! subscribing, unsubscribing and terminating all travel as `Action`s and touch the observers
-//! only outside the lock. Unsubscribing is the one that must take effect at once: the disposal
-//! writes a flag the subscribers check before every notification, and the queued `Action::Prune`
-//! only releases the observer afterwards.
+//! only outside the lock that queues them. Unsubscribing is the one that must take effect at once:
+//! the disposal writes a flag the subscribers check before every notification, and the queued
+//! `Action::Prune` only releases the observer afterwards.
 //!
 //! # Replaying to a newcomer
 //!
@@ -272,12 +272,11 @@ where
                 result: Admitted::Terminated(values, termination),
                 ..
             } => {
+                let mut values = values.into_iter();
+                // Declared after the values, so that it is dropped before those left when one of
+                // them stops it: it is not terminated then.
                 let mut observer = observer.take().expect("the update left the observer here");
-                // A replayed value can stop the newcomer, which is then dropped where it is
-                // instead of being terminated.
-                let flow = values
-                    .into_iter()
-                    .try_for_each(|value| observer.on_next(value));
+                let flow = values.try_for_each(|value| observer.on_next(value));
                 if flow.is_continue() {
                     observer.on_termination(termination);
                 }
@@ -404,19 +403,21 @@ where
         });
     }
 
-    fn add(&mut self, mut entry: Entry<'or, T, E, M>, replay: Vec<T>) {
+    fn add(&mut self, entry: Entry<'or, T, E, M>, replay: Vec<T>) {
+        // The entry is declared last, so that it is dropped before the values left of the replay, an
+        // unwind included (decision 0011).
+        let (mut replay, mut entry) = (replay.into_iter(), entry);
         // The replay is delivered here, where it is serialized with everything else: the values
         // the host snapshotted are exactly the ones queued before this action.
-        for value in replay {
+        let flow = replay.try_for_each(|value| {
             if entry.is_disposed.is_raised() {
-                return; // Unsubscribed, possibly during this very replay.
+                return Flow::Break(()); // Unsubscribed, possibly during this very replay.
             }
-            if entry.observer.on_next(value).is_break() {
-                return; // Stopped by the replay itself, so it never joins.
-            }
-        }
-        if entry.is_disposed.is_raised() {
-            return; // Unsubscribed before it was ever added.
+            entry.observer.on_next(value)
+        });
+        // Stopped by the replay itself, so it never joins, or unsubscribed before it was ever added.
+        if flow.is_break() || entry.is_disposed.is_raised() {
+            return;
         }
         debug_assert!(
             self.entries.last().is_none_or(|last| last.id < entry.id),
@@ -427,7 +428,8 @@ where
 
     fn prune(&mut self, id: Id) {
         if let Ok(index) = self.entries.binary_search_by_key(&id, |entry| entry.id) {
-            self.entries.remove(index); // Releases the observer here, outside the lock
+            // Releases the observer here, outside the lock that queues the actions.
+            self.entries.remove(index);
         }
     }
 

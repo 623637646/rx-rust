@@ -809,6 +809,54 @@ fn test_subscribe_by_different_observer() {
     ));
 }
 
+/// The values the observer never sees are the ones left of the clones made to replay to it.
+fn check_stop_on_next_while_replaying(terminated: bool) {
+    /// Logs its name when it is dropped, each clone on its own.
+    #[derive(Clone)]
+    struct Logged(&'static str, Arc<Mutex<Vec<&'static str>>>);
+
+    impl Drop for Logged {
+        fn drop(&mut self) {
+            self.1.with_mut(|log| log.push(self.0));
+        }
+    }
+
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let mut subject = ReplaySubject::<_, Infallible, _>::shared(None);
+    for name in ["1 dropped", "2 dropped", "3 dropped"] {
+        assert!(subject.on_next(Logged(name, log.clone())).is_continue());
+    }
+    if terminated {
+        subject.clone().on_termination(Termination::Completed);
+    }
+    // What was sent, whose clones the subject buffered, is dropped already.
+    log.take_value();
+
+    let logged = Logged("observer dropped", log.clone());
+    // The subject outlives the subscription here, and so does its buffer.
+    let _subscription = subject.clone().subscribe_with_callback(
+        move |_| {
+            let _ = &logged;
+            Flow::Break(())
+        },
+        |_| {},
+    );
+    assert_eq!(
+        log.clone_value(),
+        ["1 dropped", "observer dropped", "2 dropped", "3 dropped"]
+    );
+}
+
+#[test]
+fn test_stop_on_next_while_replaying_releases_observer_before_values() {
+    check_stop_on_next_while_replaying(false);
+}
+
+#[test]
+fn test_stop_on_next_while_replaying_after_completed_releases_observer_before_values() {
+    check_stop_on_next_while_replaying(true);
+}
+
 #[test]
 fn test_unsub_on_next_by_take() {
     let mut subject = ReplaySubject::<_, Infallible, _>::shared(None);
