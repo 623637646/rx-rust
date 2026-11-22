@@ -265,7 +265,8 @@ when they fail.
   `serialized_multicast`, `flagged_lock`, `subscribe_fn`, `pending_events`,
   `reservation_map`, `id_generator`, `on_panic`, `lazy_subscription`, `positional`,
   `emit_then_terminate` (the values an operator sends as its stream completes — an aggregate's
-  result, a default, the last items kept — then the termination, unless one of them stopped). A
+  result, a default, the last items kept — or a synchronous source sends — `FromIter` — then the
+  termination, unless one of them stopped). A
   module stays public only when a public signature names its items or a user writing an operator
   needs them; otherwise it is `pub(crate)`, and so is everything in it — the crate's
   `#![warn(unreachable_pub)]` is what catches a `pub` left behind in one, and CI denies warnings.
@@ -296,6 +297,14 @@ when they fail.
   lock it already holds. See the module docs in `src/thread_mode/mutable.rs`. The tests call those
   methods directly too. `Clone`, `PartialEq`, `Clock::now` and a connectable's subject factory
   are exempt: they may run under a lock, and do not get moved out of one (decision 0008).
+- **Drop order**: code that owns an observer and lets go of it drops the resources first (what a
+  disposal releases: the source's subscription, the stream a task drives), then the observer, then
+  the values it will never see (what is left of an iterator included), an unwind included. Get it
+  from the order of the declarations rather than from calls to `drop`: fields drop in declaration
+  order, so a struct declares its observer before the values it holds; locals drop in reverse, and
+  before every parameter, so an observer that comes as one is shadowed after them (`let (mut values,
+  mut observer) = (values.into_iter(), observer);`). See [decision
+  0011](docs/decisions/0011-serialized-delivery-in-batches.md).
 - **Subscription helpers**: prefer the existing helpers over hand-rolled state:
   `subscribe_with_context` for an operator with shared state — its context owns the source
   subscription and disposes it as soon as it stops, on whichever thread stops it (decision 0005);

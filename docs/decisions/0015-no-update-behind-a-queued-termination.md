@@ -26,7 +26,7 @@ termination. After a termination is queued or the delivery stops, every update r
 accepted events can still reach the observer in order. The variant was named `Stopped` while it
 meant only a stopped delivery; it was renamed as it came to cover a queued termination too.
 
-The delivery's core names that state: `Terminating` holds the values queued before the
+The delivery's core names that state: `TerminationQueued` holds the values queued before the
 termination, the termination and the resources, and offers no access to the resources, so only
 `Idle` and `Delivering` accept events and updates.
 

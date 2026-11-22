@@ -171,7 +171,11 @@ All notable changes to this project are documented here. The format follows
   notification — rather than once per value, and deliver the batch without it, reading a flag
   raised with the lock as the subscription is disposed. The values of a batch left undelivered,
   as the subscription is disposed or the downstream stops, are now dropped after the operator's
-  sources are released rather than before.
+  sources and its downstream observer are released rather than before.
+- An observer that is released without a termination is dropped before the values it will never
+  see: the items left of a replay of `ReplaySubject` or of a unicast subject, those left of
+  `take_last`, and the open bundle of `buffer_with_count`. It is dropped after the resource of
+  `using`, and after the stream or the future of a `Task`, whether or not the task has run.
 - A unicast subject replays the events buffered before its subscription in batches, taking the
   lock of its pipe once per batch of the values queued meanwhile rather than once per value.
 - A unicast sender releases the shared pipe state once it takes over the observer and the

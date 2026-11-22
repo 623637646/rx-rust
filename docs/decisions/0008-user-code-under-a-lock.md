@@ -43,6 +43,13 @@ same lock again runs under it:
   builder, outside the lock;
 - `Waker::wake`, which may run the task inline.
 
+The serialized delivery is not an exception to that list. Its loop runs `Observer::on_next` under
+the lock of the observer's own cell, but no one locks that cell while the loop runs — the
+delivery's core leaves it to the loop — so nothing the observer reaches can take it again, and no
+contract is asked of the user's code. Its core lock, which events, updates and stops take, is
+released across every notification as before. See
+[0011](0011-serialized-delivery-in-batches.md#the-loop-notifies-its-observer-in-its-cell).
+
 A `Clone` that panics under a lock is not given special handling either. The clones already made
 in that call — the first items of a `CombineLatest` or `WithLatestFrom` combination, the values a
 `ReplaySubject` replays — and a value the update was replacing are dropped as the panic unwinds,
