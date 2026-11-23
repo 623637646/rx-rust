@@ -23,26 +23,13 @@ use tests_utils::{checker::Checker, test_channel::test_channel};
 /// What happened, in order: the events the observer saw, and the drop of the resource.
 type Events = Arc<Mutex<Vec<&'static str>>>;
 
-/// A resource that records its drop in `events`.
-fn resource(events: &Events) -> DropProbe {
-    labelled(events, "dropped")
-}
-
-/// A resource that records its drop in `events` as `label`.
-fn labelled(events: &Events, label: &'static str) -> DropProbe {
-    let events = events.clone();
-    DropProbe::new().on_drop(Box::new(move || {
-        events.with_mut(|events| events.push(label));
-    }))
-}
-
 #[test]
 fn test_completed() {
     let events = Events::default();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.hold(resource(&events));
+    let observable = observable.hold(DropProbe::logged(&events, "dropped"));
     let _subscription = observable.subscribe(observer);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(events.clone_value().is_empty());
@@ -62,7 +49,9 @@ fn test_error() {
     let (mut sender, observable, _channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let _subscription = observable.hold(resource(&events)).subscribe(observer);
+    let _subscription = observable
+        .hold(DropProbe::logged(&events, "dropped"))
+        .subscribe(observer);
     assert!(sender.on_next(111).is_continue());
     sender.on_termination(Termination::Error("boom".to_owned()));
     assert_eq!(checker.values(), [111]);
@@ -78,7 +67,9 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let _subscription = observable.hold(resource(&events)).subscribe(observer);
+    let _subscription = observable
+        .hold(DropProbe::logged(&events, "dropped"))
+        .subscribe(observer);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&value).is_continue());
@@ -104,17 +95,19 @@ fn test_mut_ref() {
         DisposeOnDrop::default()
     });
 
-    let _subscription = observable.hold(resource(&events)).subscribe_with_callback(
-        |value| {
-            *value *= 2;
-        },
-        |termination| match termination {
-            Termination::Completed => panic!(),
-            Termination::Error(error) => {
-                *error *= 2;
-            }
-        },
-    );
+    let _subscription = observable
+        .hold(DropProbe::logged(&events, "dropped"))
+        .subscribe_with_callback(
+            |value| {
+                *value *= 2;
+            },
+            |termination| match termination {
+                Termination::Completed => panic!(),
+                Termination::Error(error) => {
+                    *error *= 2;
+                }
+            },
+        );
 
     assert_eq!(value, 222);
     assert_eq!(error, 444);
@@ -164,8 +157,8 @@ fn test_multiple_operation() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable
-        .hold(labelled(&events, "upstream dropped"))
-        .hold(labelled(&events, "downstream dropped"))
+        .hold(DropProbe::logged(&events, "upstream dropped"))
+        .hold(DropProbe::logged(&events, "downstream dropped"))
         .subscribe(observer);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
@@ -189,7 +182,7 @@ fn test_dropped_after_termination() {
     let (sender, observable, _channel_checker) = test_channel::<i32, Infallible>();
 
     let _subscription = observable
-        .hold(resource(&events))
+        .hold(DropProbe::logged(&events, "dropped"))
         .subscribe_with_callback(|_| {}, {
             let events = events.clone();
             move |_| events.with_mut(|events| events.push("terminated"))
@@ -204,7 +197,9 @@ fn test_unsubscribe() {
     let (mut sender, observable, channel_checker) = test_channel::<i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let subscription = observable.hold(resource(&events)).subscribe(observer);
+    let subscription = observable
+        .hold(DropProbe::logged(&events, "dropped"))
+        .subscribe(observer);
     assert!(sender.on_next(111).is_continue());
     assert!(events.clone_value().is_empty());
 
@@ -222,7 +217,9 @@ fn test_abandon_after_next() {
     let (mut sender, observable, channel_checker) = test_channel::<i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let _subscription = observable.hold(resource(&events)).subscribe(observer);
+    let _subscription = observable
+        .hold(DropProbe::logged(&events, "dropped"))
+        .subscribe(observer);
     assert!(sender.on_next(111).is_continue());
     sender.abandon();
     assert_eq!(checker.values(), [111]);
@@ -237,7 +234,9 @@ fn test_completed_on_subscribe() {
     let events = Events::default();
     let (checker, observer) = Checker::new();
 
-    let _subscription = Just::new(111).hold(resource(&events)).subscribe(observer);
+    let _subscription = Just::new(111)
+        .hold(DropProbe::logged(&events, "dropped"))
+        .subscribe(observer);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(events.clone_value(), ["dropped"]);
@@ -246,7 +245,7 @@ fn test_completed_on_subscribe() {
 #[test]
 fn test_never_subscribed() {
     let events = Events::default();
-    let observable = Just::new(111).hold(resource(&events));
+    let observable = Just::new(111).hold(DropProbe::logged(&events, "dropped"));
     assert!(events.clone_value().is_empty());
 
     drop(observable);
@@ -260,7 +259,7 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable
-        .hold(resource(&events))
+        .hold(DropProbe::logged(&events, "dropped"))
         .take(1)
         .subscribe(observer);
     assert!(sender.on_next(111).is_break());
@@ -275,7 +274,8 @@ fn test_async() {
     block_on(|scheduler| async move {
         let events = Events::default();
         let (checker, observer) = Checker::new();
-        let observable = Timer::new(111, DURATION_10_MS, scheduler.clone()).hold(resource(&events));
+        let observable = Timer::new(111, DURATION_10_MS, scheduler.clone())
+            .hold(DropProbe::logged(&events, "dropped"));
 
         let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -293,7 +293,8 @@ fn test_async() {
 fn test_without_convenient_api() {
     let events = Events::default();
     let (checker, observer) = Checker::new();
-    let _subscription = Hold::new(Just::new(111), resource(&events)).subscribe(observer);
+    let _subscription =
+        Hold::new(Just::new(111), DropProbe::logged(&events, "dropped")).subscribe(observer);
     assert_eq!(checker.values(), [111]);
     assert_eq!(events.clone_value(), ["dropped"]);
 }

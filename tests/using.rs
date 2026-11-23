@@ -27,20 +27,12 @@ use tests_utils::{checker::Checker, test_channel::test_channel};
 /// observer saw.
 type Events = Arc<Mutex<Vec<&'static str>>>;
 
-/// A resource that records its drop in `events`.
-fn resource(events: &Events) -> DropProbe {
-    let events = events.clone();
-    DropProbe::new().on_drop(Box::new(move || {
-        events.with_mut(|events| events.push("dropped"));
-    }))
-}
-
 /// A resource factory that records each resource it creates in `events`, and its drop.
 fn factory<E>(events: &Events) -> impl FnOnce() -> Result<DropProbe, E> + Clone + Send + use<E> {
     let events = events.clone();
     move || {
         events.with_mut(|events| events.push("created"));
-        Ok(resource(&events))
+        Ok(DropProbe::logged(&events, "dropped"))
     }
 }
 
@@ -312,7 +304,7 @@ fn test_observable_from_resource() {
     let _subscription = Using::new(
         {
             let events = events.clone();
-            move || Ok((resource(&events), vec![111, 222]))
+            move || Ok((DropProbe::logged(&events, "dropped"), vec![111, 222]))
         },
         |(_, values)| FromIter::new(std::mem::take(values)),
     )

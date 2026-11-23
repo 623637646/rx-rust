@@ -270,32 +270,20 @@ fn test_stop_on_next() {
 /// Records what happens, in order.
 type Log = Arc<Mutex<Vec<&'static str>>>;
 
-/// A probe that records `name` in `log` when it is dropped.
-fn logged_probe(log: &Log, name: &'static str) -> DropProbe {
-    let log = log.clone();
-    DropProbe::new().on_drop(Box::new(move || log.with_mut(|log| log.push(name))))
-}
-
-/// An observer that drops each value, then stops, and records its own drop.
-struct StopObserver(#[allow(dead_code)] DropProbe);
-
-impl Observer<DropProbe, Infallible> for StopObserver {
-    fn on_next(&mut self, _: DropProbe) -> Flow {
-        Flow::Break(())
-    }
-
-    fn on_termination(self, _: Termination<Infallible>) {}
-}
-
 #[test]
 fn test_stop_on_next_releases_observer_before_values() {
     let log = Log::default();
-    let (_sender, observable, channel_checker) = test_channel();
-    let values = ["1 dropped", "2 dropped", "3 dropped"].map(|name| logged_probe(&log, name));
+    let (_sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let values = ["1 dropped", "2 dropped", "3 dropped"].map(|name| DropProbe::logged(&log, name));
 
-    let _subscription = observable
-        .start_with(values)
-        .subscribe(StopObserver(logged_probe(&log, "observer dropped")));
+    let probe = DropProbe::logged(&log, "observer dropped");
+    let _subscription = observable.start_with(values).subscribe_with_callback(
+        move |_| {
+            let _ = &probe;
+            Flow::Break(())
+        },
+        |_| {},
+    );
     // The values ended the stream, so the source is never subscribed to.
     assert_eq!(channel_checker.state(), ChannelState::Initialized);
     assert_eq!(
@@ -307,7 +295,7 @@ fn test_stop_on_next_releases_observer_before_values() {
 #[test]
 fn test_subscribe_after_iterator_is_dropped() {
     let log = Log::default();
-    let held = logged_probe(&log, "iterator dropped");
+    let held = DropProbe::logged(&log, "iterator dropped");
     let mut values = [1, 2].into_iter();
     let iterator = std::iter::from_fn(move || {
         let _held = &held;

@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::TIMEOUT;
+use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
 use crate::tests_utils::{
@@ -603,22 +604,6 @@ fn test_stop_on_next_on_sub() {
 /// that the release tells downstream the source is gone, as the operators built on a context do.
 #[test]
 fn test_stop_on_next_releases_observer_last() {
-    struct StopObserver(Arc<Mutex<Vec<&'static str>>>);
-
-    impl Observer<i32, Infallible> for StopObserver {
-        fn on_next(&mut self, _: i32) -> Flow {
-            Flow::Break(())
-        }
-
-        fn on_termination(self, _: Termination<Infallible>) {}
-    }
-
-    impl Drop for StopObserver {
-        fn drop(&mut self) {
-            self.0.with_mut(|log| log.push("observer dropped"));
-        }
-    }
-
     block_on(|_| async move {
         let thread_1 = ThreadCheckerExecutor::new("thread_1");
         let log = Arc::new(Mutex::new(Vec::new()));
@@ -634,9 +619,16 @@ fn test_stop_on_next_releases_observer_last() {
             }
         });
 
+        let probe = DropProbe::logged(&log, "observer dropped");
         let _subscription = observable
             .observe_on(thread_1.scheduler())
-            .subscribe(StopObserver(log.clone()));
+            .subscribe_with_callback(
+                move |_| {
+                    let _ = &probe;
+                    Flow::Break(())
+                },
+                |_| {},
+            );
         assert!(log.clone_value().is_empty());
 
         thread_1.run_until_stalled().await;

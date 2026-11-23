@@ -229,28 +229,6 @@ fn test_unsubscribe() {
 
 #[test]
 fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() {
-    struct RecordSourceStateOnDrop {
-        source_disconnected: Arc<AtomicBool>,
-        disconnected_when_dropped: Arc<AtomicBool>,
-    }
-
-    impl Observer<(), Infallible> for RecordSourceStateOnDrop {
-        fn on_next(&mut self, _: ()) -> Flow {
-            Flow::Continue(())
-        }
-
-        fn on_termination(self, _: Termination<Infallible>) {}
-    }
-
-    impl Drop for RecordSourceStateOnDrop {
-        fn drop(&mut self) {
-            self.disconnected_when_dropped.store(
-                self.source_disconnected.load(Ordering::SeqCst),
-                Ordering::SeqCst,
-            );
-        }
-    }
-
     let source_disconnected = Arc::new(AtomicBool::new(false));
     let disconnected_when_observer_dropped = Arc::new(AtomicBool::new(false));
     let source_disconnected_cloned = source_disconnected.clone();
@@ -261,12 +239,21 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
         }))
     });
     let observable = source.publish().ref_count();
-    let observer = RecordSourceStateOnDrop {
-        source_disconnected: source_disconnected.clone(),
-        disconnected_when_dropped: disconnected_when_observer_dropped.clone(),
-    };
+    let probe = DropProbe::new().on_drop(Box::new({
+        let source_disconnected = source_disconnected.clone();
+        let disconnected_when_observer_dropped = disconnected_when_observer_dropped.clone();
+        move || {
+            disconnected_when_observer_dropped
+                .store(source_disconnected.load(Ordering::SeqCst), Ordering::SeqCst);
+        }
+    }));
 
-    let subscription = observable.subscribe(observer);
+    let subscription = observable.subscribe_with_callback(
+        move |_| {
+            let _ = &probe;
+        },
+        |_| {},
+    );
     assert!(!source_disconnected.load(Ordering::SeqCst));
     assert!(!disconnected_when_observer_dropped.load(Ordering::SeqCst));
 

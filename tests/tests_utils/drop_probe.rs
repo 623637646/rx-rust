@@ -20,6 +20,12 @@ impl DropProbe {
         Self(None)
     }
 
+    /// A probe that pushes `entry` to `log` when it is dropped.
+    pub(crate) fn logged(log: &Arc<Mutex<Vec<&'static str>>>, entry: &'static str) -> Self {
+        let log = log.clone();
+        Self::new().on_drop(Box::new(move || log.with_mut(|log| log.push(entry))))
+    }
+
     /// Runs `callback` when this probe is dropped, after any callback it already runs.
     pub(crate) fn on_drop(mut self, callback: DropCallback) -> Self {
         self.also_on_drop(callback);

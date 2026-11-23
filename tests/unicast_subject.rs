@@ -849,21 +849,15 @@ fn test_drop_replayed_values_after_a_stop_outside_lock() {
 /// Records what is dropped, in order.
 type DropLog = Arc<Mutex<Vec<&'static str>>>;
 
-/// A probe that records `name` in `log` when it is dropped.
-fn logged_probe(log: &DropLog, name: &'static str) -> DropProbe {
-    let log = log.clone();
-    DropProbe::new().on_drop(Box::new(move || log.with_mut(|log| log.push(name))))
-}
-
 #[test]
 fn test_stop_on_next_while_replaying_releases_observer_before_values() {
     let log = DropLog::default();
     let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
     for name in ["1 dropped", "2 dropped", "3 dropped"] {
-        assert!(sender.on_next(logged_probe(&log, name)).is_continue());
+        assert!(sender.on_next(DropProbe::logged(&log, name)).is_continue());
     }
 
-    let probe = logged_probe(&log, "observer dropped");
+    let probe = DropProbe::logged(&log, "observer dropped");
     let _subscription = observable.subscribe_with_callback(
         move |_| {
             let _ = &probe;
@@ -885,10 +879,10 @@ fn test_panicking_replay_releases_observer_before_values() {
     let log = DropLog::default();
     let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
     for name in ["1 dropped", "2 dropped", "3 dropped"] {
-        assert!(sender.on_next(logged_probe(&log, name)).is_continue());
+        assert!(sender.on_next(DropProbe::logged(&log, name)).is_continue());
     }
 
-    let probe = logged_probe(&log, "observer dropped");
+    let probe = DropProbe::logged(&log, "observer dropped");
     let result = catch_unwind(AssertUnwindSafe(|| {
         let _subscription = observable.subscribe_with_callback(
             move |value| -> () {
@@ -912,7 +906,7 @@ fn test_panicking_replay_releases_observer_before_values() {
 fn test_unsubscribe_before_next_releases_observer_before_value() {
     let log = DropLog::default();
     let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
-    let probe = logged_probe(&log, "observer dropped");
+    let probe = DropProbe::logged(&log, "observer dropped");
     let subscription = observable.subscribe_with_callback(
         move |_| {
             let _ = &probe;
@@ -924,7 +918,7 @@ fn test_unsubscribe_before_next_releases_observer_before_value() {
     subscription.dispose();
     assert!(log.clone_value().is_empty());
 
-    let value = logged_probe(&log, "value dropped");
+    let value = DropProbe::logged(&log, "value dropped");
     assert!(sender.on_next(value).is_break());
     assert_eq!(log.clone_value(), ["observer dropped", "value dropped"]);
 }
