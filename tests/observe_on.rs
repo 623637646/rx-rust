@@ -3,7 +3,9 @@ mod tests_utils;
 use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
+use crate::tests_utils::thread_checker_scheduler::{
+    CallThreads, ThreadCheckerExecutor, check_threads, get_thread_name,
+};
 use crate::tests_utils::{
     checker::State,
     test_channel::{ChannelState, test_channel},
@@ -42,45 +44,17 @@ fn test_completed() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -126,45 +100,17 @@ fn test_error() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -209,45 +155,17 @@ fn test_unsubscribe() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -280,49 +198,17 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
-        let call_history_5 = call_history.clone();
-        let call_history_6 = call_history.clone();
-        let call_history_7 = call_history.clone();
-        let call_history_8 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(move || {
-                call_history_5.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(move || {
-                call_history_6.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(move || {
-                call_history_7.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(move || {
-                call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -385,46 +271,17 @@ fn test_subscribe_by_different_observer() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .clone()
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.clone().observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
@@ -495,50 +352,18 @@ fn test_unsub_on_next_by_take() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
-        let call_history_5 = call_history.clone();
-        let call_history_6 = call_history.clone();
-        let call_history_7 = call_history.clone();
-        let call_history_8 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(move || {
-                call_history_5.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(move || {
-                call_history_6.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(move || {
-                call_history_7.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_disposal(move || {
-                call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .take(1);
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: Some("thread_1")
+            }
+        )
+        .take(1);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -806,87 +631,30 @@ fn test_multiple_operation() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history_a = Arc::new(AtomicUsize::new(0));
-        let call_history_a_1 = call_history_a.clone();
-        let call_history_a_2 = call_history_a.clone();
-        let call_history_a_3 = call_history_a.clone();
-        let call_history_a_4 = call_history_a.clone();
-        let call_history_a_5 = call_history_a.clone();
-        let call_history_a_6 = call_history_a.clone();
         let call_history_b = Arc::new(AtomicUsize::new(0));
-        let call_history_b_1 = call_history_b.clone();
-        let call_history_b_2 = call_history_b.clone();
-        let call_history_b_3 = call_history_b.clone();
-        let call_history_b_4 = call_history_b.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history_a.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history_a.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_a_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_a_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_a_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_a_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            // The second `observe_on` disposes its source once it has delivered the completion,
-            // on the thread it delivers on.
-            .do_before_disposal(move || {
-                call_history_a_5.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_2"));
-            })
-            .do_after_disposal(move || {
-                call_history_a_6.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_2"));
-            })
-            .observe_on(thread_2.scheduler())
-            .do_before_subscription(|| {
-                call_history_b.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history_b.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_b_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_2"));
-            })
-            .do_after_next(move |_| {
-                call_history_b_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_2"));
-            })
-            .do_before_termination(move |_| {
-                call_history_b_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_2"));
-            })
-            .do_after_termination(move |_| {
-                call_history_b_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_2"));
-            })
-            .do_before_disposal(|| {
-                call_history_b.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history_b.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history_a,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                // The second `observe_on` disposes its source once it has delivered the completion,
+                // on the thread it delivers on.
+                disposal: Some("thread_2")
+            }
+        );
+        let observable = check_threads!(
+            observable.observe_on(thread_2.scheduler()),
+            call_history_b,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_2"),
+                termination: Some("thread_2"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -940,44 +708,17 @@ fn test_without_convenient_api() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = ObserveOn::new(observable, thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            ObserveOn::new(observable, thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -1023,45 +764,17 @@ fn test_complete_after_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -1092,45 +805,17 @@ fn test_error_after_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -1157,45 +842,17 @@ fn test_unsub_after_next() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -1223,45 +880,17 @@ fn test_unsub_after_completed() {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -1287,45 +916,17 @@ fn test_unsub_after_error() {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -1404,45 +1005,17 @@ fn test_order_with_continuous_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = observable
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            observable.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -1471,45 +1044,17 @@ fn test_next_on_sub() {
         let source = source.start_with([111]);
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = source
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            source.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         thread_1.run_until_stalled().await;
@@ -1536,45 +1081,17 @@ fn test_complete_on_sub() {
         let thread_1 = ThreadCheckerExecutor::new("thread_1");
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = Empty
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            Empty.observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         thread_1.run_until_stalled().await;
@@ -1595,45 +1112,17 @@ fn test_error_on_sub() {
         let thread_1 = ThreadCheckerExecutor::new("thread_1");
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
-        let call_history_1 = call_history.clone();
-        let call_history_2 = call_history.clone();
-        let call_history_3 = call_history.clone();
-        let call_history_4 = call_history.clone();
 
-        let observable = Throw::new("error")
-            .observe_on(thread_1.scheduler())
-            .do_before_subscription(|| {
-                call_history.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_subscription(|| {
-                call_history.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_before_next(move |_| {
-                call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_1"));
-            })
-            .do_before_disposal(|| {
-                call_history.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(|| {
-                call_history.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            });
+        let observable = check_threads!(
+            Throw::new("error").observe_on(thread_1.scheduler()),
+            call_history,
+            CallThreads {
+                subscription: None,
+                next: Some("thread_1"),
+                termination: Some("thread_1"),
+                disposal: None
+            }
+        );
 
         let subscription = observable.subscribe(observer);
         thread_1.run_until_stalled().await;
@@ -1813,95 +1302,33 @@ fn test_observe_on_with_subscribe_on() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history_a = Arc::new(AtomicUsize::new(0));
-        let call_history_a_1 = call_history_a.clone();
-        let call_history_a_2 = call_history_a.clone();
-        let call_history_a_3 = call_history_a.clone();
-        let call_history_a_4 = call_history_a.clone();
-        let call_history_a_5 = call_history_a.clone();
-        let call_history_a_6 = call_history_a.clone();
-        let call_history_a_7 = call_history_a.clone();
-        let call_history_a_8 = call_history_a.clone();
         let call_history_b = Arc::new(AtomicUsize::new(0));
-        let call_history_b_1 = call_history_b.clone();
-        let call_history_b_2 = call_history_b.clone();
-        let call_history_b_3 = call_history_b.clone();
-        let call_history_b_4 = call_history_b.clone();
-        let call_history_b_5 = call_history_b.clone();
-        let call_history_b_6 = call_history_b.clone();
-        let call_history_b_7 = call_history_b.clone();
-        let call_history_b_8 = call_history_b.clone();
 
-        let observable = observable
-            .observe_on(thread_o_1.scheduler())
-            .do_before_subscription(move || {
-                call_history_a_1.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_s_1"));
-            })
-            .do_after_subscription(move || {
-                call_history_a_2.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_s_1"));
-            })
-            .do_before_next(move |_| {
-                call_history_a_3.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_1"));
-            })
-            .do_after_next(move |_| {
-                call_history_a_4.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_1"));
-            })
-            .do_before_termination(move |_| {
-                call_history_a_5.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_1"));
-            })
-            .do_after_termination(move |_| {
-                call_history_a_6.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_1"));
-            })
-            // The second `observe_on` disposes its source once it has delivered the completion,
-            // on the thread it delivers on.
-            .do_before_disposal(move || {
-                call_history_a_7.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_2"));
-            })
-            .do_after_disposal(move || {
-                call_history_a_8.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_2"));
-            })
-            .observe_on(thread_o_2.scheduler())
-            .subscribe_on(thread_s_1.scheduler())
-            .do_before_subscription(move || {
-                call_history_b_1.fetch_or(1 << 0, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_s_2"));
-            })
-            .do_after_subscription(move || {
-                call_history_b_2.fetch_or(1 << 1, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_s_2"));
-            })
-            .do_before_next(move |_| {
-                call_history_b_3.fetch_or(1 << 2, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_2"));
-            })
-            .do_after_next(move |_| {
-                call_history_b_4.fetch_or(1 << 3, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_2"));
-            })
-            .do_before_termination(move |_| {
-                call_history_b_5.fetch_or(1 << 4, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_2"));
-            })
-            .do_after_termination(move |_| {
-                call_history_b_6.fetch_or(1 << 5, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), Some("thread_o_2"));
-            })
-            .do_before_disposal(move || {
-                call_history_b_7.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .do_after_disposal(move || {
-                call_history_b_8.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
-            })
-            .subscribe_on(thread_s_2.scheduler());
+        let observable = check_threads!(
+            observable.observe_on(thread_o_1.scheduler()),
+            call_history_a,
+            CallThreads {
+                subscription: Some("thread_s_1"),
+                next: Some("thread_o_1"),
+                termination: Some("thread_o_1"),
+                // The second `observe_on` disposes its source once it has delivered the completion,
+                // on the thread it delivers on.
+                disposal: Some("thread_o_2")
+            }
+        );
+        let observable = check_threads!(
+            observable
+                .observe_on(thread_o_2.scheduler())
+                .subscribe_on(thread_s_1.scheduler()),
+            call_history_b,
+            CallThreads {
+                subscription: Some("thread_s_2"),
+                next: Some("thread_o_2"),
+                termination: Some("thread_o_2"),
+                disposal: None
+            }
+        )
+        .subscribe_on(thread_s_2.scheduler());
 
         let subscription = observable.subscribe(observer);
         // The outer `subscribe_on` subscribes the inner one, which then subscribes the source.

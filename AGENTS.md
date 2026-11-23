@@ -524,6 +524,7 @@ keeps asking to sleep until an instant that has passed makes `advance_by` panic 
 A test that checks which thread a callback runs on owns a `ThreadCheckerExecutor`
 (`tests/tests_utils/thread_checker_scheduler.rs`) and gives the operator its
 `thread_1.scheduler()`, a `ThreadCheckerScheduler` that does not keep the executor alive.
+`check_threads!` hooks every event of a chain to the thread it is expected on.
 `run_task` only queues a task; the test calls `thread_1.run_until_stalled().await` on the executor
 to run the queued work on that named thread and wait for it — never a `sleep`. Dropping the
 executor stops its thread, which drops its tasks there, even if scheduler clones or task disposals

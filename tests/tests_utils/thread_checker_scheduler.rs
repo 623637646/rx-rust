@@ -11,6 +11,8 @@ use rx_rust::scheduler::{Scheduler, SchedulerTypes, SystemClock, Task, drive};
 use rx_rust::thread_mode::Shared;
 use std::cell::Cell;
 use std::panic::{self, AssertUnwindSafe};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -26,6 +28,58 @@ thread_local! {
 pub(crate) fn get_thread_name() -> Option<&'static str> {
     THREAD_NAME.get()
 }
+
+/// The thread, as [`get_thread_name`] names it, each event of a chain is expected on.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CallThreads {
+    pub(crate) subscription: Option<&'static str>,
+    pub(crate) next: Option<&'static str>,
+    pub(crate) termination: Option<&'static str>,
+    pub(crate) disposal: Option<&'static str>,
+}
+
+/// Returns a callback that sets `bit` in `call_history` and checks the thread it runs on.
+pub(crate) fn check_thread(
+    call_history: &Arc<AtomicUsize>,
+    bit: u32,
+    expected: Option<&'static str>,
+) -> impl Fn() + Send + Sync + Clone + 'static {
+    let call_history = call_history.clone();
+    move || {
+        call_history.fetch_or(1 << bit, Ordering::SeqCst);
+        assert_eq!(get_thread_name(), expected);
+    }
+}
+
+/// Wraps an observable in every `do_before_*` / `do_after_*` operator, each checking that it runs
+/// on the thread the [`CallThreads`] expects and setting its own bit in the call history, an
+/// `Arc<AtomicUsize>`: from bit 0, before and after the subscription, `next`, the termination and
+/// the disposal.
+///
+/// A macro, since the type of the chain it builds has no name a function could return.
+#[allow(unused_macros)]
+macro_rules! check_threads {
+    ($observable:expr, $call_history:expr, $threads:expr $(,)?) => {{
+        use $crate::tests_utils::thread_checker_scheduler::check_thread;
+        let call_history = &$call_history;
+        let threads = $threads;
+        let before_next = check_thread(call_history, 2, threads.next);
+        let after_next = check_thread(call_history, 3, threads.next);
+        let before_termination = check_thread(call_history, 4, threads.termination);
+        let after_termination = check_thread(call_history, 5, threads.termination);
+        $observable
+            .do_before_subscription(check_thread(call_history, 0, threads.subscription))
+            .do_after_subscription(check_thread(call_history, 1, threads.subscription))
+            .do_before_next(move |_| before_next())
+            .do_after_next(move |_| after_next())
+            .do_before_termination(move |_| before_termination())
+            .do_after_termination(move |_| after_termination())
+            .do_before_disposal(check_thread(call_history, 6, threads.disposal))
+            .do_after_disposal(check_thread(call_history, 7, threads.disposal))
+    }};
+}
+#[allow(unused_imports)]
+pub(crate) use check_threads;
 
 /// What the owner asks its thread to do. Futures to spawn travel on a channel of their own,
 /// which the pool itself drains, so that a run also reaches the tasks a running task spawns.
