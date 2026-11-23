@@ -175,9 +175,7 @@ where
                         .with_next_and_termination_events(false, Termination::Completed),
                     (None, false) => {
                         mine.queue.push_back(value);
-                        UpdateOutcome::empty()
-                            .without_drop_outside()
-                            .without_events()
+                        UpdateOutcome::without_effects()
                     }
                     (Some(next), _) => {
                         // `PartialEq::eq` is user code and runs under the lock, because the pair to

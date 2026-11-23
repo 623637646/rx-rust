@@ -374,9 +374,7 @@ fn close_window<M, L, R, E, OR, DLD, DRD, SD, D>(
             .and_then(|windows| windows.release(id));
         if released.is_none() {
             // Closed already, by the completion of the other source.
-            return UpdateOutcome::empty()
-                .without_drop_outside()
-                .without_events();
+            return UpdateOutcome::without_effects();
         }
         UpdateOutcome::empty()
             .with_drop_outside(released)

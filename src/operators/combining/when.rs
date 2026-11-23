@@ -429,9 +429,7 @@ where
                 let Some(matched) = P::take(&mut model.inputs) else {
                     // Nothing taken, so no plan retires: a plan retires on a source completed with
                     // an empty queue, and queueing an item empties no queue.
-                    return UpdateOutcome::empty()
-                        .without_events()
-                        .without_drop_outside();
+                    return UpdateOutcome::without_effects();
                 };
                 let (released, finished) = model.settle::<P>();
                 let outcome = UpdateOutcome::empty();

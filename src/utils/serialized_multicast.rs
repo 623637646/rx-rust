@@ -158,41 +158,42 @@ where
 
     /// Updates the host's state and queues the events that update produced, under one lock.
     ///
-    /// `update` sees the termination, so it can decide whether it may emit at all, and describes
-    /// its outcome with an [`UpdateOutcome`] over the *host's* events: a
+    /// `update` describes its outcome with an [`UpdateOutcome`] over the *host's* events: a
     /// [`Termination`](EventBatch::Termination) in that batch is what terminates the multicast,
-    /// recorded here as the action carrying it is queued. A host that emits after the termination
-    /// was queued is a bug — check the termination first, and hand the rejected event to
-    /// [`UpdateOutcome::with_drop_outside`].
+    /// recorded here as the action carrying it is queued.
     ///
     /// `update` must not notify anyone and must not drop a value that can re-enter this multicast:
-    /// it runs under the lock. Answers [`Updated::Ended`], without running `update`, once the
-    /// delivery has stopped.
+    /// it runs under the lock. Once the multicast has terminated, or the delivery has stopped, it
+    /// does not run, and is dropped outside the lock, the event it captures included.
     ///
-    /// The flow is [`Flow::Break`] only once the multicast has terminated — including by this very
+    /// Answers [`Flow::Break`] only once the multicast has terminated — including by this very
     /// update — or when the host's outcome
     /// [answers a stop](UpdateOutcome::answering_stop): a multicast with no subscriber left is
     /// still open, and a subscriber that stops takes only itself away.
-    pub(crate) fn update<Out, DO, const EVENTS_DECIDED: bool>(
+    pub(crate) fn update<DO: Default, const EVENTS_DECIDED: bool>(
         &self,
-        update: impl FnOnce(
-            &mut R,
-            Option<&Termination<E>>,
-        ) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
-    ) -> Updated<Out> {
-        self.0.update(|resources| {
-            // The host's decision is turned into actions under the same lock that recorded the
-            // termination, so nothing can be queued between the two.
-            let outcome = update(&mut resources.host, resources.termination.as_ref())
-                .map_events(|events| into_actions(events, &mut resources.termination));
-            // The delivery underneath never terminates, so its own flow does not say whether the
-            // multicast has: the termination recorded here does.
-            if resources.termination.is_some() {
-                outcome.answering_stop()
-            } else {
-                outcome
-            }
-        })
+        update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, (), DO, EVENTS_DECIDED>,
+    ) -> Flow {
+        // Out here, so that it is dropped outside the lock when it does not run.
+        let mut update = Some(update);
+        self.0
+            .update(|resources| {
+                let Some(update) = update.take_if(|_| resources.termination.is_none()) else {
+                    return UpdateOutcome::without_effects().answering_stop();
+                };
+                // The host's decision is turned into actions under the same lock that checked the
+                // termination, so nothing can be queued between the two.
+                let outcome = update(&mut resources.host)
+                    .map_events(|events| into_actions(events, &mut resources.termination));
+                // The delivery underneath never terminates, so its own flow does not say whether
+                // the multicast has: the termination recorded here does.
+                if resources.termination.is_some() {
+                    outcome.answering_stop()
+                } else {
+                    outcome
+                }
+            })
+            .flow()
     }
 
     /// Queues `events` for every observer, dropping them outside the lock once terminated.
@@ -200,17 +201,7 @@ where
     /// Returns whether the multicast still accepts events, as [`Self::update`] answers it. This is
     /// [`Self::update`] for a host that reads nothing and decides nothing.
     pub(crate) fn send(&self, events: EventBatch<T, E>) -> Flow {
-        self.update(|_, terminated| {
-            if terminated.is_some() {
-                return UpdateOutcome::empty()
-                    .with_drop_outside(events)
-                    .without_events();
-            }
-            UpdateOutcome::empty()
-                .without_drop_outside()
-                .with_events(events)
-        })
-        .flow()
+        self.update(|_| UpdateOutcome::empty().with_events(events))
     }
 
     /// Subscribes `observer`, replaying nothing and terminating it at once when already terminated.
@@ -486,12 +477,15 @@ where
 mod tests {
     use super::SerializedMulticast;
     use crate::{
-        disposable::Disposable,
+        disposable::{
+            Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop,
+        },
         observer::{EventBatch, Flow, Termination, callback_observer::CallbackObserver},
         thread_mode::{
             Local,
             mutable::{MutableExt, MutableHelper},
         },
+        utils::serialized_delivery::UpdateOutcome,
     };
     use std::sync::{Arc, Mutex};
 
@@ -524,6 +518,27 @@ mod tests {
             seen.clone_value(),
             [("first", 1), ("second", 1), ("second", 2)]
         );
+    }
+
+    /// An update that arrives after the termination does not run, and is dropped outside the lock.
+    #[test]
+    fn test_update_after_termination() {
+        let multicast = SerializedMulticast::<i32, (), Local, _>::idle(());
+        let _ = multicast.send(EventBatch::Termination(Termination::Completed));
+
+        // Takes the lock as it is dropped.
+        let seen = Arc::new(Mutex::new(None));
+        let (multicast_of_drop, seen_by_drop) = (multicast.clone(), seen.clone());
+        let captured = DisposeOnDrop::new(CallbackDisposal::new(move || {
+            seen_by_drop.replace_value(multicast_of_drop.termination());
+        }));
+
+        let flow = multicast.update(move |()| {
+            drop(captured); // Never runs: it is what makes the update own the value.
+            UpdateOutcome::empty().with_next_event(1)
+        });
+        assert_eq!(flow, Flow::Break(()));
+        assert_eq!(seen.clone_value(), Some(Termination::Completed));
     }
 
     /// An observer that subscribes after the termination is terminated at once, and its disposal

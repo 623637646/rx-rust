@@ -135,32 +135,18 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.0
-            .update(|last, terminated| {
-                if terminated.is_some() {
-                    // Replacing the value now would change what the later subscribers observe,
-                    // after the completion already replayed the previous one.
-                    return UpdateOutcome::empty()
-                        .with_drop_outside(Some(value))
-                        .without_events();
-                }
-                // The replaced value is dropped outside the lock: dropping it can run arbitrary
-                // code.
-                let previous = last.replace(value);
-                UpdateOutcome::empty()
-                    .with_drop_outside(previous)
-                    .without_events()
-            })
-            .flow()
+        self.0.update(|last| {
+            // The replaced value is dropped outside the lock: dropping it can run arbitrary
+            // code.
+            let previous = last.replace(value);
+            UpdateOutcome::empty()
+                .with_drop_outside(previous)
+                .without_events()
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.update(|last, terminated| {
-            if terminated.is_some() {
-                return UpdateOutcome::empty()
-                    .with_drop_outside(Some(termination))
-                    .without_events();
-            }
+        let _ = self.0.update(|last| {
             // The last value and the completion are queued together, and the subject is terminated
             // by that very step: nothing can slip between them.
             let events = if matches!(termination, Termination::Completed) {
@@ -172,9 +158,7 @@ where
                 // An error replays nothing, so the last value is not even cloned.
                 EventBatch::Termination(termination)
             };
-            UpdateOutcome::empty()
-                .without_drop_outside()
-                .with_events(events)
+            UpdateOutcome::empty().with_events(events)
         });
     }
 }

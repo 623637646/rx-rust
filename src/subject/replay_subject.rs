@@ -157,22 +157,15 @@ where
         // The copy kept in the buffer is made before the lock is taken, which keeps the lock
         // short: every path but the terminated one needs it.
         let kept = value.clone();
-        self.0
-            .update(|buffer, terminated| {
-                if terminated.is_some() {
-                    return UpdateOutcome::empty()
-                        .with_drop_outside((Some(value), Some(kept)))
-                        .without_events();
-                }
-                // Buffering the value and forwarding it are one step, so the buffer a subscriber
-                // is replayed always matches the values it then receives. The evicted value is
-                // dropped outside the lock: dropping it can run arbitrary code.
-                let evicted = buffer.push(kept);
-                UpdateOutcome::empty()
-                    .with_drop_outside((None, evicted))
-                    .with_next_event(value)
-            })
-            .flow()
+        self.0.update(|buffer| {
+            // Buffering the value and forwarding it are one step, so the buffer a subscriber
+            // is replayed always matches the values it then receives. The evicted value is
+            // dropped outside the lock: dropping it can run arbitrary code.
+            let evicted = buffer.push(kept);
+            UpdateOutcome::empty()
+                .with_drop_outside(evicted)
+                .with_next_event(value)
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

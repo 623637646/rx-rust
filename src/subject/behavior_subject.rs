@@ -153,22 +153,15 @@ where
         // The copy kept as the current value is made before the lock is taken, which keeps the
         // lock short: every path but the terminated one needs it.
         let kept = value.clone();
-        self.0
-            .update(|current, terminated| {
-                if terminated.is_some() {
-                    return UpdateOutcome::empty()
-                        .with_drop_outside((Some(value), kept))
-                        .without_events();
-                }
-                // Replacing the current value and forwarding it are one step, so the value a
-                // subscriber is given always matches the values it then receives. The replaced
-                // value is dropped outside the lock: dropping it can run arbitrary code.
-                let previous = std::mem::replace(current, kept);
-                UpdateOutcome::empty()
-                    .with_drop_outside((None, previous))
-                    .with_next_event(value)
-            })
-            .flow()
+        self.0.update(|current| {
+            // Replacing the current value and forwarding it are one step, so the value a
+            // subscriber is given always matches the values it then receives. The replaced
+            // value is dropped outside the lock: dropping it can run arbitrary code.
+            let previous = std::mem::replace(current, kept);
+            UpdateOutcome::empty()
+                .with_drop_outside(previous)
+                .with_next_event(value)
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

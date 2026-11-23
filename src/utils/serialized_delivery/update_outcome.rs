@@ -71,12 +71,12 @@ impl<R> Updated<R> {
 }
 
 /// The marker of an [`UpdateOutcome`] that has not decided what to drop outside the lock yet.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DropUndecided;
 
 /// The marker of an [`UpdateOutcome`] that has decided, carrying the value to drop, if any.
 #[derive(Educe)]
-#[educe(Debug)]
+#[educe(Debug, Default(bound()))]
 pub struct DropDecided<T>(Option<T>);
 
 /// What an update performed under the lock produced: the events to queue, a value to drop outside
@@ -158,6 +158,19 @@ impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_
         Self {
             flow: Flow::Break(()),
             ..self
+        }
+    }
+}
+
+impl<T, E, DO: Default, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, (), DO, EVENTS_DECIDED> {
+    /// An outcome that queues nothing and drops nothing, in whatever type state the other arms of
+    /// the update leave theirs.
+    pub(crate) fn without_effects() -> Self {
+        Self {
+            events: None,
+            drop_outside: DO::default(),
+            flow: Flow::Continue(()),
+            result: (),
         }
     }
 }
