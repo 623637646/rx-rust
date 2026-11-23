@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::scheduler_ext::SchedulerExt;
@@ -25,7 +26,6 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -792,7 +792,6 @@ fn test_drop_queued_value_outside_lock() {
 #[test]
 fn test_race_condition() {
     const VALUES: usize = 100;
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let scheduler = ThreadPoolScheduler::from_pool(ThreadPool::new().unwrap());
 
     for _ in 0..100 {
@@ -835,7 +834,6 @@ fn test_race_condition() {
 fn test_race_condition_stop_on_next() {
     const VALUES: usize = 100;
     const TAKEN: usize = 3;
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let scheduler = ThreadPoolScheduler::from_pool(ThreadPool::new().unwrap());
 
     for _ in 0..100 {

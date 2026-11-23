@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::test_scheduler::block_on;
@@ -14,7 +15,6 @@ use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::thread_mode::mutable::MutableHelper;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 use tests_utils::checker::{Checker, CheckerObserver};
 use tests_utils::scheduler_ext::SchedulerExt;
 use tests_utils::test_struct::TestStruct;
@@ -430,7 +430,6 @@ fn test_async() {
 /// completion or the observer's stop, including the transition to direct delivery by the sender.
 fn race_subscription_with_next(stop_after: Option<usize>) {
     const VALUES: usize = 100;
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let scheduler = ThreadPoolScheduler::from_pool(ThreadPool::new().unwrap());
 
     for _ in 0..500 {

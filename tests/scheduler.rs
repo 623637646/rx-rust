@@ -4,6 +4,7 @@ use crate::main_loop::MainLoop;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::scheduler_ext::SchedulerExt;
 use crate::tests_utils::test_scheduler::block_on;
@@ -1333,10 +1334,6 @@ mod main_loop {
     }
 }
 
-/// How long a `MainLoop` test waits for an event: far beyond what it takes, it only turns a hang
-/// into a failure.
-const MAIN_LOOP_TIMEOUT: Duration = Duration::from_secs(5);
-
 #[test]
 fn test_main_loop_delivers_on_its_thread() {
     let (main_loop, scheduler) = MainLoop::start();
@@ -1369,7 +1366,7 @@ fn test_main_loop_delivers_on_its_thread() {
     .join()
     .unwrap();
 
-    let termination = termination_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap();
+    let termination = termination_rx.recv_timeout(TIMEOUT).unwrap();
     assert_eq!(termination, (Termination::Completed, main_thread));
     assert_eq!(
         values.clone_value(),
@@ -1399,14 +1396,11 @@ fn test_main_loop_runs_a_delayed_task() {
         );
 
     assert_eq!(
-        event_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap(),
+        event_rx.recv_timeout(TIMEOUT).unwrap(),
         (Some(1), main_thread)
     );
     assert!(start_time.elapsed() >= DURATION_30_MS);
-    assert_eq!(
-        event_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap(),
-        (None, main_thread)
-    );
+    assert_eq!(event_rx.recv_timeout(TIMEOUT).unwrap(), (None, main_thread));
     drop(subscription);
     main_loop.quit();
 }
@@ -1430,10 +1424,7 @@ fn test_main_loop_steps_a_task_woken_from_another_thread() {
     .join()
     .unwrap();
 
-    assert_eq!(
-        done_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap(),
-        main_thread
-    );
+    assert_eq!(done_rx.recv_timeout(TIMEOUT).unwrap(), main_thread);
     drop(subscription);
     main_loop.quit();
 }

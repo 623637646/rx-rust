@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_scheduler::block_on;
@@ -25,8 +26,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 use tests_utils::{checker::Checker, test_channel::test_channel};
-
-const RACE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The `StreamAck`s a test holds, to acknowledge the items when it chooses.
 type Acks = Arc<Mutex<Vec<StreamAck<Shared>>>>;
@@ -561,7 +560,7 @@ fn test_race_condition() {
 
         let subscription = observable.subscribe(observer);
         termination
-            .recv_timeout(RACE_TIMEOUT)
+            .recv_timeout(TIMEOUT)
             .expect("the stream completes");
         assert_eq!(checker.values(), (0..VALUES).collect::<Vec<_>>());
         assert_eq!(checker.state(), State::Completed);

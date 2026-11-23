@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
 use crate::tests_utils::{
@@ -32,10 +33,6 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
-
-/// How long a race condition test waits for the pool to finish a round: far beyond what a round
-/// takes, it only turns a hang into a failure.
-const RACE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[test]
 fn test_completed() {
@@ -1763,7 +1760,7 @@ fn test_race_condition_between_next_and_delivery() {
         sender.on_termination(Termination::Completed);
 
         termination
-            .recv_timeout(RACE_TIMEOUT)
+            .recv_timeout(TIMEOUT)
             .expect("the completion is delivered");
         assert_eq!(checker.values(), (0..VALUES).collect::<Vec<_>>());
         assert_eq!(checker.state(), State::Completed);
@@ -1805,11 +1802,9 @@ fn test_race_condition_unsub_on_next_by_take() {
         // `sender` stays alive until the end: a source that drops its observer abandons the
         // subscription, and the values still queued with it.
 
-        termination
-            .recv_timeout(RACE_TIMEOUT)
-            .expect("take completes");
+        termination.recv_timeout(TIMEOUT).expect("take completes");
         disposal
-            .recv_timeout(RACE_TIMEOUT)
+            .recv_timeout(TIMEOUT)
             .expect("take disposes the source");
         assert_eq!(checker.values(), (0..TAKEN).collect::<Vec<_>>());
         assert_eq!(checker.state(), State::Completed);

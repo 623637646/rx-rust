@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::ReceiverObservable;
@@ -25,7 +26,6 @@ use rx_rust::{
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use std::time::Duration;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -1584,7 +1584,6 @@ fn test_abandon_after_next() {
 /// A queued error prevents admission of new inner observables before it reaches downstream.
 #[test]
 fn test_next_after_error_is_queued() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut sender, observable, _) = test_channel();
     let (mut sender_1, observable_1, _) = test_channel();
     let (sender_2, observable_2, channel_checker_2) = test_channel();
@@ -1626,6 +1625,7 @@ fn test_next_after_error_is_queued() {
 /// The same operator with a `max_concurrency`.
 mod max_concurrency {
     use crate::tests_utils::DURATION_10_MS;
+    use crate::tests_utils::TIMEOUT;
     use crate::tests_utils::checker::State;
     use crate::tests_utils::test_channel::ChannelState;
     use crate::tests_utils::test_channel::ReceiverObservable;
@@ -1655,7 +1655,7 @@ mod max_concurrency {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex, mpsc};
     use std::thread;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     const ONE: NonZeroUsize = NonZeroUsize::new(1).unwrap();
     const TWO: NonZeroUsize = NonZeroUsize::new(2).unwrap();
@@ -2182,7 +2182,6 @@ mod max_concurrency {
     /// A completion after a queued error leaves the stored subscription with the context.
     #[test]
     fn test_complete_after_error_is_queued() {
-        const TIMEOUT: Duration = Duration::from_secs(5);
         let (mut sender, source, _) = test_channel();
         let (mut delivering_sender, delivering_inner, _) = test_channel();
         let (error_sender, error_inner, _) = test_channel();
@@ -2236,7 +2235,6 @@ mod max_concurrency {
     /// A synchronous queue drain also stops if an inner subscription queues an error.
     #[test]
     fn test_error_on_queued_inner_sub() {
-        const TIMEOUT: Duration = Duration::from_secs(5);
         let (sender, source) = test_channels();
         let (mut delivering_sender, delivering_inner, _) = test_channel();
         let (completing_sender, completing_inner, _) = test_channel();
@@ -2418,7 +2416,6 @@ mod max_concurrency {
         const ROUNDS: usize = 20;
         const INNERS: usize = 40;
         const THREADS: usize = 4;
-        const TIMEOUT: Duration = Duration::from_secs(5);
 
         for _ in 0..ROUNDS {
             let (inner_channels, inner) = test_channels::<'_, usize, Infallible>();

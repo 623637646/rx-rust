@@ -1489,6 +1489,7 @@ fn test_stop_during_iterator_next_skips_subscription() {
 }
 
 mod max_concurrency {
+    use crate::tests_utils::TIMEOUT;
     use crate::tests_utils::checker::{Checker, State};
     use crate::tests_utils::test_channel::{ChannelState, test_channel, test_channels};
     use crate::tests_utils::test_scheduler::block_on;
@@ -1512,7 +1513,7 @@ mod max_concurrency {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex, mpsc};
     use std::thread;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     const ONE: NonZeroUsize = NonZeroUsize::new(1).unwrap();
     const TWO: NonZeroUsize = NonZeroUsize::new(2).unwrap();
@@ -1979,7 +1980,6 @@ mod max_concurrency {
         const ROUNDS: usize = 20;
         const SOURCES: usize = 40;
         const THREADS: usize = 4;
-        const TIMEOUT: Duration = Duration::from_secs(5);
 
         for _ in 0..ROUNDS {
             let (channels, source) = test_channels::<'_, usize, Infallible>();

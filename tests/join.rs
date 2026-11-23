@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_1_MS;
 use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channels;
@@ -648,7 +649,6 @@ fn test_unsub_in_result_selector_from_right() {
 /// the disposal has not returned yet.
 #[test]
 fn test_unsub_from_other_thread_on_next() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut left, left_observable, _) = test_channel::<'_, _, Infallible>();
     let (mut right, right_observable, _) = test_channel();
     let (checker, observer) = Checker::new();
@@ -705,7 +705,6 @@ fn test_unsub_from_other_thread_on_next() {
 /// duration says the stream is over.
 #[test]
 fn test_duration_errors_on_sub_while_delivering() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut left, left_observable, _) = test_channel();
     let (mut right, right_observable, _) = test_channel();
     let (checker, observer) = Checker::new();

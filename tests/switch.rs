@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::ReceiverObservable;
@@ -25,7 +26,6 @@ use rx_rust::{
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use std::time::Duration;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -1854,7 +1854,6 @@ fn test_abandon_after_next() {
 /// downstream.
 #[test]
 fn test_next_after_error_is_queued() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut sender, observable, _) = test_channel();
     let (mut sender_1, observable_1, _) = test_channel();
     let (sender_2, observable_2, channel_checker_2) = test_channel();

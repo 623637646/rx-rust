@@ -23,6 +23,9 @@ pub(crate) const DURATION_100_MS: Duration = Duration::from_millis(100);
 /// A year: longer than any deadline a test means to reach, and still within the virtual clock.
 pub(crate) const DURATION_1_YEAR: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 
+/// How long a test waits for another thread, through a channel, before it fails.
+pub(crate) const TIMEOUT: Duration = Duration::from_secs(5);
+
 /// The longest duration that can be added to `from`: one nanosecond more is too far for an
 /// [`Instant`] to represent. A deadline that long sits at the very end of the clock, so that the
 /// same duration counted from any later time is out of range.

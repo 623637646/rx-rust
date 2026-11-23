@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_1_MS;
 use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::clone_probe::CloneProbe;
 use crate::tests_utils::test_channel::ChannelState;
@@ -831,7 +832,6 @@ fn test_stop_on_next_of_window_drops_it() {
 /// and is still disposing the durations: the second window does not get it.
 #[test]
 fn test_unsub_from_other_thread_on_next() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut left, left_observable, _) = test_channel::<'_, _, Infallible>();
     let (mut right, right_observable, _) = test_channel();
     let (dispose_sender, dispose) = mpsc::channel::<()>();
@@ -900,7 +900,6 @@ fn test_unsub_from_other_thread_on_next() {
 /// of two windows: neither window, nor the stream, gets it.
 #[test]
 fn test_unsub_from_other_thread_on_clone_of_error() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut left, left_observable, _) = test_channel();
     // A test channel clones the error it records, so the error goes through a plain observer.
     let right_observer = Arc::new(Mutex::new(None));
@@ -945,7 +944,6 @@ fn test_unsub_from_other_thread_on_clone_of_error() {
 /// duration says the stream is over.
 #[test]
 fn test_duration_errors_on_sub_while_delivering() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let (mut left, left_observable, _) = test_channel::<'_, i32, _>();
     let (mut right, right_observable, _) = test_channel();
     let windows = Windows::new();

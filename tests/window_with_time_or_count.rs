@@ -5,6 +5,7 @@ use crate::tests_utils::DURATION_1_YEAR;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
+use crate::tests_utils::TIMEOUT;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
@@ -1477,7 +1478,6 @@ fn test_reentrant_value_from_window_completion() {
 
 #[test]
 fn test_full_window_while_timed_rotation_is_delivering() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     for dispose_while_queued in [false, true] {
         let time = Arc::new(VirtualTime::new());
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
@@ -1555,7 +1555,6 @@ fn test_full_window_while_timed_rotation_is_delivering() {
 
 #[test]
 fn test_timed_rotation_while_full_window_is_delivering() {
-    const TIMEOUT: Duration = Duration::from_secs(5);
     let time = VirtualTime::new();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = WindowChecker::new();
