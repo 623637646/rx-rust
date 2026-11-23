@@ -3,10 +3,11 @@
 //!
 //! An observer that subscribes again with itself — or with another instance of its own type, as
 //! the inner observer of [`ConcatAll`](crate::operators::combining::concat_all::ConcatAll) and of
-//! the other flattening operators does for the next inner observable — needs `OE: Observable<OR>` to make that call. It cannot ask for
-//! it on its own `Observer` implementation: proving that implementation would then depend on
-//! itself, since the observable's `Observable<OR>` implementation in turn requires `OR: Observer`,
-//! and rustc rejects the cycle as an overflow (`E0275`).
+//! the other flattening operators does for the next inner observable — needs `OE: Observable<OR>`
+//! to make that call. It cannot ask for it on its own `Observer` implementation: proving that
+//! implementation would then depend on itself, since the observable's `Observable<OR>`
+//! implementation in turn requires `OR: Observer`, and rustc rejects the cycle as an overflow
+//! (`E0275`).
 //!
 //! The bound does hold where the operator itself is subscribed, because the operator's
 //! `Observable<OR>` implementation states it. [`SubscribeFn::new`] is called there: the
