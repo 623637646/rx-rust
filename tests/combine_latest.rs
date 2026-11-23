@@ -1511,13 +1511,11 @@ fn test_type_inference_without_subscribe() {
 fn test_observable_types_without_clone() {
     use rx_rust::observable::ObservableTypes;
 
-    struct NotClone;
+    fn inspect_tuple<OE: ObservableTypes<Item = (TestStruct, bool)>>(_: OE) {}
+    fn inspect_list<OE: ObservableTypes<Item = Vec<TestStruct>>>(_: OE) {}
 
-    fn inspect_tuple<OE: ObservableTypes<Item = (NotClone, bool)>>(_: OE) {}
-    fn inspect_list<OE: ObservableTypes<Item = Vec<NotClone>>>(_: OE) {}
-
-    inspect_tuple(CombineLatest::new((Just::new(NotClone), Just::new(true))));
-    inspect_list(CombineLatest::new_from_iter([Just::new(NotClone)]));
+    inspect_tuple(CombineLatest::new((Just::new(TestStruct), Just::new(true))));
+    inspect_list(CombineLatest::new_from_iter([Just::new(TestStruct)]));
 }
 
 /// A source that drops its observer without a termination (decision 0004) sends nothing more, but

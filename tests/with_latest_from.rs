@@ -674,15 +674,13 @@ fn test_type_inference_without_subscribe() {
 fn test_observable_types_without_clone() {
     use rx_rust::observable::ObservableTypes;
 
-    struct NotClone;
+    fn inspect_tuple<OE: ObservableTypes<Item = (u8, TestStruct)>>(_: OE) {}
+    fn inspect_list<OE: ObservableTypes<Item = (u8, Vec<TestStruct>)>>(_: OE) {}
 
-    fn inspect_tuple<OE: ObservableTypes<Item = (u8, NotClone)>>(_: OE) {}
-    fn inspect_list<OE: ObservableTypes<Item = (u8, Vec<NotClone>)>>(_: OE) {}
-
-    inspect_tuple(WithLatestFrom::new(Just::new(1), (Just::new(NotClone),)));
+    inspect_tuple(WithLatestFrom::new(Just::new(1), (Just::new(TestStruct),)));
     inspect_list(WithLatestFrom::new_from_iter(
         Just::new(1),
-        [Just::new(NotClone)],
+        [Just::new(TestStruct)],
     ));
 }
 
