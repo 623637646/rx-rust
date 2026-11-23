@@ -13,7 +13,11 @@ pub(crate) mod test_struct;
 pub(crate) mod thread_checker_scheduler;
 pub(crate) mod window_checker;
 
-use std::time::{Duration, Instant};
+use std::{
+    fmt::Debug,
+    ops::Sub,
+    time::{Duration, Instant},
+};
 
 pub(crate) const DURATION_1_MS: Duration = Duration::from_millis(1);
 pub(crate) const DURATION_3_MS: Duration = Duration::from_millis(3);
@@ -25,6 +29,24 @@ pub(crate) const DURATION_1_YEAR: Duration = Duration::from_secs(365 * 24 * 60 *
 
 /// How long a test waits for another thread, through a channel, before it fails.
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Checks values paired with a time read from a real clock, which is only close to the expected
+/// one. On a virtual clock the times are exact: compare them with `assert_eq!`.
+pub(crate) fn assert_times_within<T, C>(
+    values: Vec<(T, C)>,
+    expected: &[(T, C)],
+    tolerance: Duration,
+) where
+    T: PartialEq + Debug,
+    C: Ord + Copy + Debug + Sub<Output = Duration>,
+{
+    assert_eq!(values.len(), expected.len());
+    for (value, expected) in values.iter().zip(expected) {
+        assert_eq!(value.0, expected.0);
+        let diff = value.1.max(expected.1) - value.1.min(expected.1);
+        assert!(diff < tolerance, "{value:?} != {expected:?}");
+    }
+}
 
 /// The longest duration that can be added to `from`: one nanosecond more is too far for an
 /// [`Instant`] to represent. A deadline that long sits at the very end of the clock, so that the

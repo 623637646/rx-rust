@@ -2,7 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::{
-    DURATION_30_MS,
+    DURATION_30_MS, assert_times_within,
     checker::{Checker, State},
     test_channel::{ChannelState, test_channel},
     test_scheduler::block_on,
@@ -18,27 +18,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::utility::timestamp::Timestamp,
 };
-use std::{convert::Infallible, fmt::Debug, ops::Sub, time::Instant};
-
-/// On the virtual clock the times are exact.
-fn check_values<T: PartialEq + Debug>(values: Vec<(T, Instant)>, expected: Vec<(T, Instant)>) {
-    assert_eq!(values, expected);
-}
-
-/// On a real clock (`test_async`) the times are only close.
-fn check_values_within<T: PartialEq + Debug>(
-    values: Vec<(T, Instant)>,
-    expected: Vec<(T, Instant)>,
-) {
-    assert_eq!(values.len(), expected.len());
-    for i in 0..values.len() {
-        let value = &values[i];
-        let expected = &expected[i];
-        assert_eq!(value.0, expected.0);
-        let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
-        assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
-    }
-}
+use std::{convert::Infallible, time::Instant};
 
 #[test]
 fn test_completed() {
@@ -57,29 +37,29 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    check_values(checker.values(), vec![(111, start)]);
+    assert_eq!(checker.values(), [(111, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    check_values(checker.values(), vec![(111, start), (222, start)]);
+    assert_eq!(checker.values(), [(111, start), (222, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(333).is_continue());
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     sender.on_termination(Termination::<Infallible>::Completed);
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -102,29 +82,29 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    check_values(checker.values(), vec![(111, start)]);
+    assert_eq!(checker.values(), [(111, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    check_values(checker.values(), vec![(111, start), (222, start)]);
+    assert_eq!(checker.values(), [(111, start), (222, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(333).is_continue());
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     sender.on_termination(Termination::Error("error"));
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
@@ -147,29 +127,29 @@ fn test_unsubscribe() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    check_values(checker.values(), vec![(111, start)]);
+    assert_eq!(checker.values(), [(111, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    check_values(checker.values(), vec![(111, start), (222, start)]);
+    assert_eq!(checker.values(), [(111, start), (222, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(333).is_continue());
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     subscription.dispose();
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -196,37 +176,37 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&value_1).is_continue());
-    check_values(checker.values(), vec![(&value_1, start)]);
+    assert_eq!(checker.values(), [(&value_1, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&value_2).is_continue());
-    check_values(checker.values(), vec![(&value_1, start), (&value_2, start)]);
+    assert_eq!(checker.values(), [(&value_1, start), (&value_2, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(&value_3).is_continue());
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![
+        [
             (&value_1, start),
             (&value_2, start),
             (&value_3, start + DURATION_30_MS),
-        ],
+        ]
     );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     sender.on_termination(Termination::Error(&error));
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![
+        [
             (&value_1, start),
             (&value_2, start),
             (&value_3, start + DURATION_30_MS),
-        ],
+        ]
     );
     assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(channel_checker.state(), ChannelState::Error(&error));
@@ -252,29 +232,29 @@ fn test_mut_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&mut value_1).is_continue());
-    check_values(checker.values(), vec![(222, start)]);
+    assert_eq!(checker.values(), [(222, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(&mut value_2).is_continue());
-    check_values(checker.values(), vec![(222, start), (444, start)]);
+    assert_eq!(checker.values(), [(222, start), (444, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(&mut value_3).is_continue());
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(222, start), (444, start), (666, start + DURATION_30_MS)],
+        [(222, start), (444, start), (666, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     sender.on_termination(Termination::<Infallible>::Completed);
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(222, start), (444, start), (666, start + DURATION_30_MS)],
+        [(222, start), (444, start), (666, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -303,7 +283,7 @@ fn test_async() {
                 sender
             })
             .await;
-        check_values_within(checker.values(), vec![(111, start)]);
+        assert_times_within(checker.values(), &[(111, start)], DURATION_30_MS);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
@@ -313,7 +293,11 @@ fn test_async() {
                 sender
             })
             .await;
-        check_values_within(checker.values(), vec![(111, start), (222, start)]);
+        assert_times_within(
+            checker.values(),
+            &[(111, start), (222, start)],
+            DURATION_30_MS,
+        );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
@@ -324,9 +308,10 @@ fn test_async() {
                 sender
             })
             .await;
-        check_values_within(
+        assert_times_within(
             checker.values(),
-            vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+            &[(111, start), (222, start), (333, start + DURATION_30_MS)],
+            DURATION_30_MS,
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -337,9 +322,10 @@ fn test_async() {
                 sender.on_termination(Termination::<Infallible>::Completed);
             })
             .await;
-        check_values_within(
+        assert_times_within(
             checker.values(),
-            vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+            &[(111, start), (222, start), (333, start + DURATION_30_MS)],
+            DURATION_30_MS,
         );
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -372,34 +358,34 @@ fn test_subscribe_by_different_observer() {
 
     assert!(channels.on_next(0, 111).is_continue());
     assert!(channels.on_next(1, 111).is_continue());
-    check_values(checker_1.values(), vec![(111, start)]);
+    assert_eq!(checker_1.values(), [(111, start)]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(channels.state(0), ChannelState::Subscribed);
-    check_values(checker_2.values(), vec![(111, start)]);
+    assert_eq!(checker_2.values(), [(111, start)]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(channels.state(1), ChannelState::Subscribed);
 
     assert!(channels.on_next(0, 222).is_continue());
     assert!(channels.on_next(1, 222).is_continue());
-    check_values(checker_1.values(), vec![(111, start), (222, start)]);
+    assert_eq!(checker_1.values(), [(111, start), (222, start)]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(channels.state(0), ChannelState::Subscribed);
-    check_values(checker_2.values(), vec![(111, start), (222, start)]);
+    assert_eq!(checker_2.values(), [(111, start), (222, start)]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(channels.state(1), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(channels.on_next(0, 333).is_continue());
     assert!(channels.on_next(1, 333).is_continue());
-    check_values(
+    assert_eq!(
         checker_1.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(channels.state(0), ChannelState::Subscribed);
-    check_values(
+    assert_eq!(
         checker_2.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(channels.state(1), ChannelState::Subscribed);
@@ -407,15 +393,15 @@ fn test_subscribe_by_different_observer() {
     time.advance_by(DURATION_30_MS);
     channels.on_termination(0, Termination::<Infallible>::Completed);
     channels.on_termination(1, Termination::<Infallible>::Completed);
-    check_values(
+    assert_eq!(
         checker_1.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(channels.state(0), ChannelState::Completed);
-    check_values(
+    assert_eq!(
         checker_2.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker_2.state(), State::Completed);
     assert_eq!(channels.state(1), ChannelState::Completed);
@@ -439,7 +425,7 @@ fn test_unsub_on_next_by_take() {
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(111).is_break());
-    check_values(checker.values(), vec![(111, start + DURATION_30_MS)]);
+    assert_eq!(checker.values(), [(111, start + DURATION_30_MS)]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -460,46 +446,41 @@ fn test_multiple_operation() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    fn check_values<T: PartialEq + Debug>(
-        values: Vec<((T, Instant), Instant)>,
-        expected: Vec<(T, Instant)>,
-    ) {
-        assert_eq!(values.len(), expected.len());
-        for i in 0..values.len() {
-            let value = &values[i];
-            let expected = &expected[i];
-            assert_eq!(value.0.0, expected.0);
-            let diff = value.0.1.max(expected.1).sub(value.0.1.min(expected.1));
-            assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
-            let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
-            assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
-        }
-    }
-
     assert!(sender.on_next(111).is_continue());
-    check_values(checker.values(), vec![(111, start)]);
+    assert_eq!(checker.values(), [((111, start), start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    check_values(checker.values(), vec![(111, start), (222, start)]);
+    assert_eq!(
+        checker.values(),
+        [((111, start), start), ((222, start), start)]
+    );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(333).is_continue());
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [
+            ((111, start), start),
+            ((222, start), start),
+            ((333, start + DURATION_30_MS), start + DURATION_30_MS)
+        ]
     );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     sender.on_termination(Termination::<Infallible>::Completed);
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [
+            ((111, start), start),
+            ((222, start), start),
+            ((333, start + DURATION_30_MS), start + DURATION_30_MS)
+        ]
     );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -522,29 +503,29 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(111).is_continue());
-    check_values(checker.values(), vec![(111, start)]);
+    assert_eq!(checker.values(), [(111, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    check_values(checker.values(), vec![(111, start), (222, start)]);
+    assert_eq!(checker.values(), [(111, start), (222, start)]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     assert!(sender.on_next(333).is_continue());
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     time.advance_by(DURATION_30_MS);
     sender.on_termination(Termination::<Infallible>::Completed);
-    check_values(
+    assert_eq!(
         checker.values(),
-        vec![(111, start), (222, start), (333, start + DURATION_30_MS)],
+        [(111, start), (222, start), (333, start + DURATION_30_MS)]
     );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
