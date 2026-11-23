@@ -1,22 +1,24 @@
 mod tests_utils;
 
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::{
-    disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{Observable, ObservableExt},
-    observer::{EventBatch, Flow, Observer, Termination},
-    utils::subscribe_with_context::{UpdateOutcome, Updated, subscribe_with_context},
-};
-use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use tests_utils::{
+use crate::tests_utils::{
     checker::{Checker, State},
     drop_probe::DropProbe,
     test_channel::{ChannelState, test_channel},
+};
+use rx_rust::{
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableExt},
+    observer::{EventBatch, Flow, Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::creating::create::Create,
+    thread_mode::{Shared, mutable::MutableExt},
+    utils::subscribe_with_context::{UpdateOutcome, Updated, subscribe_with_context},
+};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 #[test]

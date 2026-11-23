@@ -11,6 +11,9 @@
 
 mod tests_utils;
 
+use crate::tests_utils::{
+    DURATION_10_MS, DURATION_30_MS, DURATION_100_MS, scheduler_ext::SchedulerExt,
+};
 use futures::executor::LocalPool;
 use rx_rust::{
     disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
@@ -64,8 +67,6 @@ use std::{
     thread::{self, ThreadId},
     time::Duration,
 };
-use tests_utils::scheduler_ext::SchedulerExt;
-use tests_utils::{DURATION_10_MS, DURATION_30_MS, DURATION_100_MS};
 
 /// What [`record`] has seen: the values, then the termination.
 struct Record<T, E> {

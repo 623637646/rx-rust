@@ -1,24 +1,30 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::drop_probe::DropCount;
-use crate::tests_utils::scheduler_ext::SchedulerExt;
+use crate::tests_utils::{
+    DURATION_10_MS, DURATION_100_MS, drop_probe::DropCount, scheduler_ext::SchedulerExt,
+};
 use futures::channel::oneshot;
-use rx_rust::disposable::Disposable;
-use rx_rust::observable::ObservableExt;
-use rx_rust::operators::creating::interval::Interval;
-use rx_rust::operators::creating::just::Just;
-use rx_rust::scheduler::virtual_time::{VirtualTime, VirtualTimeScheduler};
-use rx_rust::scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task};
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
-use std::ops::ControlFlow;
-use std::panic::{self, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::task::Waker;
-use std::thread;
-use std::time::{Duration, Instant};
+use rx_rust::{
+    disposable::Disposable,
+    observable::ObservableExt,
+    operators::creating::{interval::Interval, just::Just},
+    scheduler::{
+        Clock, Next, Scheduler, SchedulerTypes, Task,
+        virtual_time::{VirtualTime, VirtualTimeScheduler},
+    },
+    thread_mode::mutable::{MutableExt, MutableHelper},
+};
+use std::{
+    ops::ControlFlow,
+    panic::{self, AssertUnwindSafe},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    task::Waker,
+    thread,
+    time::{Duration, Instant},
+};
 
 const DURATION_1_MS: Duration = Duration::from_millis(1);
 

@@ -2,7 +2,6 @@
 //! [`ObservableExt::switch`](crate::observable::ObservableExt::switch).
 
 use super::internal::flatten::{self, ContextDisposal, InnerObserverOf, SourceObserverOf};
-pub use super::internal::flatten::{Identity, InnerObserver, Replace, SourceObserver};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -13,6 +12,8 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
+
+pub use super::internal::flatten::{Identity, InnerObserver, Replace, SourceObserver};
 
 /// Flattens an observable of observables by emitting the items of the most recently emitted inner
 /// observable only.

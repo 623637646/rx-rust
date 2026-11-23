@@ -1,41 +1,40 @@
 mod tests_utils;
 
-use crate::tests_utils::TIMEOUT;
-use crate::tests_utils::drop_probe::DropProbe;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::thread_checker_scheduler::{
-    CallThreads, ThreadCheckerExecutor, check_threads, get_thread_name,
-};
 use crate::tests_utils::{
-    checker::State,
-    test_channel::{ChannelState, test_channel},
+    TIMEOUT,
+    checker::{Checker, State},
+    drop_probe::DropProbe,
+    test_channel::{ChannelState, test_channel, test_channels},
     test_scheduler::block_on,
-};
-use futures::executor::ThreadPool;
-use rx_rust::disposable::{boxed_disposal::SendBoxedDisposal, callback_disposal::CallbackDisposal};
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::throw::Throw;
-use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
-use rx_rust::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableExt},
-    observer::{Flow, Observer, Termination},
-    operators::{
-        creating::{from_iter::FromIter, never::Never},
-        utility::observe_on::ObserveOn,
+    test_struct::TestStruct,
+    thread_checker_scheduler::{
+        CallThreads, ThreadCheckerExecutor, check_threads, get_thread_name,
     },
 };
-use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
+use futures::executor::ThreadPool;
+use rx_rust::{
+    disposable::{
+        Disposable, boxed_disposal::SendBoxedDisposal, callback_disposal::CallbackDisposal,
+        dispose_on_drop::DisposeOnDrop,
+    },
+    observable::{Observable, ObservableExt},
+    observer::{Flow, Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{
+        creating::{create::Create, empty::Empty, from_iter::FromIter, never::Never, throw::Throw},
+        utility::observe_on::ObserveOn,
+    },
+    scheduler::{runtime::futures::ThreadPoolScheduler, virtual_time::VirtualTime},
+    thread_mode::mutable::{MutableExt, MutableHelper},
+};
 use std::{
     convert::Infallible,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
+    time::Duration,
 };
-use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {

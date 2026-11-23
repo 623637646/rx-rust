@@ -1,24 +1,27 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::connectable::connectable_controller::ConnectableController;
-use rx_rust::operators::creating::create::Create;
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{
+        connectable::connectable_controller::ConnectableController, creating::create::Create,
+    },
     subject::publish_subject::PublishSubject,
 };
-use std::convert::Infallible;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 #[test]
 fn test_completed() {

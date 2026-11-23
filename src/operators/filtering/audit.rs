@@ -1,8 +1,6 @@
 //! The [`Audit`] operator, behind
 //! [`ObservableExt::audit`](crate::observable::ObservableExt::audit).
 
-#[doc(hidden)]
-pub use super::internal::span::SpanObserver;
 use super::internal::span::{
     self, OnItem, OnTimer, SpanDisposal, SpanObserverOf, SpanState, SpanTask, TrailingSpan,
 };
@@ -16,6 +14,9 @@ use crate::{
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
+
+#[doc(hidden)]
+pub use super::internal::span::SpanObserver;
 
 /// Emits the most recent item of the source once a time span has passed since the first item that
 /// started it, then waits for the next item to start another.

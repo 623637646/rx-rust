@@ -5,10 +5,6 @@ use super::internal::{
     flatten::ContextDisposal,
     reorder::{InnerObserverOf, SourceObserverOf, subscribe_eager},
 };
-pub use super::internal::{
-    flatten::{Enqueue, Identity, InnerObserver, SourceObserver},
-    reorder::{IndexedEvent, IndexedSource, IndexingObserver, IndexingSelector, ReorderObserver},
-};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -19,6 +15,11 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
+
+pub use super::internal::{
+    flatten::{Enqueue, Identity, InnerObserver, SourceObserver},
+    reorder::{IndexedEvent, IndexedSource, IndexingObserver, IndexingSelector, ReorderObserver},
+};
 
 /// Flattens an observable of observables by subscribing each inner observable as it arrives, and
 /// emitting all of the values of each, one inner observable after the other.

@@ -14,8 +14,7 @@ use crate::{
     },
 };
 use educe::Educe;
-use std::collections::VecDeque;
-use std::marker::PhantomData;
+use std::{collections::VecDeque, marker::PhantomData};
 
 /// Emits a single boolean value that indicates whether two observables emit the same sequence of
 /// items.

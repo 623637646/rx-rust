@@ -1,8 +1,9 @@
 mod tests_utils;
 
-use rx_rust::disposable::boxed_disposal::SendBoxedDisposal;
-use rx_rust::disposable::{Disposable, callback_disposal::CallbackDisposal};
-use tests_utils::test_struct::TestStruct;
+use crate::tests_utils::test_struct::TestStruct;
+use rx_rust::disposable::{
+    Disposable, boxed_disposal::SendBoxedDisposal, callback_disposal::CallbackDisposal,
+};
 
 #[cfg(panic = "unwind")]
 #[test]

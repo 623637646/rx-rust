@@ -1,37 +1,38 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_1_MS;
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::TIMEOUT;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::clone_probe::CloneProbe;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::never::Never;
-use rx_rust::operators::creating::throw::Throw;
-use rx_rust::operators::creating::timer::Timer;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::subject::unicast_subject::{self, BoxedUnicastObservable};
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
-use rx_rust::{
-    observable::{Observable, ObservableExt},
-    observer::{Flow, Observer, Termination},
-    operators::combining::group_join::GroupJoin,
+use crate::tests_utils::{
+    DURATION_1_MS, DURATION_10_MS, TIMEOUT,
+    checker::{Checker, State},
+    clone_probe::CloneProbe,
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
 };
-use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
-use std::thread;
-use std::time::Duration;
-use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
+use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt},
+    observer::{Flow, Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{
+        combining::group_join::GroupJoin,
+        creating::{create::Create, empty::Empty, never::Never, throw::Throw, timer::Timer},
+    },
+    scheduler::virtual_time::VirtualTime,
+    subject::unicast_subject::{self, BoxedUnicastObservable},
+    thread_mode::{
+        Shared,
+        mutable::{MutableExt, MutableHelper},
+    },
+};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
+    thread,
+    time::Duration,
+};
 
 /// A window, by its left value: the checker it is subscribed with, and the subscription.
 type Window<L, R, E> = (

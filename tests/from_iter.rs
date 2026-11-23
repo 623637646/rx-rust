@@ -1,9 +1,11 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::DropProbe;
-use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    drop_probe::DropProbe,
+    test_scheduler::block_on,
+};
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
@@ -11,10 +13,11 @@ use rx_rust::{
     operators::creating::from_iter::FromIter,
     thread_mode::mutable::{MutableExt, MutableHelper},
 };
-use std::cell::Cell;
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
-use tests_utils::checker::Checker;
+use std::{
+    cell::Cell,
+    convert::Infallible,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn test_completed_array() {

@@ -1,8 +1,6 @@
 //! The [`ThrottleLatest`] operator, behind
 //! [`ObservableExt::throttle_latest`](crate::observable::ObservableExt::throttle_latest).
 
-#[doc(hidden)]
-pub use super::internal::span::SpanObserver;
 use super::internal::span::{
     self, OnItem, OnTimer, SpanDisposal, SpanObserverOf, SpanState, SpanTask,
 };
@@ -16,6 +14,9 @@ use crate::{
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
+
+#[doc(hidden)]
+pub use super::internal::span::SpanObserver;
 
 /// Emits an item at once, then, while items keep coming, the most recent one at the end of each
 /// time span.

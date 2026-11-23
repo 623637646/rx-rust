@@ -1,24 +1,23 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_channel::{ChannelState, test_channel};
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::utility::do_before_termination::DoBeforeTermination,
+    operators::{creating::create::Create, utility::do_before_termination::DoBeforeTermination},
+    thread_mode::mutable::{MutableExt, MutableHelper},
 };
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn test_completed() {

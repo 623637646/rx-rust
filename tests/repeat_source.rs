@@ -1,34 +1,29 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::ReceiverObservable;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observable::boxed_observable::SendBoxedObservable;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::from_iter::FromIter;
-use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_channel::{ChannelState, ReceiverObservable, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use rx_rust::{
-    observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt, boxed_observable::SendBoxedObservable},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
     operators::{
-        creating::{just::Just, throw::Throw},
+        creating::{create::Create, empty::Empty, from_iter::FromIter, just::Just, throw::Throw},
         utility::repeat_source::RepeatSource,
     },
-    subject::publish_subject::PublishSubject,
+    subject::{behavior_subject::BehaviorSubject, publish_subject::PublishSubject},
+    thread_mode::{
+        Shared,
+        mutable::{MutableExt, MutableHelper},
+    },
 };
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 
 /// A callback that repeats `source` `rounds` times, then gives up, counting its calls in `calls`.
 fn repeating<OE: Clone>(

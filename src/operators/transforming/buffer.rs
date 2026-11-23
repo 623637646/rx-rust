@@ -12,6 +12,12 @@ use crate::{
 };
 use educe::Educe;
 
+#[doc(hidden)]
+pub use super::internal::{
+    boundary::{BoundaryObserver as BoundaryObserver_, SourceObserver},
+    bundle::Bundles,
+};
+
 /// Gathers items from an observable into bundles and emits these bundles as `Vec<T>`, whenever a
 /// `boundary` observable emits an item.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
@@ -92,12 +98,6 @@ impl<OE, OE1> Buffer<OE, OE1> {
         Self { source, boundary }
     }
 }
-
-#[doc(hidden)]
-pub use super::internal::{
-    boundary::{BoundaryObserver as BoundaryObserver_, SourceObserver},
-    bundle::Bundles,
-};
 
 /// The observer a [`Buffer`] gives its source.
 #[doc(hidden)]

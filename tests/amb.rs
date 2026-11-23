@@ -1,25 +1,21 @@
 mod tests_utils;
 
-use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::{
     checker::{Checker, State},
-    test_channel::{ChannelState, test_channel},
+    test_channel::{ChannelState, test_channel, test_channels},
     test_scheduler::block_on,
     test_struct::TestStruct,
 };
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::subject::publish_subject::PublishSubject;
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use rx_rust::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
     operators::{
         conditional_boolean::amb::Amb,
-        creating::{empty::Empty, just::Just, throw::Throw},
+        creating::{create::Create, empty::Empty, just::Just, throw::Throw},
     },
+    subject::publish_subject::PublishSubject,
+    thread_mode::mutable::{MutableExt, MutableHelper},
 };
 use std::{
     convert::Infallible,

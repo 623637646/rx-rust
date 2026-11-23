@@ -14,6 +14,9 @@ use crate::{
 use educe::Educe;
 use std::time::Duration;
 
+#[doc(hidden)]
+pub use super::internal::{bundle::Bundles, time_shift::TimeShiftObserver};
+
 /// Gathers the items of an observable into bundles that each last `time_span`, starting a new
 /// bundle every `time_shift`, and emits each as a `Vec<T>` as it ends, empty or not.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
@@ -91,9 +94,6 @@ impl<OE, S> BufferWithTimeAndShift<OE, S> {
         }
     }
 }
-
-#[doc(hidden)]
-pub use super::internal::{bundle::Bundles, time_shift::TimeShiftObserver};
 
 /// The observer a [`BufferWithTimeAndShift`] gives its source.
 #[doc(hidden)]

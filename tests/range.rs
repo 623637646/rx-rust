@@ -1,15 +1,16 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_scheduler::block_on,
+};
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::range::Range,
 };
 use std::convert::Infallible;
-use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed_range() {

@@ -1,26 +1,23 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::subject::publish_subject::PublishSubject;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
     operators::{
-        creating::{just::Just, throw::Throw},
+        creating::{create::Create, just::Just, throw::Throw},
         transforming::flat_map::FlatMap,
     },
+    subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
-use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
 fn test_completed_inner_finish() {
@@ -1507,30 +1504,25 @@ fn test_type_inference_without_subscribe() {
 
 /// The same operator with a `max_concurrency`.
 mod max_concurrency {
-    use crate::tests_utils::DURATION_10_MS;
-    use crate::tests_utils::checker::State;
-    use crate::tests_utils::test_channel::ChannelState;
-    use crate::tests_utils::test_channel::test_channels;
-    use crate::tests_utils::test_scheduler::block_on;
     use crate::tests_utils::{
-        checker::Checker, test_channel::test_channel, test_struct::TestStruct,
+        DURATION_10_MS,
+        checker::{Checker, State},
+        test_channel::{ChannelState, test_channel, test_channels},
+        test_scheduler::block_on,
+        test_struct::TestStruct,
     };
-    use rx_rust::disposable::Disposable;
-    use rx_rust::disposable::callback_disposal::CallbackDisposal;
-    use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-    use rx_rust::observer::boxed_observer::SendBoxedObserver;
-    use rx_rust::operators::creating::create::Create;
-    use rx_rust::operators::creating::empty::Empty;
     use rx_rust::{
+        disposable::{
+            Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop,
+        },
         observable::{Observable, ObservableExt},
-        observer::{Observer, Termination},
+        observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
         operators::{
-            creating::{just::Just, throw::Throw},
+            creating::{create::Create, empty::Empty, just::Just, throw::Throw},
             transforming::flat_map::FlatMap,
         },
     };
-    use std::convert::Infallible;
-    use std::num::NonZeroUsize;
+    use std::{convert::Infallible, num::NonZeroUsize};
 
     const ONE: NonZeroUsize = NonZeroUsize::new(1).unwrap();
     const TWO: NonZeroUsize = NonZeroUsize::new(2).unwrap();

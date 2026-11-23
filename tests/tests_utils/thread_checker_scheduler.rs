@@ -1,21 +1,27 @@
-use futures::FutureExt;
-use futures::StreamExt;
-use futures::channel::{mpsc as futures_mpsc, oneshot};
-use futures::executor::LocalPool;
-use futures::future::{BoxFuture, abortable};
-use futures::stream::AbortHandle;
-use futures::task::LocalSpawnExt;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::scheduler::{Scheduler, SchedulerTypes, SystemClock, Task, drive};
-use rx_rust::thread_mode::Shared;
-use std::cell::Cell;
-use std::panic::{self, AssertUnwindSafe};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
+use futures::{
+    FutureExt, StreamExt,
+    channel::{mpsc as futures_mpsc, oneshot},
+    executor::LocalPool,
+    future::{BoxFuture, abortable},
+    stream::AbortHandle,
+    task::LocalSpawnExt,
+};
+use rx_rust::{
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    scheduler::{Scheduler, SchedulerTypes, SystemClock, Task, drive},
+    thread_mode::Shared,
+};
+use std::{
+    cell::Cell,
+    panic::{self, AssertUnwindSafe},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
+    thread,
+    time::Duration,
+};
 
 thread_local! {
     static THREAD_NAME: Cell<Option<&'static str>> = const { Cell::new(None) };

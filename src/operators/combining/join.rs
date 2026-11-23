@@ -3,9 +3,6 @@
 use super::internal::join::{
     self, Action, DurationObserverOf, Ending, LeftObserverOf, RightObserverOf, Side,
 };
-pub use super::internal::join::{
-    Disposal, DisposalOf, DurationObserver, LeftObserver, ModeOf, RightObserver,
-};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -15,6 +12,10 @@ use crate::{
 };
 use educe::Educe;
 use std::{collections::BTreeMap, marker::PhantomData};
+
+pub use super::internal::join::{
+    Disposal, DisposalOf, DurationObserver, LeftObserver, ModeOf, RightObserver,
+};
 
 /// Combines the values of two observables whose windows overlap: every value opens a window that
 /// lasts until the observable its duration selector returns for it emits or completes, and a value

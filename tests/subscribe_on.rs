@@ -1,33 +1,30 @@
 mod tests_utils;
 
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::thread_checker_scheduler::{
-    CallThreads, ThreadCheckerExecutor, check_threads,
-};
 use crate::tests_utils::{
-    checker::State,
-    test_channel::{ChannelState, test_channel},
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
     test_scheduler::block_on,
+    test_struct::TestStruct,
+    thread_checker_scheduler::{CallThreads, ThreadCheckerExecutor, check_threads},
 };
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::throw::Throw;
-use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
-    operators::{creating::never::Never, utility::subscribe_on::SubscribeOn},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{
+        creating::{create::Create, empty::Empty, never::Never, throw::Throw},
+        utility::subscribe_on::SubscribeOn,
+    },
+    scheduler::virtual_time::VirtualTime,
 };
-use std::sync::Arc;
 use std::{
     convert::Infallible,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::Duration,
 };
-use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {

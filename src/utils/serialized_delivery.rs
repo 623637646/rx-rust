@@ -70,6 +70,8 @@
 //! answers too, so they are public, and re-exported by
 //! [`subscribe_with_context`](crate::utils::subscribe_with_context); the delivery itself is not.
 
+mod update_outcome;
+
 use crate::{
     observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::{
@@ -83,8 +85,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{collections::VecDeque, ops::ControlFlow};
-
-mod update_outcome;
 
 pub use update_outcome::{DropDecided, DropUndecided, UpdateOutcome, Updated};
 

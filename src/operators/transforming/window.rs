@@ -14,6 +14,12 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+#[doc(hidden)]
+pub use super::internal::{
+    boundary::{BoundaryObserver as BoundaryObserver_, SourceObserver as SourceObserver_},
+    window::{Action, DelegateObserver, Windows},
+};
+
 /// Subdivides the items of an observable into observable windows, opening a new one whenever the
 /// `boundary` observable emits an item.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -94,12 +100,6 @@ impl<OE, OE1> Window<'_, OE, OE1> {
         }
     }
 }
-
-#[doc(hidden)]
-pub use super::internal::{
-    boundary::{BoundaryObserver as BoundaryObserver_, SourceObserver as SourceObserver_},
-    window::{Action, DelegateObserver, Windows},
-};
 
 /// The observer a [`Window`] gives its source.
 #[doc(hidden)]

@@ -1,22 +1,24 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::{ChannelState, test_channel, test_channels};
-use crate::tests_utils::test_scheduler::block_on;
-use crate::tests_utils::{DURATION_1_MS, DURATION_10_MS, DURATION_100_MS};
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::subject::publish_subject::PublishSubject;
+use crate::tests_utils::{
+    DURATION_1_MS, DURATION_10_MS, DURATION_100_MS,
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use rx_rust::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::{creating::just::Just, utility::delay_subscription::DelaySubscription},
+    operators::{
+        creating::{create::Create, just::Just},
+        utility::delay_subscription::DelaySubscription,
+    },
+    scheduler::virtual_time::VirtualTime,
+    subject::publish_subject::PublishSubject,
 };
-use std::convert::Infallible;
-use std::time::Duration;
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use std::{convert::Infallible, time::Duration};
 
 #[test]
 fn test_completed() {

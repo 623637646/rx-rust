@@ -1,25 +1,27 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::callback_observer::CallbackObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::{
-    observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
-    operators::{creating::just::Just, utility::stop_on_disposal::StopOnDisposal},
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
 };
-use std::convert::Infallible;
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use rx_rust::{
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt},
+    observer::{Observer, Termination, callback_observer::CallbackObserver},
+    operators::{
+        creating::{create::Create, just::Just},
+        utility::stop_on_disposal::StopOnDisposal,
+    },
+    thread_mode::mutable::MutableExt,
+};
+use std::{
+    convert::Infallible,
+    num::NonZeroUsize,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn test_completed() {

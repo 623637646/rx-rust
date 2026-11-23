@@ -1,18 +1,16 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_1_MS;
-use crate::tests_utils::DURATION_3_MS;
-use crate::tests_utils::DURATION_30_MS;
-use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::scheduler::virtual_time::VirtualTime;
+use crate::tests_utils::{
+    DURATION_1_MS, DURATION_3_MS, DURATION_30_MS, DURATION_100_MS,
+    checker::{Checker, State},
+    test_scheduler::block_on,
+};
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::timer::Timer,
+    scheduler::virtual_time::VirtualTime,
 };
-use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed() {

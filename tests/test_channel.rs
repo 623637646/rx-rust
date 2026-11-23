@@ -1,16 +1,19 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use rx_rust::disposable::Disposable;
-use rx_rust::observable::Observable;
-use rx_rust::observable::ObservableExt;
-use rx_rust::observer::{Flow, Observer, Termination};
-use rx_rust::thread_mode::mutable::MutableExt;
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
-use tests_utils::checker::Checker;
-use tests_utils::test_channel::test_channel;
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel},
+};
+use rx_rust::{
+    disposable::Disposable,
+    observable::{Observable, ObservableExt},
+    observer::{Flow, Observer, Termination},
+    thread_mode::mutable::MutableExt,
+};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn test_unsub_on_next() {

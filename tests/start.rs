@@ -1,12 +1,17 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::observable::{Observable, ObservableExt};
-use rx_rust::operators::creating::start::Start;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tests_utils::checker::Checker;
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_scheduler::block_on,
+};
+use rx_rust::{
+    observable::{Observable, ObservableExt},
+    operators::creating::start::Start,
+};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 #[test]
 fn test_completed() {

@@ -1,11 +1,17 @@
 mod tests_utils;
 
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop};
-use rx_rust::thread_mode::mutable::MutableHelper;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use tests_utils::test_struct::TestStruct;
+use crate::tests_utils::test_struct::TestStruct;
+use rx_rust::{
+    disposable::{
+        Disposable, DisposableExt, callback_disposal::CallbackDisposal,
+        dispose_on_drop::DisposeOnDrop,
+    },
+    thread_mode::mutable::MutableHelper,
+};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 
 struct TestDisposal {
     disposed: Arc<AtomicBool>,

@@ -1,32 +1,30 @@
 mod tests_utils;
 
-use crate::tests_utils::TIMEOUT;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-use crate::tests_utils::scheduler_ext::SchedulerExt;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use futures::executor::ThreadPool;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::just::Just;
-use rx_rust::operators::creating::throw::Throw;
-use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
-use rx_rust::{
-    observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
-    operators::combining::when::{Plans, When},
+use crate::tests_utils::{
+    TIMEOUT,
+    checker::{Checker, State},
+    drop_probe::{DropCount, DropProbe},
+    scheduler_ext::SchedulerExt,
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
 };
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex, mpsc};
-use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
+use futures::executor::ThreadPool;
+use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{
+        combining::when::{Plans, When},
+        creating::{create::Create, empty::Empty, just::Just, throw::Throw},
+    },
+    scheduler::runtime::futures::ThreadPoolScheduler,
+    thread_mode::mutable::{MutableExt, MutableHelper},
+};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex, mpsc},
+};
 
 #[test]
 fn test_completed() {

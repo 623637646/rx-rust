@@ -1,27 +1,30 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-use crate::tests_utils::test_channel::{ChannelState, test_channels};
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::from_iter::FromIter;
-use rx_rust::operators::creating::just::Just;
-use rx_rust::operators::creating::timer::Timer;
-use rx_rust::operators::error_handling::retry::RetryAction;
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    drop_probe::{DropCount, DropProbe},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+};
 use rx_rust::{
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::utility::using::Using,
+    operators::{
+        creating::{create::Create, from_iter::FromIter, just::Just, timer::Timer},
+        error_handling::retry::RetryAction,
+        utility::using::Using,
+    },
+    thread_mode::mutable::{MutableExt, MutableHelper},
 };
-use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use tests_utils::{checker::Checker, test_channel::test_channel};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 /// What happened, in order: the creation and the drop of each resource, and the events the
 /// observer saw.

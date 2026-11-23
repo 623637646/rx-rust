@@ -1,13 +1,15 @@
 mod tests_utils;
 
-use crate::tests_utils::test_channel::{ChannelState, test_channel};
-use crate::tests_utils::{checker::Checker, checker::State, test_struct::TestStruct};
-use rx_rust::operators::creating::create::Create;
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel},
+    test_struct::TestStruct,
+};
 use rx_rust::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::error_handling::map_err::MapErr,
+    operators::{creating::create::Create, error_handling::map_err::MapErr},
 };
 use std::convert::Infallible;
 

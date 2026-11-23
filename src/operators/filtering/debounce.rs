@@ -1,8 +1,6 @@
 //! The [`Debounce`] operator, behind
 //! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
 
-#[doc(hidden)]
-pub use super::internal::span::SpanObserver;
 use super::internal::span::{
     self, OnItem, OnTimer, SpanDisposal, SpanObserverOf, SpanState, SpanTask, TrailingSpan,
 };
@@ -16,6 +14,9 @@ use crate::{
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
+
+#[doc(hidden)]
+pub use super::internal::span::SpanObserver;
 
 /// Emits an item from the source observable only after a particular time span has passed without
 /// another source emission.

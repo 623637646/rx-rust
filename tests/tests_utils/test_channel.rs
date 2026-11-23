@@ -1,20 +1,20 @@
+mod channels;
+
 use crate::tests_utils::parked_observer::ParkedObserver;
 use educe::Educe;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{
         EventBatch, Flow, Observer, Termination,
-        boxed_observer::{IntoBoxedObserver, ObserverMode},
+        boxed_observer::{IntoBoxedObserver, ObserverMode, SendBoxedObserver},
     },
+    thread_mode::{Shared, mutable::MutableHelper},
 };
-use std::mem;
-use std::sync::{Arc, Mutex};
-
-mod channels;
+use std::{
+    mem,
+    sync::{Arc, Mutex},
+};
 
 // Every test binary compiles the helpers and most never open several channels: the same reason
 // `tests_utils` allows `dead_code`.

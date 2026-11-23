@@ -1,21 +1,23 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::clone_probe::CloneProbe;
-use crate::tests_utils::drop_probe::DropProbe;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::observable::Observable;
-use rx_rust::observable::ObservableExt;
-use rx_rust::observer::{Flow, Observer, Termination};
-use rx_rust::subject::Subject;
-use rx_rust::subject::replay_subject::ReplaySubject;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
-use tests_utils::checker::Checker;
-use tests_utils::test_struct::TestStruct;
+use crate::tests_utils::{
+    checker::{Checker, State},
+    clone_probe::CloneProbe,
+    drop_probe::DropProbe,
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
+use rx_rust::{
+    disposable::Disposable,
+    observable::{Observable, ObservableExt},
+    observer::{Flow, Observer, Termination},
+    subject::{Subject, replay_subject::ReplaySubject},
+    thread_mode::mutable::{MutableExt, MutableHelper},
+};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn test_completed() {

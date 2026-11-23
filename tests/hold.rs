@@ -1,24 +1,26 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::DropProbe;
-use crate::tests_utils::test_channel::{ChannelState, test_channels};
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::just::Just;
-use rx_rust::operators::creating::timer::Timer;
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    drop_probe::DropProbe,
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+};
 use rx_rust::{
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::utility::hold::Hold,
+    operators::{
+        creating::{create::Create, just::Just, timer::Timer},
+        utility::hold::Hold,
+    },
+    thread_mode::mutable::{MutableExt, MutableHelper},
 };
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
-use tests_utils::{checker::Checker, test_channel::test_channel};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+};
 
 /// What happened, in order: the events the observer saw, and the drop of the resource.
 type Events = Arc<Mutex<Vec<&'static str>>>;

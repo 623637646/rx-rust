@@ -1,34 +1,34 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::{DURATION_3_MS, DURATION_10_MS};
-use crate::tests_utils::{test_channel::test_channel, test_scheduler::block_on};
+use crate::tests_utils::{
+    DURATION_3_MS, DURATION_10_MS,
+    checker::{Checker, State},
+    drop_probe::{DropCount, DropProbe},
+    test_channel::{ChannelState, test_channel},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use futures::{FutureExt, Stream, StreamExt, TryStreamExt};
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::from_iter::FromIter;
-use rx_rust::operators::creating::throw::Throw;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{
         ObservableExt,
         stream::{Bounded, Latest, ObservableTryStream, Overflow, StreamBuffer, Unbounded},
     },
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::creating::{create::Create, empty::Empty, from_iter::FromIter, throw::Throw},
+    scheduler::virtual_time::VirtualTime,
+    subject::{behavior_subject::BehaviorSubject, publish_subject::PublishSubject},
 };
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use std::{convert::Infallible, num::NonZeroUsize};
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use std::{
+    convert::Infallible,
+    num::NonZeroUsize,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 #[test]
 fn test_waker_released_after_ready() {

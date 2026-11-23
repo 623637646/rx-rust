@@ -1,26 +1,28 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::{test_channel::test_channel, test_scheduler::block_on};
-use futures::{FutureExt, StreamExt};
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::{
-    observable::{ObservableExt, stream::ObservableStream},
-    observer::{Observer, Termination},
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
 };
-use std::convert::Infallible;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use futures::{FutureExt, StreamExt};
+use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{ObservableExt, stream::ObservableStream},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::creating::{create::Create, empty::Empty},
+    scheduler::virtual_time::VirtualTime,
+};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 #[test]
 fn test_completed() {

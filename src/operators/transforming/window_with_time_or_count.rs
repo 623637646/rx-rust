@@ -18,6 +18,12 @@ use crate::{
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize, time::Duration};
 
+#[doc(hidden)]
+pub use super::internal::{
+    time_or_count::TimeOrCountObserver,
+    window::{Action, DelegateObserver, Windows},
+};
+
 /// Subdivides the items of an observable into observable windows, a new one either when the
 /// current window reaches `count` items or every `time_span`, whichever happens first.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -109,12 +115,6 @@ impl<OE, S> WindowWithTimeOrCount<'_, OE, S> {
         }
     }
 }
-
-#[doc(hidden)]
-pub use super::internal::{
-    time_or_count::TimeOrCountObserver,
-    window::{Action, DelegateObserver, Windows},
-};
 
 /// The observer a [`WindowWithTimeOrCount`] gives its source.
 #[doc(hidden)]

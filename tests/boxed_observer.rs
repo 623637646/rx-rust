@@ -1,11 +1,12 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::observer::{Flow, Observer, Termination};
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
+use rx_rust::observer::{Flow, Observer, Termination, boxed_observer::SendBoxedObserver};
 use std::convert::Infallible;
-use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {

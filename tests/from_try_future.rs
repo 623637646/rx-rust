@@ -1,17 +1,18 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_scheduler::block_on,
+};
 use futures::FutureExt;
-use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::from_try_future::FromTryFuture,
+    scheduler::virtual_time::VirtualTime,
 };
 use std::time::Duration;
-use tests_utils::checker::Checker;
 
 /// A one-shot channel whose receiver is a `Future<Output = Result<i32, &str>>`: dropping the
 /// sender fails it with `"canceled"`.

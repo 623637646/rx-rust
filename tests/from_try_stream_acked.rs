@@ -1,23 +1,25 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_scheduler::block_on,
+};
 use futures::{SinkExt, StreamExt, stream};
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::{
         from_stream_acked::StreamAck, from_try_stream_acked::FromTryStreamAcked,
     },
+    scheduler::virtual_time::VirtualTime,
+    thread_mode::{Shared, mutable::MutableHelper},
 };
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use tests_utils::checker::Checker;
+use std::{
+    num::NonZeroUsize,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 /// The `StreamAck`s a test holds, to acknowledge the items when it chooses.
 type Acks = Arc<Mutex<Vec<StreamAck<Shared>>>>;

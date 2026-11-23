@@ -1,22 +1,18 @@
 mod tests_utils;
 
-use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::{
     DURATION_30_MS, assert_times_within,
     checker::{Checker, State},
-    test_channel::{ChannelState, test_channel},
+    test_channel::{ChannelState, test_channel, test_channels},
     test_scheduler::block_on,
     test_struct::TestStruct,
 };
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::scheduler::SchedulerTypes;
-use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::utility::time_interval::TimeInterval,
+    operators::{creating::create::Create, utility::time_interval::TimeInterval},
+    scheduler::{SchedulerTypes, virtual_time::VirtualTime},
 };
 use std::{convert::Infallible, time::Duration};
 

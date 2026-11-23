@@ -18,9 +18,10 @@
 
 use crate::tests_utils::parked_observer::ParkedObserver;
 use educe::Educe;
-use rx_rust::observer::{EventBatch, Observer, Termination};
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
+use rx_rust::{
+    observer::{EventBatch, Observer, Termination},
+    thread_mode::mutable::{MutableExt, MutableHelper},
+};
 use std::sync::{Arc, Mutex};
 
 /// A shared, initially empty handle sending through at most one observer.

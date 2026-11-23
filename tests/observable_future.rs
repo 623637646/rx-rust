@@ -1,24 +1,20 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::{test_channel::test_channel, test_scheduler::block_on};
+use crate::tests_utils::{
+    DURATION_10_MS,
+    test_channel::{ChannelState, test_channel},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use futures::FutureExt;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::from_iter::FromIter;
-use rx_rust::operators::creating::never::Never;
-use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::{
+    disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ObservableExt, future::ObservableFuture},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::creating::{create::Create, empty::Empty, from_iter::FromIter, never::Never},
+    subject::{behavior_subject::BehaviorSubject, publish_subject::PublishSubject},
 };
 use std::convert::Infallible;
-use tests_utils::test_struct::TestStruct;
 
 #[test]
 fn test_completed() {

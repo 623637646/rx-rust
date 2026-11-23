@@ -1,24 +1,26 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::shared_sender::SharedSender;
-use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::{
-    observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
-    operators::utility::do_after_disposal::DoAfterDisposal,
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    shared_sender::SharedSender,
+    test_channel::test_channel,
+    test_scheduler::block_on,
+    test_struct::TestStruct,
 };
-use std::convert::Infallible;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{creating::create::Create, utility::do_after_disposal::DoAfterDisposal},
+};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 #[test]
 fn test_completed() {

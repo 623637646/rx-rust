@@ -1,7 +1,6 @@
 //! A value that reports its own drop.
 
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use std::sync::{Arc, Mutex};
 
 /// A callback run while a [`DropProbe`] is being dropped.

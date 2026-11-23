@@ -1,24 +1,21 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_1_MS;
-use crate::tests_utils::DURATION_1_YEAR;
-use crate::tests_utils::DURATION_3_MS;
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::DURATION_30_MS;
-use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
+use crate::tests_utils::{
+    DURATION_1_MS, DURATION_1_YEAR, DURATION_3_MS, DURATION_10_MS, DURATION_30_MS, DURATION_100_MS,
+    checker::{Checker, State},
+    test_scheduler::block_on,
+};
 use rx_rust::{
+    disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::interval::Interval,
+    scheduler::virtual_time::VirtualTime,
+    thread_mode::mutable::{MutableExt, MutableHelper},
 };
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use tests_utils::checker::Checker;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 #[test]
 fn test_completed_zero_initial_delay() {

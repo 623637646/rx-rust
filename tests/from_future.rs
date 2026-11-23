@@ -1,17 +1,18 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    test_scheduler::block_on,
+};
 use futures::channel::oneshot::Canceled;
-use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::{from_future::FromFuture, from_result::FromResult},
+    scheduler::virtual_time::VirtualTime,
 };
 use std::time::Duration;
-use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed() {

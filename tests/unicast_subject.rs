@@ -1,23 +1,29 @@
 mod tests_utils;
 
-use crate::tests_utils::TIMEOUT;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{
+    TIMEOUT,
+    checker::{Checker, CheckerObserver, State},
+    drop_probe::{DropCount, DropProbe},
+    scheduler_ext::SchedulerExt,
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use futures::executor::ThreadPool;
-use rx_rust::disposable::Disposable;
-use rx_rust::observable::{Observable, ObservableExt};
-use rx_rust::observer::{Flow, Observer, Termination};
-use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
-use rx_rust::subject::unicast_subject::{self, BoxedUnicastSender};
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex, mpsc};
-use tests_utils::checker::{Checker, CheckerObserver};
-use tests_utils::scheduler_ext::SchedulerExt;
-use tests_utils::test_struct::TestStruct;
+use rx_rust::{
+    disposable::Disposable,
+    observable::{Observable, ObservableExt},
+    observer::{Flow, Observer, Termination},
+    scheduler::runtime::futures::ThreadPoolScheduler,
+    subject::unicast_subject::{self, BoxedUnicastSender},
+    thread_mode::{
+        Shared,
+        mutable::{MutableExt, MutableHelper},
+    },
+};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex, mpsc},
+};
 
 #[test]
 fn test_completed() {

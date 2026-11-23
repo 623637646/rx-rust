@@ -1,7 +1,6 @@
 //! The [`ConcatAll`] operator, behind
 //! [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all).
 
-pub use super::internal::flatten::{Enqueue, Identity, InnerObserver, SourceObserver};
 use super::{
     internal::flatten::{self, InnerObserverOf, SourceObserverOf},
     merge_all,
@@ -14,6 +13,8 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
+
+pub use super::internal::flatten::{Enqueue, Identity, InnerObserver, SourceObserver};
 
 /// Flattens an observable of observables by emitting all of the values of each inner observable,
 /// one inner observable after the other.

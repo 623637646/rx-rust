@@ -1,36 +1,45 @@
 mod tests_utils;
 
-use crate::main_loop::MainLoop;
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::DURATION_30_MS;
-use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::TIMEOUT;
-use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-use crate::tests_utils::scheduler_ext::SchedulerExt;
-use crate::tests_utils::test_scheduler::block_on;
-use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
-use futures::StreamExt;
-use rx_rust::disposable::Disposable;
-use rx_rust::observable::ObservableExt;
-use rx_rust::observer::{Observer, Termination};
-use rx_rust::operators::creating::just::Just;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::scheduler::{
-    Clock, Next, Scheduler, SchedulerTypes, Stepper, SystemClock, Task, TaskWaker, WakeableContext,
-    drive,
+use crate::{
+    main_loop::MainLoop,
+    tests_utils::{
+        DURATION_10_MS, DURATION_30_MS, DURATION_100_MS, TIMEOUT,
+        drop_probe::{DropCount, DropProbe},
+        scheduler_ext::SchedulerExt,
+        test_scheduler::block_on,
+        thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name},
+    },
 };
-use rx_rust::subject::publish_subject::PublishSubject;
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
-use std::convert::Infallible;
-use std::future::Future;
-use std::ops::ControlFlow;
-use std::pin::pin;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
-use std::task::{Context, Wake, Waker};
-use std::thread;
-use std::time::{Duration, Instant};
+use futures::StreamExt;
+use rx_rust::{
+    disposable::Disposable,
+    observable::ObservableExt,
+    observer::{Observer, Termination},
+    operators::creating::just::Just,
+    scheduler::{
+        Clock, Next, Scheduler, SchedulerTypes, Stepper, SystemClock, Task, TaskWaker,
+        WakeableContext, drive, virtual_time::VirtualTime,
+    },
+    subject::publish_subject::PublishSubject,
+    thread_mode::{
+        Shared,
+        mutable::{MutableExt, MutableHelper},
+    },
+};
+use std::{
+    convert::Infallible,
+    future::Future,
+    ops::ControlFlow,
+    pin::pin,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc,
+    },
+    task::{Context, Wake, Waker},
+    thread,
+    time::{Duration, Instant},
+};
 
 const RECURSION_EXECUTION_TIMES: usize = 20;
 

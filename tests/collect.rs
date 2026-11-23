@@ -1,24 +1,24 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::mathematical_aggregate::collect::Collect;
-use rx_rust::{
-    observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
-    operators::creating::{from_iter::FromIter, just::Just},
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
 };
-use std::collections::{BTreeSet, HashSet, VecDeque};
-use std::convert::Infallible;
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{
+        creating::{create::Create, from_iter::FromIter, just::Just},
+        mathematical_aggregate::collect::Collect,
+    },
+};
+use std::{
+    collections::{BTreeSet, HashSet, VecDeque},
+    convert::Infallible,
+};
 
 #[test]
 fn test_completed_empty() {

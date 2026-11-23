@@ -16,6 +16,9 @@ use crate::{
 use educe::Educe;
 use std::{num::NonZeroUsize, time::Duration};
 
+#[doc(hidden)]
+pub use super::internal::{bundle::Bundles, time_or_count::TimeOrCountObserver};
+
 /// Gathers items from an observable into bundles and emits these bundles as `Vec<T>`, either when
 /// the bundle reaches `count` items or every `time_span`, whichever happens first.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
@@ -86,9 +89,6 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
         }
     }
 }
-
-#[doc(hidden)]
-pub use super::internal::{bundle::Bundles, time_or_count::TimeOrCountObserver};
 
 /// The observer a [`BufferWithTimeOrCount`] gives its source.
 #[doc(hidden)]

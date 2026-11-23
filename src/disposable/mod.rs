@@ -41,13 +41,14 @@ pub(crate) mod flag_disposal;
 pub mod replaceable_disposal;
 mod tuple_disposal;
 
-pub use crate::delegate_disposal;
 use crate::disposable::{
     boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
     chain_disposal::ChainDisposal,
     dispose_on_drop::DisposeOnDrop,
     either_disposal::EitherDisposal,
 };
+
+pub use crate::delegate_disposal;
 
 /// A resource that is released exactly once, by consuming it.
 ///

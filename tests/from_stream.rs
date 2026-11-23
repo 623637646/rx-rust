@@ -1,24 +1,27 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::DropCount;
-use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{
+    DURATION_10_MS,
+    checker::{Checker, State},
+    drop_probe::DropCount,
+    test_scheduler::block_on,
+};
 use futures::{SinkExt, StreamExt, stream};
-use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::from_stream::FromStream,
+    scheduler::virtual_time::VirtualTime,
 };
-use std::sync::Arc;
-use std::task::Poll;
-use std::time::Duration;
 use std::{
     convert::Infallible,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    task::Poll,
+    time::Duration,
 };
-use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed() {

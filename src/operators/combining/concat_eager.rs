@@ -5,13 +5,6 @@ use super::internal::{
     merge::{ContextDisposal, DriverOf, Pause, subscribe_limited, subscribe_unlimited},
     reorder::IndexSourcesOps,
 };
-pub use super::internal::{
-    merge::{MergeObserver, Unlimited},
-    reorder::{
-        IndexSources, IndexedEvent, IndexedSource, IndexedSourcesIter, IndexingObserver,
-        ReorderObserver,
-    },
-};
 use crate::{
     delegate_disposal,
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -24,6 +17,14 @@ use crate::{
 };
 use educe::Educe;
 use std::{convert::Infallible, num::NonZeroUsize};
+
+pub use super::internal::{
+    merge::{MergeObserver, Unlimited},
+    reorder::{
+        IndexSources, IndexedEvent, IndexedSource, IndexedSourcesIter, IndexingObserver,
+        ReorderObserver,
+    },
+};
 
 /// Subscribes all of the observables at once, and emits all of the values of the first, then, once
 /// it completes, all of the values of the next, and so on to the last.

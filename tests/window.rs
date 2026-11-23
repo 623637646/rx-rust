@@ -1,28 +1,27 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use crate::tests_utils::window_checker::WindowChecker;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::throw::Throw;
-use rx_rust::subject::publish_subject::PublishSubject;
-use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::thread_mode::mutable::MutableHelper;
-use rx_rust::{
-    observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
-    operators::transforming::window::Window,
+use crate::tests_utils::{
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+    window_checker::WindowChecker,
 };
-use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
-use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
+use rx_rust::{
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt},
+    observer::{Observer, Termination, boxed_observer::SendBoxedObserver},
+    operators::{
+        creating::{create::Create, empty::Empty, throw::Throw},
+        transforming::window::Window,
+    },
+    subject::publish_subject::PublishSubject,
+    thread_mode::mutable::{MutableExt, MutableHelper},
+};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn test_completed_from_source() {

@@ -8,12 +8,11 @@ use super::{
     SharedChannel, new_channel,
 };
 use educe::Educe;
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination, boxed_observer::IntoBoxedObserver},
+    thread_mode::{Shared, mutable::MutableHelper},
 };
 use std::sync::{Arc, Mutex};
 

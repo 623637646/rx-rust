@@ -18,14 +18,14 @@
 //! The source sets are declared here; [`mod@tuple`] implements them for tuples of sources and
 //! [`list`] for [`IterSources`].
 
-use crate::{
-    disposable::Disposable, thread_mode::ThreadMode, utils::positional::combination::Combination,
-};
-
 mod batch;
 mod list;
 mod subscribe;
 mod tuple;
+
+use crate::{
+    disposable::Disposable, thread_mode::ThreadMode, utils::positional::combination::Combination,
+};
 
 pub use batch::CollectedCursor;
 pub(crate) use batch::{ObserverFamily, SubscribeBatch};

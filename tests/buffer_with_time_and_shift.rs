@@ -1,30 +1,28 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_1_MS;
-use crate::tests_utils::DURATION_1_YEAR;
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::DURATION_30_MS;
-use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_channel::test_channels;
-use crate::tests_utils::test_scheduler::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::operators::creating::create::Create;
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::throw::Throw;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::thread_mode::mutable::MutableExt;
+use crate::tests_utils::{
+    DURATION_1_MS, DURATION_1_YEAR, DURATION_10_MS, DURATION_30_MS, DURATION_100_MS,
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel, test_channels},
+    test_scheduler::block_on,
+    test_struct::TestStruct,
+};
 use rx_rust::{
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::transforming::buffer_with_time_and_shift::BufferWithTimeAndShift,
+    operators::{
+        creating::{create::Create, empty::Empty, throw::Throw},
+        transforming::buffer_with_time_and_shift::BufferWithTimeAndShift,
+    },
+    scheduler::virtual_time::VirtualTime,
+    thread_mode::mutable::MutableExt,
 };
-use std::sync::{Arc, Mutex};
-use std::{convert::Infallible, time::Duration};
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 const SPAN: Duration = DURATION_100_MS;
 const HALF: Duration = Duration::from_millis(50);

@@ -2,7 +2,6 @@
 //! [`ObservableExt::exhaust_all`](crate::observable::ObservableExt::exhaust_all).
 
 use super::internal::flatten::{self, ContextDisposal, InnerObserverOf, SourceObserverOf};
-pub use super::internal::flatten::{Identity, Ignore, InnerObserver, SourceObserver};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -13,6 +12,8 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
+
+pub use super::internal::flatten::{Identity, Ignore, InnerObserver, SourceObserver};
 
 /// Flattens an observable of observables by emitting the items of one inner observable at a time,
 /// ignoring every inner observable that arrives while one is still running.

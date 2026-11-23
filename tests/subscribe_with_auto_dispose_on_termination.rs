@@ -1,14 +1,18 @@
 mod tests_utils;
 
-use rx_rust::thread_mode::Shared;
 use rx_rust::{
     disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observer::{Flow, Observer, Termination},
+    thread_mode::Shared,
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
-use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 /// An observer running `callback` from inside its `on_termination`.
 struct HookOnTerminationObserver<F: FnOnce()>(F);

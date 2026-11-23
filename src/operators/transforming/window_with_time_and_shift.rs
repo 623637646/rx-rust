@@ -15,6 +15,12 @@ use crate::{
 use educe::Educe;
 use std::{marker::PhantomData, time::Duration};
 
+#[doc(hidden)]
+pub use super::internal::{
+    time_shift::TimeShiftObserver,
+    window::{Action, DelegateObserver, Windows},
+};
+
 /// Subdivides the items of an observable into observable windows that each last `time_span`,
 /// opening a new window every `time_shift`.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -111,12 +117,6 @@ impl<OE, S> WindowWithTimeAndShift<'_, OE, S> {
         }
     }
 }
-
-#[doc(hidden)]
-pub use super::internal::{
-    time_shift::TimeShiftObserver,
-    window::{Action, DelegateObserver, Windows},
-};
 
 /// The observer a [`WindowWithTimeAndShift`] gives its source.
 #[doc(hidden)]

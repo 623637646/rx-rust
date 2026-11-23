@@ -1,31 +1,38 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
-use crate::tests_utils::TIMEOUT;
-use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_scheduler::block_on;
-use futures::executor::ThreadPool;
-use futures::{SinkExt, StreamExt, stream};
-use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::from_try_stream_acked::FromTryStreamAcked;
-use rx_rust::operators::creating::timer::Timer;
-use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
-use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::thread_mode::Shared;
-use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
+use crate::tests_utils::{
+    DURATION_10_MS, TIMEOUT,
+    checker::{Checker, State},
+    test_channel::{ChannelState, test_channel},
+    test_scheduler::block_on,
+};
+use futures::{SinkExt, StreamExt, executor::ThreadPool, stream};
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::creating::from_stream_acked::{FromStreamAcked, StreamAck},
+    operators::creating::{
+        empty::Empty,
+        from_stream_acked::{FromStreamAcked, StreamAck},
+        from_try_stream_acked::FromTryStreamAcked,
+        timer::Timer,
+    },
+    scheduler::{runtime::futures::ThreadPoolScheduler, virtual_time::VirtualTime},
+    thread_mode::{
+        Shared,
+        mutable::{MutableExt, MutableHelper},
+    },
 };
-use std::convert::Infallible;
-use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
-use tests_utils::{checker::Checker, test_channel::test_channel};
+use std::{
+    convert::Infallible,
+    num::NonZeroUsize,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
+    time::Duration,
+};
 
 /// The `StreamAck`s a test holds, to acknowledge the items when it chooses.
 type Acks = Arc<Mutex<Vec<StreamAck<Shared>>>>;
