@@ -265,8 +265,8 @@ when they fail.
   `serialized_multicast`, `flagged_lock`, `subscribe_fn`, `pending_events`,
   `reservation_map`, `id_generator`, `on_panic`, `lazy_subscription`, `positional`,
   `emit_then_terminate` (the values an operator sends as its stream completes — an aggregate's
-  result, a default, the last items kept — or a synchronous source sends — `FromIter` — then the
-  termination, unless one of them stopped). A
+  result, a default, the last items kept — or a source sends — `FromIter`, `Just`, `Timer` — then
+  the termination, unless one of them stopped). A
   module stays public only when a public signature names its items or a user writing an operator
   needs them; otherwise it is `pub(crate)`, and so is everything in it — the crate's
   `#![warn(unreachable_pub)]` is what catches a `pub` left behind in one, and CI denies warnings.

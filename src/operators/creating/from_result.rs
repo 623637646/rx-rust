@@ -1,5 +1,6 @@
 //! The [`FromResult`] source.
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -50,13 +51,9 @@ impl<T, E, OR> Observable<OR> for FromResult<T, E>
 where
     OR: Observer<T, E>,
 {
-    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         match self.0 {
-            Ok(value) => {
-                if observer.on_next(value).is_continue() {
-                    observer.on_termination(Termination::Completed);
-                }
-            }
+            Ok(value) => emit_then_terminate(observer, Some(value), Termination::Completed),
             Err(error) => observer.on_termination(Termination::Error(error)),
         }
         DisposeOnDrop::default()

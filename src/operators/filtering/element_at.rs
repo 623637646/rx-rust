@@ -1,6 +1,7 @@
 //! The [`ElementAt`] operator, behind
 //! [`ObservableExt::element_at`](crate::observable::ObservableExt::element_at).
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -99,12 +100,10 @@ where
             return Flow::Continue(());
         }
         // The wanted element was reached, so the rest of the source is of no use.
-        let Some(mut observer) = self.observer.take() else {
+        let Some(observer) = self.observer.take() else {
             return Flow::Break(());
         };
-        if observer.on_next(value).is_continue() {
-            observer.on_termination(Termination::Completed);
-        }
+        emit_then_terminate(observer, Some(value), Termination::Completed);
         Flow::Break(())
     }
 

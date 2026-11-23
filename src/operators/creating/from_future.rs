@@ -1,5 +1,6 @@
 //! The [`FromFuture`] source.
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -97,10 +98,8 @@ where
     S: Scheduler<FutureThenContext<OR, T>, FU>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let task = Task::from_future_then(observer, self.future, |mut observer, value| {
-            if observer.on_next(value).is_continue() {
-                observer.on_termination(Termination::Completed);
-            }
+        let task = Task::from_future_then(observer, self.future, |observer, value| {
+            emit_then_terminate(observer, Some(value), Termination::Completed)
         });
         self.scheduler.run_task(task, None)
     }

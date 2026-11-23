@@ -102,12 +102,10 @@ where
             return Flow::Continue(());
         }
         // The item was found, so the result is decided and the rest of the source is of no use.
-        let Some(mut observer) = self.observer.take() else {
+        let Some(observer) = self.observer.take() else {
             return Flow::Break(());
         };
-        if observer.on_next(true).is_continue() {
-            observer.on_termination(Termination::Completed);
-        }
+        emit_then_terminate(observer, Some(true), Termination::Completed);
         Flow::Break(())
     }
 

@@ -1,5 +1,6 @@
 //! The [`Just`] source.
 
+use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -51,10 +52,8 @@ impl<T, OR> Observable<OR> for Just<T>
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        if observer.on_next(self.0).is_continue() {
-            observer.on_termination(Termination::Completed);
-        }
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        emit_then_terminate(observer, Some(self.0), Termination::Completed);
         DisposeOnDrop::default()
     }
 }
