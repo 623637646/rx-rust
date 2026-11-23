@@ -1,10 +1,10 @@
 //! The [`Min`] operator, behind [`ObservableExt::min`](crate::observable::ObservableExt::min).
 
-use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::emit_then_terminate::emit_then_terminate,
 };
 use educe::Educe;
 

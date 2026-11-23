@@ -1,12 +1,12 @@
 //! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
 
-use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::{
         MarkerType,
+        emit_then_terminate::emit_then_terminate,
         subscribe_with_auto_dispose_on_termination::{
             self, subscribe_with_auto_dispose_on_termination,
         },

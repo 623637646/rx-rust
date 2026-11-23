@@ -1,10 +1,10 @@
 //! The [`Max`] operator, behind [`ObservableExt::max`](crate::observable::ObservableExt::max).
 
-use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::emit_then_terminate::emit_then_terminate,
 };
 use educe::Educe;
 

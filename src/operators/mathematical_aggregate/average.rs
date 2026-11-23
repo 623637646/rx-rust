@@ -1,12 +1,11 @@
 //! The [`Average`] operator, behind
 //! [`ObservableExt::average`](crate::observable::ObservableExt::average).
 
-use crate::utils::emit_then_terminate::emit_then_terminate;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::MarkerType,
+    utils::{MarkerType, emit_then_terminate::emit_then_terminate},
 };
 use educe::Educe;
 use std::marker::PhantomData;
