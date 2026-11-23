@@ -279,6 +279,12 @@ when they fail.
 ## Code conventions
 
 - No `unsafe`. The crate-level `forbid` makes this a hard error.
+- **Imports** belong in contiguous blocks at the start of their scope. Merge imports with the same
+  root, visibility and attributes into one `use` tree, grouping shared prefixes. Add a new
+  `crate::utils` import inside the matching `use crate::{ ... }` block, under `utils`.
+  Use `crate::tests_utils` for shared helpers in integration test headers. Group re-exports near
+  the imports and keep macro re-exports beside their definitions. When editing imports, review
+  the entire block for split paths. Rustfmt's default settings preserve separate declarations.
 - **Debug-only code**: `cfg(debug_assertions)` gates whole items — a check, the helpers only it
   uses, their imports (the `thread_mode::mutable::reentrancy` module,
   `is_auto_dispose_on_termination_observer`) — and never selects between two implementations:
