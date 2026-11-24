@@ -285,6 +285,23 @@ when they fail.
   Use `crate::tests_utils` for shared helpers in integration test headers. Group re-exports near
   the imports and keep macro re-exports beside their definitions. When editing imports, review
   the entire block for split paths. Rustfmt's default settings preserve separate declarations.
+  Import an item from the module that defines or re-exports it, not through `super::` from a
+  private `use` of the parent.
+- **Re-exports** give an item its public path when the module defining it is not public
+  (`observable::ObservableExt`, `scheduler::Task`). They never add a second path to an item that
+  already has one, neither for convenience nor to keep an old path:
+  - an item moved to a public module is named there: `boxed_observer::BoxedObserverExt`, not also
+    `observer::BoxedObserverExt`;
+  - an operator built on another, or on the scheduler, names their items where they are:
+    `type Disposal = window_with_count_and_skip::Disposal<…>`, `scheduler::StreamAck`;
+  - a `#[macro_export]` macro has its path at the crate root, and is imported from there.
+
+  Of the machinery in an `internal/` module, what users name (`Disposal`, `Unlimited`) is
+  re-exported by each operator naming it, as none of them is its home. The rest, observers and
+  their generic arguments, needs only to be `pub`, not to have a path: add a `#[doc(hidden)]`
+  re-export only where `unreachable_pub` asks for one (`MergeObserver`). `grep -rnE "^pub use" src`
+  lists the re-exports. After removing or moving a path, run `cargo check --all-targets`, and
+  search the docs and the doctests for the old one.
 - **Debug-only code**: `cfg(debug_assertions)` gates whole items — a check, the helpers only it
   uses, their imports (the `thread_mode::mutable::reentrancy` module,
   `is_auto_dispose_on_termination_observer`) — and never selects between two implementations:
