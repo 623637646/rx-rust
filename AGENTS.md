@@ -243,8 +243,12 @@ when they fail.
   `combining/internal/reorder.rs`, shared by `concat_eager_all`, `concat_eager_map` and
   `concat_eager`; a change to it runs
   `--test concat_eager --test concat_eager_all --test concat_eager_map`.
-  A limit is a method on the operator, not a constructor: `merge_all().max_concurrency(n)`,
-  `Merge::new(sources).max_concurrency(n)`.
+  An optional parameter — one with a default, which asks nothing more of the items — is a method
+  on the operator, not a constructor: `merge_all().max_concurrency(n)`,
+  `Merge::new(sources).max_concurrency(n)`, `Interval::new(period, scheduler).initial_delay(d)`,
+  `FromStreamAcked::new(stream, scheduler).permits(n)`. That is for a value that only describes
+  what a subscription will do; a subject, or the stream of `into_stream`, may have started, so it
+  takes its parameters as it is created.
 - `src/subject/` — the subjects, the hot sources.
 - `src/thread_mode/` — the bottom layer, depending on nothing else in the crate: `ThreadMode`,
   `Local`, `Shared`, `Joined` (the mode of an operator with several sources), the pointer, weak

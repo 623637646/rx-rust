@@ -12,10 +12,10 @@ use std::{convert::Infallible, time::Duration};
 /// Creates an observable that emits a sequence of integers spaced by a given time interval.
 /// See <https://reactivex.io/documentation/operators/interval.html>
 ///
-/// [`new`](Self::new) emits `0` one `period` after the subscription, as ReactiveX does, and
-/// [`with_initial_delay`](Self::with_initial_delay) after a delay of its own, `Duration::ZERO` to
-/// start at once. Every following count comes one `period` later, at a fixed rate. It never
-/// completes.
+/// It emits `0` one `period` after the subscription, as ReactiveX does;
+/// [`initial_delay`](Self::initial_delay) gives that first count a delay of its own,
+/// `Duration::ZERO` to start at once. Every following count comes one `period` later, at a fixed
+/// rate. It never completes.
 ///
 /// "At once" is as soon as the scheduler runs the task, not inside `subscribe`: on a
 /// [`VirtualTime`](crate::scheduler::virtual_time::VirtualTime), the
@@ -61,18 +61,20 @@ pub struct Interval<S> {
 }
 
 impl<S> Interval<S> {
-    /// Creates an [`Interval`] that emits `0` after one `period`, then every `period`.
+    /// Creates an [`Interval`] that emits `0` after one `period`, then a count every `period`.
     pub fn new(period: Duration, scheduler: S) -> Self {
-        Self::with_initial_delay(period, period, scheduler)
-    }
-
-    /// Creates an [`Interval`] that emits `0` after `initial_delay`, then every `period`.
-    /// `Duration::ZERO` starts at once.
-    pub fn with_initial_delay(initial_delay: Duration, period: Duration, scheduler: S) -> Self {
         Self {
-            initial_delay,
+            initial_delay: period,
             period,
             scheduler,
+        }
+    }
+
+    /// Sets the delay before `0` is emitted, one period by default. `Duration::ZERO` starts at once.
+    pub fn initial_delay(self, initial_delay: Duration) -> Self {
+        Self {
+            initial_delay,
+            ..self
         }
     }
 }

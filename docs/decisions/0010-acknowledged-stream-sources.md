@@ -9,7 +9,7 @@ Status: adopted.
 
 `FromStreamAcked` and `FromTryStreamAcked` convert a `Stream` like `FromStream` and
 `FromTryStream`, but send each item with a `StreamAck`, and poll the stream only while they hold
-a permit: one by default, `with_permits(n)` for `n`. Every item sent takes a permit; dropping its
+a permit: one by default, `permits(n)` for `n`. Every item sent takes a permit; dropping its
 `StreamAck` gives it back and wakes the source's task. `hold(resource)`, an operator of its own,
 keeps a value for as long as the subscription to its source lasts; holding the `StreamAck` in the
 observable made of the item acknowledges the item once that observable has ended:
@@ -30,15 +30,14 @@ FromTryStreamAcked::new(chunks, scheduler.clone())
   one is forgotten, and every operator that drops an item (`filter`, `skip`, `debounce`, `sample`)
   would have to know about it. With the drop, those operators acknowledge on their own, and so
   does a disposal, a panic or an inner that lets go of its observer.
-- **`hold` works with every flattening operator.** `concat_map` handles one item at a time;
-  `flat_map` under `with_permits(n)` handles up to `n` at once, the bounded concurrency nothing
-  else gives; `switch_map` drops the `StreamAck` of the inner it cancels. And it is not specific to
-  acknowledgements: a lock guard, a temporary file or a metering token is tied to a subscription
-  the same way, as an owned value dropped with the observer that holds it. ReactiveX's `Using` is
-  a separate source, `operators::utility::using::Using`: it creates a resource for each
-  subscription, and drops it *before* the termination goes downstream, so that a `retry` finds
-  an exclusive resource released. An acknowledgement wants the other order, which is `hold`'s: the
-  item is done once its observable's termination has been handled.
+- **`hold` works with every flattening operator.** `concat_map` handles one item at a time.
+  With `permits(n)`, `flat_map` handles up to `n` items at once and the source pauses polling at
+  that limit. `switch_map` drops the `StreamAck` of the inner it cancels. `hold` can also tie a lock
+  guard, a temporary file or a metering token to a subscription by dropping it with the observer
+  that holds it. `operators::utility::using::Using` creates a resource for each subscription and
+  drops it *before* forwarding termination, so a `retry` can acquire an exclusive resource again.
+  An acknowledgement wants the other order, which is `hold`'s: the item is done once its
+  observable's termination has been handled.
 - **It keeps the stance on `request(n)`.** The README says an observable has no `request(n)` and
   that demand-driven consumption is what `Stream` is for. That still holds: no observer, subject
   or operator gains a demand protocol, and the pull side stays in the `Stream`. What is new is a
@@ -69,10 +68,11 @@ FromTryStreamAcked::new(chunks, scheduler.clone())
 - **An operator that holds items until more arrive holds their `StreamAck`s.**
   `buffer_with_count(n)`, `window_with_count`, `collect`, `reduce`, `last`, `take_last`,
   `skip_last`, `zip`, a `ReplaySubject`: with fewer permits than the items such an operator waits
-  for, it waits for the source while the source waits for it. `with_permits` gives the permits
+  for, it waits for the source while the source waits for it. `permits` gives the permits
   before the items flow, which is the only point where that can be undone.
-- **The end of the stream is seen only when the stream is polled**, once a permit is back: the
-  source completes, or fails, after the last `StreamAck` is dropped, not when the stream ends.
+- **A poll needs an available permit to observe completion or an error.** With one permit, the
+  source terminates only after the last `StreamAck` is dropped, not when the stream ends. With
+  several, it can terminate while some `StreamAck`s are still outstanding.
 - **An inner that lets go of its observer** without a termination drops the `StreamAck` it holds,
   so the next value is read; `concat_map` still waits for that inner, so that value waits behind
   it.

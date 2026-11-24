@@ -107,7 +107,7 @@ async fn main() -> io::Result<()> {
         })
         // The upload holds the acknowledgement of its chunk: the next chunk is read once it ends.
         // Without the `hold`, the acknowledgement would be dropped here, and the whole file read
-        // ahead. `with_permits(n)` and a `flat_map` would upload `n` chunks at once.
+        // ahead. `permits(n)` and a `flat_map` would upload `n` chunks at once.
         .concat_map(move |(part, ack)| {
             FromTryFuture::new(upload(part), upload_scheduler.clone()).hold(ack)
         })

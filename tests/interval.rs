@@ -22,7 +22,7 @@ fn test_completed_zero_initial_delay() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let observable =
-        Interval::with_initial_delay(Duration::ZERO, DURATION_100_MS, scheduler.clone());
+        Interval::new(DURATION_100_MS, scheduler.clone()).initial_delay(Duration::ZERO);
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
@@ -101,7 +101,7 @@ fn test_completed_with_initial_delay() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let observable =
-        Interval::with_initial_delay(DURATION_30_MS, DURATION_100_MS, scheduler.clone());
+        Interval::new(DURATION_100_MS, scheduler.clone()).initial_delay(DURATION_30_MS);
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -125,8 +125,7 @@ fn test_completed_with_initial_delay() {
 fn test_initial_delay_too_long_never_comes_due() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable =
-        Interval::with_initial_delay(Duration::MAX, DURATION_100_MS, scheduler.clone());
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone()).initial_delay(Duration::MAX);
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
@@ -148,7 +147,7 @@ fn test_initial_delay_too_long_never_comes_due() {
 fn test_period_too_long_never_comes_due() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::with_initial_delay(Duration::ZERO, Duration::MAX, scheduler.clone());
+    let observable = Interval::new(Duration::MAX, scheduler.clone()).initial_delay(Duration::ZERO);
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);

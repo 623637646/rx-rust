@@ -10,17 +10,18 @@ use educe::Educe;
 use futures::Stream;
 use std::{convert::Infallible, num::NonZeroUsize};
 
-/// Converts a `Stream` into an observable that polls the stream for the next item only once an
-/// earlier one is acknowledged.
+/// Converts a `Stream` into an observable with a limit on unacknowledged items.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
-/// Each item comes with a [`StreamAck`], and dropping the `StreamAck` acknowledges the item. The
-/// source holds a number of permits, one by default ([`with_permits`](Self::with_permits) sets
-/// another): every item sent takes one, every acknowledgement gives one back, and the stream is
-/// polled only while one is left. A downstream that keeps the `StreamAck` until it has handled the
-/// item, asynchronously or not, thus sets the pace at which the stream is read. That is the
-/// backpressure an observable otherwise lacks. The end of the stream is seen only when the stream
-/// is polled too: the source completes once a permit is back, not as soon as the stream ends.
+/// The source polls the stream only while a permit is available. Every emitted item takes one
+/// permit and comes with a [`StreamAck`]; dropping the `StreamAck` acknowledges the item, which
+/// gives the permit back. There is one permit by default, and [`permits`](Self::permits) sets
+/// another limit. A downstream that holds an item's `StreamAck` until its work is done thus sets
+/// the pace at which the stream is read: the backpressure an observable otherwise lacks.
+///
+/// The end of the stream is seen by a poll too, so it takes a permit: with one permit the source
+/// completes only once the last item is acknowledged, while with several it may complete with
+/// acknowledgements outstanding.
 ///
 /// The usual way to handle the items is a `concat_map` that [`hold`]s the `StreamAck` in the
 /// observable it makes of the item, so that the item is acknowledged once that observable has
@@ -82,16 +83,16 @@ impl<SM, S> FromStreamAcked<SM, S> {
     /// Creates a [`FromStreamAcked`] with one permit: the stream is polled for an item only once
     /// the previous one is acknowledged.
     pub fn new(stream: SM, scheduler: S) -> Self {
-        Self::with_permits(stream, scheduler, NonZeroUsize::MIN)
-    }
-
-    /// Creates a [`FromStreamAcked`] that sends up to `permits` items not acknowledged yet.
-    pub fn with_permits(stream: SM, scheduler: S, permits: NonZeroUsize) -> Self {
         Self {
             stream,
             scheduler,
-            permits,
+            permits: NonZeroUsize::MIN,
         }
+    }
+
+    /// Sets the maximum number of unacknowledged items, one by default.
+    pub fn permits(self, permits: NonZeroUsize) -> Self {
+        Self { permits, ..self }
     }
 }
 

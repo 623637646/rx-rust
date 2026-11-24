@@ -10,8 +10,7 @@ use educe::Educe;
 use futures::Stream;
 use std::num::NonZeroUsize;
 
-/// Converts a `Stream` of `Result`s into an observable that polls the stream for the next item
-/// only once an earlier one is acknowledged.
+/// Converts a `Stream` of `Result`s into an observable with a limit on unacknowledged items.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
 /// Each `Ok` is emitted as an item, with the [`StreamAck`] that acknowledges it, as for
@@ -65,16 +64,16 @@ impl<SM, S> FromTryStreamAcked<SM, S> {
     /// Creates a [`FromTryStreamAcked`] with one permit: the stream is polled for an item only once
     /// the previous one is acknowledged.
     pub fn new(stream: SM, scheduler: S) -> Self {
-        Self::with_permits(stream, scheduler, NonZeroUsize::MIN)
-    }
-
-    /// Creates a [`FromTryStreamAcked`] that sends up to `permits` items not acknowledged yet.
-    pub fn with_permits(stream: SM, scheduler: S, permits: NonZeroUsize) -> Self {
         Self {
             stream,
             scheduler,
-            permits,
+            permits: NonZeroUsize::MIN,
         }
+    }
+
+    /// Sets the maximum number of unacknowledged items, one by default.
+    pub fn permits(self, permits: NonZeroUsize) -> Self {
+        Self { permits, ..self }
     }
 }
 

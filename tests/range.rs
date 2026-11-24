@@ -87,6 +87,17 @@ fn test_unsub_on_next_by_take() {
 }
 
 #[test]
+fn test_stop_on_next_by_take() {
+    // A range without an end only stops because the observer does.
+    let observable = Range::new(100..).take(2);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [100, 101]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_clone() {
     let source = 100..103;
     let observable = Range::new(source);

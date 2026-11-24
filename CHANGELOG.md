@@ -59,7 +59,7 @@ All notable changes to this project are documented here. The format follows
 - `operators::creating::from_stream_acked::FromStreamAcked` and
   `from_try_stream_acked::FromTryStreamAcked` convert a stream as `FromStream` and `FromTryStream`
   do, but send each item with a `StreamAck`, and poll the stream only while they hold a permit:
-  one by default, `with_permits(n)` for `n`. Dropping a `StreamAck` gives its permit back, so a
+  one by default, `permits(n)` for `n`. Dropping a `StreamAck` gives its permit back, so a
   downstream that keeps it until the item is handled — asynchronously or not — sets the pace at
   which the stream is read: a large file read chunk by chunk, each chunk uploaded before the next
   is read. See `docs/decisions/0010-acknowledged-stream-sources.md`.
@@ -105,6 +105,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** the initial delay of an `Interval` is a method instead of a constructor. Replace
+  `Interval::with_initial_delay(initial_delay, period, scheduler)` with
+  `Interval::new(period, scheduler).initial_delay(initial_delay)`.
+- **Breaking:** subscribing to `Range` requires an input that implements both `IntoIterator` and
+  `RangeBounds`, such as `1..4`, `1..=3` or `1..`. Use `FromIter::new(values)` for other iterables.
 - **Breaking:** `Flow` is an alias of the standard `ControlFlow<()>`, so that a flow forwards with
   `?` and drives `Iterator::try_for_each`. Replace `Flow::Continue` with `Flow::Continue(())`,
   `Flow::Stop` with `Flow::Break(())` and `is_stop()` with `is_break()`. To import the variants

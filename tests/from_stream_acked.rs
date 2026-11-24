@@ -134,9 +134,9 @@ fn test_with_permits() {
     let time = VirtualTime::new();
     let stream = stream::iter([111, 222, 333, 444]);
     let acks = Acks::default();
-    let observable =
-        FromStreamAcked::with_permits(stream, time.scheduler(), NonZeroUsize::new(2).unwrap())
-            .map(keep_ack(&acks));
+    let observable = FromStreamAcked::new(stream, time.scheduler())
+        .permits(NonZeroUsize::new(2).unwrap())
+        .map(keep_ack(&acks));
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -151,6 +151,8 @@ fn test_with_permits() {
     drop(acks.take_value());
     time.advance_by(Duration::ZERO);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
+    // The permit left is enough to see the end of the stream, with the last item unacknowledged.
+    assert_eq!(acks.with_ref(|acks| acks.len()), 1);
     assert_eq!(checker.state(), State::Completed);
 }
 
@@ -490,9 +492,9 @@ fn test_order_with_continuous_next() {
     let time = VirtualTime::new();
     let (tx, rx) = futures::channel::mpsc::unbounded();
     let acks = Acks::default();
-    let observable =
-        FromStreamAcked::with_permits(rx, time.scheduler(), NonZeroUsize::new(10).unwrap())
-            .map(keep_ack(&acks));
+    let observable = FromStreamAcked::new(rx, time.scheduler())
+        .permits(NonZeroUsize::new(10).unwrap())
+        .map(keep_ack(&acks));
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -546,22 +548,19 @@ fn test_race_condition() {
         let (checker, observer) = Checker::new();
         let (terminated, termination) = mpsc::channel();
 
-        let observable = FromStreamAcked::with_permits(
-            stream::iter(0..VALUES),
-            scheduler.clone(),
-            NonZeroUsize::new(PERMITS).unwrap(),
-        )
-        .map({
-            let unacknowledged = unacknowledged.clone();
-            let most = most.clone();
-            move |(value, ack)| {
-                let count = unacknowledged.fetch_add(1, Ordering::SeqCst) + 1;
-                most.fetch_max(count, Ordering::SeqCst);
-                ack_sender.send(ack).unwrap();
-                value
-            }
-        })
-        .do_after_termination(move |_| terminated.send(()).unwrap());
+        let observable = FromStreamAcked::new(stream::iter(0..VALUES), scheduler.clone())
+            .permits(NonZeroUsize::new(PERMITS).unwrap())
+            .map({
+                let unacknowledged = unacknowledged.clone();
+                let most = most.clone();
+                move |(value, ack)| {
+                    let count = unacknowledged.fetch_add(1, Ordering::SeqCst) + 1;
+                    most.fetch_max(count, Ordering::SeqCst);
+                    ack_sender.send(ack).unwrap();
+                    value
+                }
+            })
+            .do_after_termination(move |_| terminated.send(()).unwrap());
 
         let subscription = observable.subscribe(observer);
         termination
@@ -689,11 +688,11 @@ fn test_concat_map_hold_with_permits() {
     let (stream, polled) = counted(vec![1, 2, 3]);
 
     let mut observables = [Some(observable_1), Some(observable_2), Some(observable_3)];
-    let observable =
-        FromStreamAcked::with_permits(stream, time.scheduler(), NonZeroUsize::new(2).unwrap())
-            .concat_map(move |(value, ack): (usize, _)| {
-                observables[value - 1].take().unwrap().hold(ack)
-            });
+    let observable = FromStreamAcked::new(stream, time.scheduler())
+        .permits(NonZeroUsize::new(2).unwrap())
+        .concat_map(move |(value, ack): (usize, _)| {
+            observables[value - 1].take().unwrap().hold(ack)
+        });
 
     let _subscription = observable.subscribe(observer);
     time.advance_by(Duration::ZERO);
@@ -727,11 +726,9 @@ fn test_flat_map_hold_with_permits() {
     let (stream, polled) = counted(vec![1, 2, 3]);
 
     let mut observables = [Some(observable_1), Some(observable_2), Some(observable_3)];
-    let observable =
-        FromStreamAcked::with_permits(stream, time.scheduler(), NonZeroUsize::new(2).unwrap())
-            .flat_map(move |(value, ack): (usize, _)| {
-                observables[value - 1].take().unwrap().hold(ack)
-            });
+    let observable = FromStreamAcked::new(stream, time.scheduler())
+        .permits(NonZeroUsize::new(2).unwrap())
+        .flat_map(move |(value, ack): (usize, _)| observables[value - 1].take().unwrap().hold(ack));
 
     let _subscription = observable.subscribe(observer);
     time.advance_by(Duration::ZERO);

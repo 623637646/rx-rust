@@ -151,9 +151,9 @@ fn test_with_permits() {
     let time = VirtualTime::new();
     let stream = stream::iter([Ok::<_, String>(111), Ok(222), Ok(333)]);
     let acks = Acks::default();
-    let observable =
-        FromTryStreamAcked::with_permits(stream, time.scheduler(), NonZeroUsize::new(2).unwrap())
-            .map(keep_ack(&acks));
+    let observable = FromTryStreamAcked::new(stream, time.scheduler())
+        .permits(NonZeroUsize::new(2).unwrap())
+        .map(keep_ack(&acks));
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);

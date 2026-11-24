@@ -180,7 +180,7 @@ fn test_completed_with_interval() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (mut sender, observable, channel_checker) = test_channel();
-    let sampler = Interval::with_initial_delay(Duration::ZERO, DURATION_100_MS, scheduler.clone());
+    let sampler = Interval::new(DURATION_100_MS, scheduler.clone()).initial_delay(Duration::ZERO);
     let (checker, observer) = Checker::new();
 
     let observable = observable.sample(sampler);
