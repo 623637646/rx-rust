@@ -108,3 +108,6 @@ pub trait SameItemSources: SourceSet {
     /// The item type shared by every source.
     type SameItem;
 }
+
+#[cfg(test)]
+mod testing;

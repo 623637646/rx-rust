@@ -86,10 +86,10 @@ once per scheduler. A failing run prints
 `the test panicked on the <name> scheduler`; `RX_TEST_SCHEDULERS=smol,local-pool` (comma-separated
 names from that list) restricts the loop to some of them.
 
-`TestScheduler` declares the `Shared` mode for every variant, the single-threaded ones included,
-so the suite is built in `Shared` mode only. The single-threaded schedulers are not `Send`, so
-their variants find the scheduler in a thread-local that `block_on` sets on the thread driving
-their executor; using one from another thread panics. The `Local` mode is covered by
+`TestScheduler` declares the `Shared` mode for every variant, the single-threaded ones included.
+The single-threaded schedulers are not `Send`, so their variants find the scheduler in a
+thread-local that `block_on` sets on the thread driving their executor. Using one from another
+thread panics. The `Local` mode is covered by
 `tests/local_mode.rs` (non-`Send` items and state on the three single-threaded schedulers) and by
 `tests/mutable.rs` (both locks). See `docs/decisions/0003-test-infrastructure.md`.
 
@@ -99,9 +99,9 @@ mode — `M::Ptr<T>` (`Rc<RefCell<T>>` / `Arc<Mutex<T>>`), `M::Flag` (a `RaiseOn
 raised it stays raised; a bool that goes back is a field under the lock), and `M::BoxedObserver` of
 `ObserverMode` — never
 `Rc`/`Arc` directly, and `Send` is required only where a value really crosses threads (the
-scheduler impls, the `SendBoxed*` erasures). The test suite runs in the `Shared` mode;
-when touching shared state or bounds, run `tests/local_mode.rs` too, which checks that the `Local`
-mode still takes values that are not `Send`.
+scheduler impls, the `SendBoxed*` erasures). When touching shared state or bounds, run
+`tests/local_mode.rs` too, which checks that the `Local` mode still takes values that are not
+`Send`.
 
 ## Other commands
 
@@ -274,7 +274,7 @@ when they fail.
   by the public module naming them (`serialized_delivery::UpdateOutcome` from
   `subscribe_with_context`).
 - `tests/<name>.rs` — integration tests, one file per operator; shared helpers in
-  `tests/tests_utils/`. Crate-private modules carry their own unit tests (see below).
+  `tests/tests_utils/`. See [test conventions](#test-conventions) for crate-private unit tests.
 
 ## Code conventions
 
@@ -498,12 +498,17 @@ The public API is tested by integration tests, in `tests/`. Each file starts wit
 `mod tests_utils;` and builds sources with `test_channel()` plus a `Checker` observer, asserting on
 `checker.values()`, `checker.state()` and the channel state after each event.
 
-What is `pub(crate)` cannot be reached from `tests/`, nor from a doctest, so it is tested by a
-`#[cfg(test)] mod tests` at the bottom of its own file (`cargo test --lib`), with `use super::…`.
-Those tests cannot use `tests/tests_utils/` either: keep the few helpers they need local to the
-module, and keep them small — a crate-private item is a building block, tested on its own state
-machine, while its effect on the operators stays covered by the operators' integration tests. Do
-not make an item public only to test it from `tests/`.
+Use unit tests (`cargo test --lib`) to exercise crate-private items. Declare
+`#[cfg(test)] mod tests;` at the end of the module under test. Both `foo.rs` and `foo/mod.rs` use
+`foo/tests.rs`, where `use super::…` reaches private items. Declare tests of an inline module inside
+it and put the file one directory deeper (`observe_on/inbox/tests.rs`). Keep helpers used by one
+test module in its `tests.rs`. Give helpers shared by several modules a `#[cfg(test)] mod testing;`
+declaration in the module that owns them, even for methods on a tested type (`Events::into_vec` in
+`group/testing.rs`). Keep test code in these files, so that editing a test does not rebuild the
+library the integration tests link.
+
+Test crate-private state machines directly and cover their effects through the operators'
+integration tests. Keep internal items private when adding tests.
 
 Pick the source by what the test needs from it, not by habit:
 
@@ -522,16 +527,16 @@ Pick the source by what the test needs from it, not by habit:
   `*_same_inner`), or a subject the operator API takes: `PublishSubject::shared()` and the other
   subjects.
 
-Tests build in the `Shared` mode, the mode of every `TestScheduler`, through the library's own
+Integration tests default to `Shared`, the mode of every `TestScheduler`, through the library's own
 constructors: `Create::shared_boxed`, `PublishSubject::shared()` and the other subjects'
 `shared`, `unicast_subject::shared`; erase with `into_boxed` / `SendBoxedObserver`. A source
 of another mode that must sit among erased `Shared` observables of one type gets `.into_shared()`.
 Name the mode (`Shared`, from `rx_rust::thread_mode`) only where inference cannot reach it, and
 write `_` in `let` annotations. Keep test state in plain `Arc<Mutex<_>>`, reached through
 `MutableHelper`, or in atomics (`AtomicBool`, `AtomicUsize`) with their own `load` / `store` and
-`Ordering::SeqCst`, and bound closures with `Send`. Tests that need real
-threads need no gate. A
-test that needs the `Local` mode itself goes in `tests/local_mode.rs`.
+`Ordering::SeqCst`, and bound closures with `Send`. Tests that need real threads need no gate.
+Exercise the `Local` mode through the public API in `tests/local_mode.rs`. Unit tests can use the
+mode the code under test needs.
 
 What must not compile is a `compile_fail` doctest on the item, next to a twin that compiles and
 differs in one place, since a `compile_fail` passes on any error; a `Local` type that must not be
