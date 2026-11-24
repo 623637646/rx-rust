@@ -52,13 +52,18 @@ fn test_completed() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
+    assert!(sender.on_next(11).is_continue());
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
     assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.values(), [11]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }

@@ -78,6 +78,24 @@ fn test_completed() {
 }
 
 #[test]
+fn test_completed_without_next() {
+    let subject = AsyncSubject::<i32, Infallible, _>::shared();
+    let (checker, observer) = Checker::new();
+    let _subscription = subject.clone().subscribe(observer);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.clone().on_termination(Termination::Completed);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(subject.termination(), Some(Termination::Completed));
+
+    let (late_checker, late_observer) = Checker::new();
+    let _late_subscription = subject.subscribe(late_observer);
+    assert!(late_checker.values().is_empty());
+    assert_eq!(late_checker.state(), State::Completed);
+}
+
+#[test]
 fn test_error() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();

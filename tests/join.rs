@@ -828,6 +828,46 @@ fn test_duration_completes_on_sub() {
     assert_eq!(checker.state(), State::Active);
 }
 
+#[test]
+fn test_other_source_completes_during_duration_subscription() {
+    let (mut left, left_observable, left_checker) = test_channel::<'_, i32, Infallible>();
+    let (right, right_observable) = test_channels::<'_, &str, Infallible>();
+    let (left_durations, left_duration) = test_channels::<(), _>();
+    let (right_durations, right_duration) = test_channels::<(), _>();
+    let right_during_subscription = right.clone();
+    let (checker, observer) = Checker::new();
+
+    let observable = left_observable.join(
+        right_observable,
+        move |_| {
+            let right = right_during_subscription.clone();
+            left_duration.clone().do_after_subscription(move || {
+                right.on_termination(0, Termination::Completed);
+            })
+        },
+        move |_| right_duration.clone(),
+        |left, right| (*left, *right),
+    );
+    let _subscription = observable.subscribe(observer);
+    assert!(right.on_next(0, "a").is_continue());
+
+    // Completing the right source closes the left window before its duration returns a disposal.
+    assert!(left.on_next(1).is_continue());
+    assert_eq!(right.state(0), ChannelState::Completed);
+    assert_eq!(left_durations.state(0), ChannelState::Unsubscribed);
+    assert_eq!(right_durations.state(0), ChannelState::Subscribed);
+    assert_eq!(checker.values(), [(1, "a")]);
+    assert_eq!(checker.state(), State::Active);
+
+    assert!(left.on_next(2).is_continue());
+    assert_eq!(left_durations.len(), 1);
+    assert_eq!(checker.values(), [(1, "a"), (2, "a")]);
+
+    right_durations.on_termination(0, Termination::Completed);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(left_checker.state(), ChannelState::Unsubscribed);
+}
+
 /// A duration that fails while it is subscribed ends the stream, and the value that opened it
 /// answers its source with a stop: a source emitting while it is subscribed has no disposal yet,
 /// so only the flow stops it.

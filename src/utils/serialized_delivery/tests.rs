@@ -1351,6 +1351,37 @@ fn test_a_termination_sent_from_on_next_is_delivered_after_the_queued_values() {
     );
 }
 
+#[test]
+fn test_batches_sent_from_on_next_are_delivered_in_order_before_termination() {
+    let log = new_log();
+    let delivery = builder(&log)
+        .on_next(|delivery, number| {
+            if number == 1 {
+                assert!(delivery.send(next_batch([4, 5])).is_continue());
+                assert!(delivery.send(next_batch_and_completed([6, 7])).is_break());
+                assert!(delivery.send(next_batch([8, 9])).is_break());
+            }
+        })
+        .build();
+
+    assert!(delivery.send(next_batch([1, 2, 3])).is_break());
+    assert_eq!(
+        records(&log),
+        [
+            Record::Next(1),
+            Record::Next(2),
+            Record::Next(3),
+            Record::Next(4),
+            Record::Next(5),
+            Record::Next(6),
+            Record::Next(7),
+            Record::Termination(Termination::Completed),
+            Record::ObserverDropped,
+            Record::ResourcesDropped,
+        ]
+    );
+}
+
 // MARK: - `update`
 
 #[test]

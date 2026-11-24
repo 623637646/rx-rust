@@ -18,10 +18,12 @@ use rx_rust::{
 };
 use std::{
     convert::Infallible,
+    pin::pin,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
+    task::{Context, Poll, Wake, Waker},
 };
 
 #[test]
@@ -45,6 +47,43 @@ fn test_completed() {
         drop(future);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
+}
+
+#[test]
+fn test_poll_replaces_the_waker() {
+    #[derive(Default)]
+    struct CountingWake(AtomicUsize);
+
+    impl Wake for CountingWake {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let first = Arc::new(CountingWake::default());
+    let latest = Arc::new(CountingWake::default());
+    let first_waker = Waker::from(first.clone());
+    let latest_waker = Waker::from(latest.clone());
+    let mut latest_context = Context::from_waker(&latest_waker);
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let mut future = pin!(observable.into_try_future());
+
+    assert_eq!(
+        future.as_mut().poll(&mut Context::from_waker(&first_waker)),
+        Poll::Pending
+    );
+    assert_eq!(future.as_mut().poll(&mut latest_context), Poll::Pending);
+    assert_eq!(Arc::strong_count(&first), 2);
+
+    assert!(sender.on_next(111).is_break());
+    assert_eq!(first.0.load(Ordering::SeqCst), 0);
+    assert_eq!(latest.0.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        future.as_mut().poll(&mut latest_context),
+        Poll::Ready(Ok(Some(111)))
+    );
+    assert_eq!(Arc::strong_count(&latest), 2);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]

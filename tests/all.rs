@@ -90,6 +90,28 @@ fn test_completed_false() {
 }
 
 #[test]
+fn test_predicate_is_not_called_after_short_circuit() {
+    let source = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, i32, Infallible>| {
+        assert!(observer.on_next(1).is_break());
+        // The source is still in subscribe and sends a value despite the stop.
+        assert!(observer.on_next(2).is_break());
+        observer.on_termination(Termination::Completed);
+        DisposeOnDrop::default()
+    });
+    let (checker, observer) = Checker::new();
+
+    let _subscription = source
+        .all(|value| {
+            assert_eq!(value, 1);
+            false
+        })
+        .subscribe(observer);
+
+    assert_eq!(checker.values(), [false]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
