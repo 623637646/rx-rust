@@ -1,9 +1,9 @@
 //! An observable that is one of two types, without boxing.
 
-use super::{DisposeOnDrop, JoinedModeOf, Observable, ObservableTypes};
+use super::{JoinedModeOf, Observable, ObservableTypes};
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, either_disposal::EitherDisposal},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop, either_disposal::EitherDisposal},
     observer::Observer,
 };
 use educe::Educe;

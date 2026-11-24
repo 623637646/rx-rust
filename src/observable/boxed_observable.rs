@@ -25,13 +25,16 @@
 //! The `For` types have no method: their observer type `OR` must be named anyway, and so can the
 //! type itself, `BoxedObservableFor::<_, _, _, _, _, OR>::new(observable)`.
 
-use super::{Observable, ObservableTypes, Observer};
+use super::{Observable, ObservableTypes};
 use crate::{
     disposable::{
         boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
         dispose_on_drop::DisposeOnDrop,
     },
-    observer::boxed_observer::{BoxedObserver, ObserverMode, SendBoxedObserver},
+    observer::{
+        Observer,
+        boxed_observer::{BoxedObserver, ObserverMode, SendBoxedObserver},
+    },
     thread_mode::{Local, Shared, ThreadMode},
     utils::MarkerType,
 };

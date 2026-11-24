@@ -125,8 +125,8 @@ when they fail.
 ## Layout
 
 - `src/observable/`, `src/observer/`, `src/disposable/` — core traits. `ObservableExt` in
-  `src/observable/mod.rs` is the fluent API; every operator gets a method there, in alphabetical
-  order, except that each `into_*` conversion sits next to its `Send` twin.
+  `src/observable/observable_ext.rs` is the fluent API; every operator gets a method there, in
+  alphabetical order.
   `observable::sources` is the crate-private machinery for source sets (decision 0012):
   `SourceSet` and `SameItemSources` cover tuples and the `IterSources<I>` adapter. `SourceSet`
   holds `Item`, `Error` and `Mode` — `Item` is a `Combination`, a type selection that asks
