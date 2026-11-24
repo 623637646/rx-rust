@@ -34,15 +34,12 @@ use rx_rust::{
         },
         connectable::ref_count::RefCount,
         creating::{
-            create::Create,
-            empty::Empty,
-            from_iter::FromIter,
-            from_stream_acked::{FromStreamAcked, StreamAck},
+            create::Create, empty::Empty, from_iter::FromIter, from_stream_acked::FromStreamAcked,
         },
         error_handling::retry::RetryAction,
     },
     scheduler::{
-        SchedulerTypes, TaskWaker,
+        SchedulerTypes, StreamAck, TaskWaker,
         runtime::{
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},

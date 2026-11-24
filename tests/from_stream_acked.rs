@@ -12,12 +12,10 @@ use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::creating::{
-        empty::Empty,
-        from_stream_acked::{FromStreamAcked, StreamAck},
-        from_try_stream_acked::FromTryStreamAcked,
-        timer::Timer,
+        empty::Empty, from_stream_acked::FromStreamAcked,
+        from_try_stream_acked::FromTryStreamAcked, timer::Timer,
     },
-    scheduler::{runtime::futures::ThreadPoolScheduler, virtual_time::VirtualTime},
+    scheduler::{StreamAck, runtime::futures::ThreadPoolScheduler, virtual_time::VirtualTime},
     thread_mode::{
         Shared,
         mutable::{MutableExt, MutableHelper},

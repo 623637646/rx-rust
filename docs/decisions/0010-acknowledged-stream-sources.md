@@ -50,10 +50,10 @@ FromTryStreamAcked::new(chunks, scheduler.clone())
   pushed, as before.
 - **The task is the scheduler's.** It is `Task::from_stream_acked_then`, in
   `scheduler/task/stream_acked.rs` next to `from_stream_then`, and public like it, for operators
-  written outside the crate; `StreamAck` lives there with it, since the task hands it out, and
-  `from_stream_acked` re-exports it. The permits and the waker sit behind one lock of the
-  scheduler's mode, which the `StreamAck` shares: in the `Shared` mode it is `Send` and may be
-  dropped on any thread, in the `Local` mode it is not.
+  written outside the crate; `StreamAck` lives there with it, since the task hands it out. The
+  permits and the waker sit behind one lock of the scheduler's mode, which the `StreamAck` shares:
+  in the `Shared` mode it is `Send` and may be dropped on any thread, in the `Local` mode it is
+  not.
 - **The names follow their neighbours.** `from_stream_acked_then` and `StreamAckedThenContext`
   pair with `from_stream_then` and `StreamThenContext`, the modifier after the noun as in
   `FromStreamAcked`. `StreamAck` rather than `Ack`, since its home is `scheduler`, where a bare

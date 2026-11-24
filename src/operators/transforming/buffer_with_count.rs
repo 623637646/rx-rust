@@ -1,7 +1,10 @@
 //! The [`BufferWithCount`] operator, behind
 //! [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count).
 
-use super::{buffer_with_count_and_skip, internal::overlap::no_overlap};
+use super::{
+    buffer_with_count_and_skip::{self, BufferWithCountAndSkipObserver},
+    internal::overlap::no_overlap,
+};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -9,9 +12,6 @@ use crate::{
 };
 use educe::Educe;
 use std::num::NonZeroUsize;
-
-#[doc(hidden)]
-pub use super::buffer_with_count_and_skip::BufferWithCountAndSkipObserver as BufferWithCountObserver;
 
 /// Gathers the items of an observable into bundles of a specified size, emitted as `Vec<T>`; the
 /// last bundle, emitted on completion, may be smaller.
@@ -69,7 +69,7 @@ where
 impl<T, E, OE, OR> Observable<OR> for BufferWithCount<OE>
 where
     OR: Observer<Vec<T>, E>,
-    OE: Observable<BufferWithCountObserver<T, OR>, Item = T, Error = E>,
+    OE: Observable<BufferWithCountAndSkipObserver<T, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // A `BufferWithCountAndSkip` whose bundles start as the one before is full: a single one

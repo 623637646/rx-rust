@@ -2,7 +2,9 @@
 //! [`ObservableExt::buffer_with_time`](crate::observable::ObservableExt::buffer_with_time).
 
 use super::{
-    buffer_with_time_and_shift::BufferWithTimeAndShiftTask,
+    buffer_with_time_and_shift::{
+        self, BufferWithTimeAndShiftObserver, BufferWithTimeAndShiftTask,
+    },
     internal::{bundle::Bundles, overlap::no_overlap, time_shift},
 };
 use crate::{
@@ -13,10 +15,6 @@ use crate::{
 };
 use educe::Educe;
 use std::time::Duration;
-
-#[doc(hidden)]
-pub use super::buffer_with_time_and_shift::BufferWithTimeAndShiftObserver as BufferWithTimeObserver;
-pub use super::buffer_with_time_and_shift::Disposal;
 
 /// Periodically gathers items from an observable into bundles and emits these bundles as `Vec<T>`,
 /// every `time_span`.
@@ -93,14 +91,20 @@ where
     /// The timer's thread emits the buffers, the source's the last one, so the mode is both
     /// joined.
     type Mode = JoinedSchedulerModeOf<OE, S>;
-    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
+    type Disposal = buffer_with_time_and_shift::Disposal<
+        JoinedSchedulerModeOf<OE, S>,
+        T,
+        E,
+        S::Disposal,
+        OE::Disposal,
+    >;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTime<OE, S>
 where
     OR: Observer<Vec<T>, E>,
     OE: Observable<
-            BufferWithTimeObserver<
+            BufferWithTimeAndShiftObserver<
                 JoinedSchedulerModeOf<OE, S>,
                 T,
                 E,

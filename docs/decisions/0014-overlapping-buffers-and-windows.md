@@ -35,8 +35,8 @@ observer of the general operator, given the length as the step and `no_overlap` 
 | `BufferWithTime`  | `BufferWithTimeAndShift` | `time_span` |
 | `WindowWithTime`  | `WindowWithTimeAndShift` | `time_span` |
 
-Where the general operator has a `Disposal` of its own, the one without a skip or a shift
-re-exports it from its own module, so that the type keeps its path there.
+Where the general operator has a `Disposal` of its own, the one without a skip or a shift takes
+it as it is, as `switch_map` takes `switch::Disposal`.
 
 ### Cloning is a function pointer, not a bound
 

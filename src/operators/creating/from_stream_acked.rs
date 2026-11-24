@@ -4,14 +4,11 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
-    scheduler::{Scheduler, SchedulerTypes, StreamAckedThenContext, Task},
+    scheduler::{Scheduler, SchedulerTypes, StreamAck, StreamAckedThenContext, Task},
 };
 use educe::Educe;
 use futures::Stream;
 use std::{convert::Infallible, num::NonZeroUsize};
-
-/// The acknowledgement each item comes with, re-exported from [`scheduler`](crate::scheduler).
-pub use crate::scheduler::StreamAck;
 
 /// Converts a `Stream` into an observable that polls the stream for the next item only once an
 /// earlier one is acknowledged.

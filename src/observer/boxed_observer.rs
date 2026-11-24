@@ -59,7 +59,8 @@ boxed_observer!(
     /// # Examples
     /// ```rust
     /// use rx_rust::observer::{
-    ///     BoxedObserverExt, Flow, Observer, Termination, boxed_observer::BoxedObserver,
+    ///     Flow, Observer, Termination,
+    ///     boxed_observer::{BoxedObserver, BoxedObserverExt},
     ///     callback_observer::CallbackObserver,
     /// };
     ///
@@ -109,6 +110,27 @@ boxed_observer!(
     Send
 );
 
+/// Type erasure for any [`Observer`].
+pub trait BoxedObserverExt<T, E>: Observer<T, E> + Sized {
+    /// Erases the type of this observer.
+    fn into_boxed<'or>(self) -> BoxedObserver<'or, T, E>
+    where
+        Self: 'or,
+    {
+        BoxedObserver::new(self)
+    }
+
+    /// Erases the type of this observer, keeping it `Send`.
+    fn into_send_boxed<'or>(self) -> SendBoxedObserver<'or, T, E>
+    where
+        Self: Send + 'or,
+    {
+        SendBoxedObserver::new(self)
+    }
+}
+
+impl<T, E, OR> BoxedObserverExt<T, E> for OR where OR: Observer<T, E> {}
+
 /// What a [thread mode](crate::thread_mode) means for an observer: the box it is erased into, and
 /// how to get it there.
 ///
@@ -147,7 +169,7 @@ impl ObserverMode for Shared {
 pub trait IntoBoxedObserver<'a, T, E, M: ObserverMode>: Observer<T, E> + Sized {
     /// Boxes the observer; call it as [`ObserverMode::boxed`]. An associated function rather than a
     /// method, so that it does not show up on every observer next to
-    /// [`into_boxed`](super::BoxedObserverExt::into_boxed).
+    /// [`into_boxed`](BoxedObserverExt::into_boxed).
     #[doc(hidden)]
     fn box_observer(observer: Self) -> M::BoxedObserver<'a, T, E>;
 }

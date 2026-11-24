@@ -8,7 +8,7 @@
 //!
 //! A pair of closures is an observer too, through
 //! [`CallbackObserver`](callback_observer::CallbackObserver), and
-//! [`BoxedObserver`] erases an observer's type.
+//! [`BoxedObserver`](boxed_observer::BoxedObserver) erases an observer's type.
 //!
 //! # Examples
 //! ```rust
@@ -40,7 +40,6 @@ pub mod boxed_observer;
 pub mod callback_observer;
 pub mod emitter;
 
-use crate::observer::boxed_observer::{BoxedObserver, SendBoxedObserver};
 use educe::Educe;
 use std::ops::ControlFlow;
 
@@ -165,24 +164,3 @@ impl<T, E> EventBatch<T, E> {
         )
     }
 }
-
-/// Type erasure for any [`Observer`].
-pub trait BoxedObserverExt<T, E>: Observer<T, E> + Sized {
-    /// Erases the type of this observer.
-    fn into_boxed<'or>(self) -> BoxedObserver<'or, T, E>
-    where
-        Self: 'or,
-    {
-        BoxedObserver::new(self)
-    }
-
-    /// Erases the type of this observer, keeping it `Send`.
-    fn into_send_boxed<'or>(self) -> SendBoxedObserver<'or, T, E>
-    where
-        Self: Send + 'or,
-    {
-        SendBoxedObserver::new(self)
-    }
-}
-
-impl<T, E, OR> BoxedObserverExt<T, E> for OR where OR: Observer<T, E> {}

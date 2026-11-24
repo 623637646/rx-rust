@@ -7,7 +7,9 @@ use super::{
         time_shift,
         window::{DelegateObserver, Windows},
     },
-    window_with_time_and_shift::WindowWithTimeAndShiftTask,
+    window_with_time_and_shift::{
+        self, WindowWithTimeAndShiftObserver, WindowWithTimeAndShiftTask,
+    },
 };
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -19,10 +21,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, time::Duration};
-
-pub use super::window_with_time_and_shift::Disposal;
-#[doc(hidden)]
-pub use super::window_with_time_and_shift::WindowWithTimeAndShiftObserver as WindowWithTimeObserver;
 
 /// Subdivides the items of an observable into observable windows, a new one every `time_span`.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -120,7 +118,13 @@ where
     /// The timer's thread rotates the windows, the source's feeds them and ends the last one, so
     /// the mode is both joined.
     type Mode = JoinedSchedulerModeOf<OE, S>;
-    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
+    type Disposal = window_with_time_and_shift::Disposal<
+        JoinedSchedulerModeOf<OE, S>,
+        T,
+        E,
+        S::Disposal,
+        OE::Disposal,
+    >;
 }
 
 impl<'a, T, E, OE, S, OR> Observable<OR> for WindowWithTime<'a, OE, S>
@@ -129,7 +133,7 @@ where
     OR: Observer<BoxedUnicastObservable<'a, T, E, JoinedSchedulerModeOf<OE, S>>, E>,
     E: Clone,
     OE: Observable<
-            WindowWithTimeObserver<
+            WindowWithTimeAndShiftObserver<
                 'a,
                 JoinedSchedulerModeOf<OE, S>,
                 T,

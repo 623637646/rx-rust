@@ -1,7 +1,10 @@
 //! The [`WindowWithCount`] operator, behind
 //! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
 
-use super::{internal::overlap::no_overlap, window_with_count_and_skip};
+use super::{
+    internal::overlap::no_overlap,
+    window_with_count_and_skip::{self, WindowWithCountAndSkipObserver},
+};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -11,10 +14,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
-
-pub use super::window_with_count_and_skip::Disposal;
-#[doc(hidden)]
-pub use super::window_with_count_and_skip::WindowWithCountAndSkipObserver as WindowWithCountObserver;
 
 /// Subdivides the items of an observable into observable windows of a specified number of items.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -78,7 +77,7 @@ where
     type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = Disposal<OE::Disposal>;
+    type Disposal = window_with_count_and_skip::Disposal<OE::Disposal>;
 }
 
 impl<'a, T, E, OE, OR> Observable<OR> for WindowWithCount<'a, OE>
@@ -87,7 +86,7 @@ where
     OR: Observer<BoxedUnicastObservable<'a, T, E, <OE as ObservableTypes>::Mode>, E>,
     E: Clone,
     OE: Observable<
-            WindowWithCountObserver<'a, <OE as ObservableTypes>::Mode, T, E, OR>,
+            WindowWithCountAndSkipObserver<'a, <OE as ObservableTypes>::Mode, T, E, OR>,
             Item = T,
             Error = E,
         >,

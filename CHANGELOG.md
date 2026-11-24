@@ -112,6 +112,13 @@ All notable changes to this project are documented here. The format follows
   `Task::from_stream_then` and `Task::from_stream_acked_then` now return `ControlFlow<()>`.
   Replace `true` with `ControlFlow::Continue(())` and `false` with `ControlFlow::Break(())`.
   An observer's `on_next` already returns this type.
+- **Breaking:** `BoxedObserverExt` moved to `observer::boxed_observer`, next to the boxes it makes.
+  Import it from there instead of from `observer`.
+- **Breaking:** `delegate_disposal!` is no longer re-exported by `disposable`. Import it from the
+  crate root, `rx_rust::delegate_disposal`.
+- **Breaking:** the disposals of `BufferWithTime` and `WindowWithCount` are
+  `buffer_with_time_and_shift::Disposal` and `window_with_count_and_skip::Disposal`, those of the
+  operators they are built on.
 - **Breaking:** `into_boxed` and `into_cloneable_boxed` erase an observable into the box its mode
   picks (`BoxedObservableMode`): `BoxedObservable` / `CloneableBoxedObservable` for `Local`,
   `SendBoxedObservable` / `SendCloneableBoxedObservable` for `Shared`

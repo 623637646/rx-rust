@@ -15,8 +15,8 @@
 //!   disposal that is built, or replaced, later;
 //! - [`BoxedDisposal`] erases the type.
 //!
-//! [`DisposableExt`] wraps any disposal into these, and [`delegate_disposal!`] names a deeply
-//! nested combination.
+//! [`DisposableExt`] wraps any disposal into these, and
+//! [`delegate_disposal!`](crate::delegate_disposal) names a deeply nested combination.
 //!
 //! # Examples
 //! ```rust
@@ -47,8 +47,6 @@ use crate::disposable::{
     dispose_on_drop::DisposeOnDrop,
     either_disposal::EitherDisposal,
 };
-
-pub use crate::delegate_disposal;
 
 /// A resource that is released exactly once, by consuming it.
 ///
@@ -109,8 +107,8 @@ pub trait DisposableExt: Disposable + Sized {
     /// Converts this disposal through [`From`] and wraps it in [`DisposeOnDrop`].
     ///
     /// Dropping or disposing the returned wrapper disposes the converted value. The conversion
-    /// can name an operator's disposal through [`delegate_disposal!`]; to wrap a value without
-    /// converting it, use [`DisposeOnDrop::new`].
+    /// can name an operator's disposal through [`delegate_disposal!`](crate::delegate_disposal);
+    /// to wrap a value without converting it, use [`DisposeOnDrop::new`].
     fn into_dispose_on_drop<D>(self) -> DisposeOnDrop<D>
     where
         D: Disposable + From<Self>,
