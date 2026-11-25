@@ -4,10 +4,40 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] - 2026-11-25
+
+### Migrating from 2.x
+
+The renames and moves most programs meet. Every breaking change is under Changed and Removed.
+
+2.x | 3.0
+--- | ---
+`Flow::Continue`, `Flow::Stop`, `flow.is_stop()` | `Flow::Continue(())`, `Flow::Break(())`, `flow.is_break()`
+`a.merge_with(b)`, `a.concat_with(b)`, `a.amb_with(b)` | `a.merge(b)`, `a.concat(b)`, `a.amb(b)`
+`Zip::new(a, b)`, and `CombineLatest`, `Merge`, `Concat` | `Zip::new((a, b))`
+`Amb::new(list)` | `Amb::new_from_iter(list)`
+`MergeAll::new_from_iter(list)`, `ConcatAll::new_from_iter(list)` | `Merge::new_from_iter(list)`, `Concat::new_from_iter(list)`
+`Switch::new_from_iter(list)` | `Switch::new(FromIter::new(list).with_error_type())`
+`Interval::with_initial_delay(delay, period, scheduler)` | `Interval::new(period, scheduler).initial_delay(delay)`
+`Range::new(iterable)` | `FromIter::new(iterable)`, unless it is a range
+`source.into_send_boxed()` on a `Shared` source | `source.into_boxed()`
+`source.into_send_boxed()` on a `Local` source | `SendBoxedObservable::new(source)`
+`a.take_until(subject)`, the subject's item type inferred as `()` | `PublishSubject::<(), _, _>::local()`
+`OptionDisposal::some(d)`, `d.into_option()` | `Some(d)`
+`observer::BoxedObserverExt` | `observer::boxed_observer::BoxedObserverExt`
+`disposable::delegate_disposal!` | `rx_rust::delegate_disposal!`
+`true` / `false` from a `Task::periodic` or `Task::from_stream_then` callback | `ControlFlow::Continue(())` / `ControlFlow::Break(())`
+`context.update_flow(…)` | `context.update(…).flow()`
 
 ### Fixed
 
+- The minimum `educe` is 0.8.1: the crate does not build with 0.8.0, which `educe = "0.8"` let a
+  lock file select. The minimum `async-io` is 2.1, which `smol` already asks for.
+- A context's update no longer runs once the termination of its stream is queued behind a running
+  delivery. `merge_all` and `switch` could subscribe an inner observable whose events would all be
+  rejected, and `SubscriptionContext::update_flow` could answer `Flow::Continue`, so that a source
+  kept emitting into a stream that was over. See
+  `docs/decisions/0015-no-update-behind-a-queued-termination.md`.
 - `concat_all` and `concat_map` give the stream up when subscribing an inner observable panics,
   or disposing the one that completed, as `merge_all`, `switch` and `exhaust_all` do. The
   place of that inner observable used to stay taken: every later one waited in the queue, and the
@@ -29,6 +59,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `join` combines every item of two sources whose windows overlap, a window staying open until the
+  observable that its duration selector returns emits or completes. `group_join` pairs every item
+  of the left source with an observable of the right items that overlap it.
 - `filter_map`, `pairwise` and `single` filter optional mapping results, emit adjacent pairs,
   and require exactly one source item, respectively.
 - `buffer_with_count_and_skip` and `window_with_count_and_skip` support overlapping groups and
@@ -76,7 +109,6 @@ All notable changes to this project are documented here. The format follows
   callback returns `None`, which completes downstream; an error is not repeated. Like `retry`, it
   repeats a source that completes as it is subscribed once that `subscribe` has returned, so the
   rounds take the stack of one subscription, and disposes each round before subscribing the next.
-  The trampoline behind both now lives in `utils::trampoline`.
 - `ObservableExt::window_with_time(time_span, scheduler)` and
   `window_with_time_or_count(count, time_span, scheduler)` are the windowed twins of
   `buffer_with_time` and `buffer_with_time_or_count`: the first window opens at the subscription
@@ -108,6 +140,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** the notifier of `take_until`, `skip_until`, `sample`, `buffer` and `window` may emit
+  items of any type, which are ignored, so `Empty` and `Never` are notifiers too, and
+  `.map(|_| ())` is no longer needed. A notifier whose item type was inferred from the former `()`
+  must now state it: `PublishSubject::<(), _, _>::local()`.
+- **Breaking:** `Option<D>` is a `Disposable` itself, which disposes the disposal it holds, if any.
+  It replaces `OptionDisposal<D>`.
+- **Breaking:** `debug::Disposal` no longer names the item and error types:
+  `Disposal<D, C, F, T, E>` is now `Disposal<D, C, F>`. A subscription to borrowed items is no
+  longer tied to their lifetime by `debug`.
 - **Breaking:** the initial delay of an `Interval` is a method instead of a constructor. Replace
   `Interval::with_initial_delay(initial_delay, period, scheduler)` with
   `Interval::new(period, scheduler).initial_delay(initial_delay)`.
@@ -173,11 +214,11 @@ All notable changes to this project are documented here. The format follows
   `SubscriptionContext`. What a context's update takes and answers — `UpdateOutcome`, `Updated`,
   `DropUndecided` and `DropDecided` — moved to `utils::subscribe_with_context`.
 - **Breaking:** `SubscriptionContext::update` answers an `Updated<R>` — `Ran { result, flow }`, or
-  `Stopped` when the context had stopped — instead of `Result<R, DeliveryStopped>`, and
-  `update_flow` is gone: `.flow()` is what an `on_next` answers, `.result()` the result of the
-  callback, as an `Option`. A model that stops its caller, an inner observable that has been
-  superseded say, calls `UpdateOutcome::answering_stop` instead of returning a `Flow` as its
-  result. `DeliveryStopped` is removed.
+  `Ended` when the context had stopped or a termination was already queued, the callback not being
+  run — instead of `Result<R, DeliveryStopped>`, and `update_flow` is gone: `.flow()` is what an
+  `on_next` answers, `.result()` the result of the callback, as an `Option`. A model that stops its
+  caller, an inner observable that has been superseded say, calls `UpdateOutcome::answering_stop`
+  instead of returning a `Flow` as its result. `DeliveryStopped` is removed.
 - `observe_on` delivers each value without taking the lock of its queue, which the source pushes
   the next values through: a flag raised with the lock, as the subscription is disposed or an
   error queued, tells the task when it must look before the next value.
@@ -204,6 +245,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 
+- **Breaking:** `disposable::option_disposal` and `DisposableExt::into_option`. Write `Some(d)` and
+  `None`.
 - **Breaking:** `ObservableExt::into_send_boxed`, `into_send_cloneable_boxed` and the four `_for` methods
   (`into_boxed_for`, …). `into_boxed` covers the first two through the mode; the `For` types
   keep their constructors, `BoxedObservableFor::new(source)`, whose observer type is inferred
@@ -695,7 +738,8 @@ themes rather than every change.
 
 Initial public release on crates.io.
 
-[Unreleased]: https://github.com/623637646/rx-rust/compare/2.0.1...HEAD
+[Unreleased]: https://github.com/623637646/rx-rust/compare/3.0.0...HEAD
+[3.0.0]: https://github.com/623637646/rx-rust/compare/2.0.1...3.0.0
 [2.0.1]: https://github.com/623637646/rx-rust/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/623637646/rx-rust/compare/1.0.1...2.0.0
 [1.0.1]: https://github.com/623637646/rx-rust/compare/1.0.0...1.0.1

@@ -40,7 +40,7 @@ compares the two.
 
 ```toml
 [dependencies]
-rx-rust = { version = "2.0", features = ["tokio-scheduler"] }
+rx-rust = { version = "3.0", features = ["tokio-scheduler"] }
 ```
 
 Enable the scheduler feature of the runtime you use; the features can be combined. The schedulers
