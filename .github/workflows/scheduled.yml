@@ -1,8 +1,9 @@
 name: Scheduled
 
 # What a pull request does not wait for: the next toolchain, whose new lints and changes show up
-# here before they reach stable, and another platform, whose schedulers time differently. A failure
-# does not block anything; it opens an issue, or comments on the one already open.
+# here before they reach stable, another platform, whose schedulers time differently, and the lowest
+# versions of the dependencies, which only a nightly cargo selects. A failure does not block
+# anything; it opens an issue, or comments on the one already open.
 
 on:
   schedule:
@@ -48,8 +49,19 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - run: ci/check.sh test dev
 
+  minimal:
+    name: lowest dependency versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - run: ci/check.sh minimal
+
   report:
-    needs: [beta, macos]
+    needs: [beta, macos, minimal]
     if: failure()
     runs-on: ubuntu-latest
     timeout-minutes: 5

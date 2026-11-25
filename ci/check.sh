@@ -8,6 +8,9 @@
 #   ci/check.sh test dev|release [ARGS...]  the test suite; ARGS go to nextest (`--test map`)
 #   ci/check.sh msrv                        the library on the MSRV, on every feature combination
 #   ci/check.sh all                         all of the above, in both profiles
+#   ci/check.sh minimal                     the library on the lowest versions of the dependencies
+#                                           that Cargo.toml allows; needs a nightly toolchain, so
+#                                           only the scheduled workflow runs it
 #
 # CI is the product of the tools (rustc, clippy, rustdoc, the tests) and the configurations the
 # code compiles differently in (the features, the profile, the toolchain). Every configuration is
@@ -108,6 +111,17 @@ run_msrv() {
     cargo "+$msrv" hack check "${POWERSET[@]}" --lib
 }
 
+run_minimal() {
+    require hack
+    # Only the resolution is nightly: the library is built with the default toolchain. The lock
+    # file holds the newest versions, which hide a lower bound that is too low, and is put back.
+    lock=$(mktemp)
+    cp Cargo.lock "$lock"
+    trap 'cp "$lock" Cargo.lock; rm -f "$lock"' EXIT
+    cargo +nightly update -Z direct-minimal-versions
+    cargo hack check "${POWERSET[@]}" --lib
+}
+
 command="${1:-}"
 shift || true
 case "$command" in
@@ -116,6 +130,7 @@ case "$command" in
     doc) run_doc ;;
     test) run_test "$@" ;;
     msrv) run_msrv ;;
+    minimal) run_minimal ;;
     all)
         run_static
         run_lint dev
@@ -126,7 +141,7 @@ case "$command" in
         run_msrv
         ;;
     *)
-        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' >&2
+        sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2
         exit 2
         ;;
 esac

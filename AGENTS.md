@@ -119,8 +119,9 @@ a release, not after a local change. CI builds every configuration the code comp
 in — each feature combination, both profiles, the MSRV — and `ci/cfg_coverage.py` (in `static`)
 fails on a `cfg` key that `ci/cfg-dimensions.toml` does not list: a new key, such as a
 `target_os`, is a configuration CI does not build yet, so extend the matrix before listing it.
-`.github/workflows/scheduled.yml` runs the beta toolchain and macOS weekly, and opens an issue
-when they fail.
+`.github/workflows/scheduled.yml` runs the beta toolchain, macOS and `ci/check.sh minimal` (the
+lowest dependency versions that `Cargo.toml` allows, resolved by a nightly cargo) weekly, and opens
+an issue when they fail.
 
 ## Layout
 

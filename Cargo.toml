@@ -16,16 +16,16 @@ include = ["/src/**", "/Cargo.toml", "/LICENSE", "/README.md"]
 all-features = true
 
 [dependencies]
-educe = "0.8" # Derive bounds from fields rather than every generic parameter.
+educe = "0.8.1" # Derive bounds from fields rather than every generic parameter.
 # Custom schedulers need not depend on futures.
 futures = { version = "0.3.34", optional = true }
 tokio = { version = "1", optional = true }
 smol = { version = "2", optional = true }
-async-io = { version = "2", optional = true }
+async-io = { version = "2.1", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-async-io = "2"
+async-io = "2.1"
 pastey = "0.2"
 # Benchmarks, compared locally against a saved baseline (decision 0016): no plots, no rayon.
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
