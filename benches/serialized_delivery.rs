@@ -13,6 +13,7 @@ use bench_utils::{N, deliver, pads, throughput_group};
 use criterion::{Criterion, criterion_group, criterion_main};
 use rx_rust::{
     observable::ObservableExt,
+    observer::Observer,
     operators::creating::{just::Just, never::Never, range::Range},
 };
 use std::{

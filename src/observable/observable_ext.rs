@@ -595,11 +595,26 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// The callback returns the [`Flow`] the operator answers, which is normally the one the
     /// downstream observer it was handed answered.
-    fn hook_on_next<F>(self, callback: F) -> HookOnNext<Self, F>
+    ///
+    /// The callback gets the downstream observer unboxed, so the operator subscribes that one
+    /// observer type only; see [`HookOnNext`] and
+    /// [`hook_on_next_boxed`](ObservableExt::hook_on_next_boxed).
+    fn hook_on_next<OR, F>(self, callback: F) -> HookOnNext<Self, F>
+    where
+        OR: Observer<Self::Item, Self::Error>,
+        F: FnMut(&mut Emitter<Self::Mode, OR>, Self::Item) -> Flow,
+    {
+        HookOnNext::new(self, callback)
+    }
+
+    /// Like [`hook_on_next`](ObservableExt::hook_on_next), but the callback gets the downstream
+    /// observer behind a `&mut dyn `[`Observer`], so the operator subscribes any observer. It
+    /// erases the observer without boxing it: see [`HookOnNext`].
+    fn hook_on_next_dyn<F>(self, callback: F) -> HookOnNext<Self, F, true>
     where
         F: FnMut(&mut dyn Observer<Self::Item, Self::Error>, Self::Item) -> Flow,
     {
-        HookOnNext::new(self, callback)
+        HookOnNext::new_dyn(self, callback)
     }
 
     /// Hands each subscription to a callback, which gets the source and the downstream observer

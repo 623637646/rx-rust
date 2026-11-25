@@ -337,7 +337,7 @@ fn test_subscribe_by_different_observer() {
     let (checker_3, observer_3) = Checker::<_, String>::new();
 
     let observer_3 = Arc::new(Mutex::new(observer_3));
-    let observable = observable.hook_on_next(move |observer, value| {
+    let observable = observable.hook_on_next_dyn(move |observer, value| {
         assert!(observer_3.with_mut(|observer_3| observer_3.on_next(value).is_continue()));
         observer.on_next(value * 2)
     });
@@ -556,7 +556,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         DisposeOnDrop::default()
     });
-    let observable = observable.hook_on_next(|_, _| Flow::Continue(()));
+    let observable = observable.hook_on_next_dyn(|_, _| Flow::Continue(()));
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -573,7 +573,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let observable = observable.hook_on_next(|_, _| Flow::Continue(()));
+    let observable = observable.hook_on_next_dyn(|_, _| Flow::Continue(()));
 
     observable.filter(|_| true);
 }
