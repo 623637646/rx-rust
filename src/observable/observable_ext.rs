@@ -598,7 +598,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// The callback gets the downstream observer unboxed, so the operator subscribes that one
     /// observer type only; see [`HookOnNext`] and
-    /// [`hook_on_next_boxed`](ObservableExt::hook_on_next_boxed).
+    /// [`hook_on_next_dyn`](ObservableExt::hook_on_next_dyn).
     fn hook_on_next<OR, F>(self, callback: F) -> HookOnNext<Self, F>
     where
         OR: Observer<Self::Item, Self::Error>,
