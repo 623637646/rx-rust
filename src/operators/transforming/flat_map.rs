@@ -8,8 +8,8 @@ use crate::{
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
     operators::combining::{
-        internal::flatten::{self, Enqueue, InnerObserverOf, SourceObserverOf},
-        merge_all,
+        internal::flatten::{self, Enqueue},
+        merge_all::{self, MergeAllInnerObserver, MergeAllObserverOf},
     },
     utils::MarkerType,
 };
@@ -131,8 +131,8 @@ where
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for FlatMap<T0, OE, OE1, F>
 where
     OR: Observer<T, E>,
-    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>, F>, Item = T0, Error = E>,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>>, Item = T, Error = E>,
+    OE: Observable<MergeAllObserverOf<OE, OE1, T, E, OR, F>, Item = T0, Error = E>,
+    OE1: Observable<MergeAllInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
     F: FnMut(T0) -> OE1,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {

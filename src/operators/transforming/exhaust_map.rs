@@ -8,8 +8,8 @@ use crate::{
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
     operators::combining::{
-        exhaust_all,
-        internal::flatten::{self, Ignore, InnerObserverOf, SourceObserverOf},
+        exhaust_all::{self, ExhaustAllInnerObserver, ExhaustAllObserverOf},
+        internal::flatten::{self, Ignore},
     },
     utils::MarkerType,
 };
@@ -93,8 +93,8 @@ where
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for ExhaustMap<T0, OE, OE1, F>
 where
     OR: Observer<T, E>,
-    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Ignore, F>, Item = T0, Error = E>,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Ignore>, Item = T, Error = E>,
+    OE: Observable<ExhaustAllObserverOf<OE, OE1, T, E, OR, F>, Item = T0, Error = E>,
+    OE1: Observable<ExhaustAllInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
     F: FnMut(T0) -> OE1,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {

@@ -240,7 +240,11 @@ an issue when they fail.
   `switch`, `exhaust_all` and their `*_map` forms (`flat_map` for `merge_all`) — are one state
   machine, the crate-private `combining/internal/flatten.rs`, set apart only by the store of the
   inner observables that find no place (decision 0013); `concat_eager_all` and
-  `concat_eager_map` are that machine with an observer that puts the values back in order. A
+  `concat_eager_map` are that machine with an observer that puts the values back in order. Each
+  operator names its store, and the selector of an `*_all` form, inside `pub(crate)` aliases of its
+  own (`merge_all::{MergeAllObserver, MergeAllObserverOf, MergeAllInnerObserver}` and the same per
+  store), which the operators built on it take as they take its `Disposal`, so no store or selector
+  type appears in a where-clause or needs a path of its own. A
   change to it runs its unit tests, `cargo test --lib combining::internal::flatten`, and the
   integration tests of those ten operators.
   The operators that merge a tuple or a list — `merge`, `concat_eager`, and `concat` over a list,

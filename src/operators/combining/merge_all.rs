@@ -3,7 +3,9 @@
 //! The [`MergeAll`] operator, behind
 //! [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all).
 
-use super::internal::flatten::{self, ContextDisposal, InnerObserverOf, SourceObserverOf};
+use super::internal::flatten::{
+    self, ContextDisposal, Enqueue, Identity, InnerObserverOf, SourceObserverOf,
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -14,8 +16,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
-
-pub use super::internal::flatten::{Enqueue, Identity, InnerObserver, SourceObserver};
 
 /// Flattens an observable of observables by emitting the values of the inner observables as they
 /// arrive.
@@ -131,6 +131,24 @@ impl<OE, OE1> MergeAll<OE, OE1> {
     }
 }
 
+/// The observer a [`MergeAll`], a [`ConcatAll`](super::concat_all::ConcatAll) or an operator on
+/// one gives its source, with the selector `F` that turns each item into an inner observable: the
+/// `Identity` of the two of them, a user callback for
+/// [`FlatMap`](crate::operators::transforming::flat_map::FlatMap) and
+/// [`ConcatMap`](crate::operators::transforming::concat_map::ConcatMap).
+pub(crate) type MergeAllObserverOf<OE, OE1, T, E, OR, F> =
+    SourceObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>, F>;
+
+/// The observer a [`MergeAll`] or a [`ConcatAll`](super::concat_all::ConcatAll) gives its source,
+/// whose items are the inner observables themselves.
+pub(crate) type MergeAllObserver<OE, OE1, T, E, OR> =
+    MergeAllObserverOf<OE, OE1, T, E, OR, Identity>;
+
+/// The observer a [`MergeAll`], a [`ConcatAll`](super::concat_all::ConcatAll) or an operator on
+/// one gives each inner observable.
+pub(crate) type MergeAllInnerObserver<OE, OE1, T, E, OR> =
+    InnerObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>>;
+
 delegate_disposal!(
     Disposal<M, T, E, D, OE1>,
     ContextDisposal<M, T, E, D, Enqueue<OE1>, <OE1 as ObservableTypes>::Disposal>,
@@ -151,12 +169,8 @@ where
 impl<T, E, OE, OE1, OR> Observable<OR> for MergeAll<OE, OE1>
 where
     OR: Observer<T, E>,
-    OE: Observable<
-            SourceObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>, Identity>,
-            Item = OE1,
-            Error = E,
-        >,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>>, Item = T, Error = E>,
+    OE: Observable<MergeAllObserver<OE, OE1, T, E, OR>, Item = OE1, Error = E>,
+    OE1: Observable<MergeAllInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         flatten::subscribe(

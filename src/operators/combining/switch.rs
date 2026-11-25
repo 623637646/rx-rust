@@ -3,7 +3,9 @@
 //! The [`Switch`] operator, behind
 //! [`ObservableExt::switch`](crate::observable::ObservableExt::switch).
 
-use super::internal::flatten::{self, ContextDisposal, InnerObserverOf, SourceObserverOf};
+use super::internal::flatten::{
+    self, ContextDisposal, Identity, InnerObserverOf, Replace, SourceObserverOf,
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -14,8 +16,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
-
-pub use super::internal::flatten::{Identity, InnerObserver, Replace, SourceObserver};
 
 /// Flattens an observable of observables by emitting the items of the most recently emitted inner
 /// observable only.
@@ -83,6 +83,19 @@ impl<OE, OE1> Switch<OE, OE1> {
     }
 }
 
+/// The observer a [`Switch`] or an operator on it gives its source, with the selector `F` that
+/// turns each item into an inner observable: the `Identity` of `Switch` itself, a user callback
+/// for [`SwitchMap`](crate::operators::transforming::switch_map::SwitchMap).
+pub(crate) type SwitchObserverOf<OE, OE1, T, E, OR, F> =
+    SourceObserverOf<OE, OE1, T, E, OR, Replace, F>;
+
+/// The observer a [`Switch`] gives its source, whose items are the inner observables themselves.
+pub(crate) type SwitchObserver<OE, OE1, T, E, OR> = SwitchObserverOf<OE, OE1, T, E, OR, Identity>;
+
+/// The observer a [`Switch`] or an operator on it gives each inner observable.
+pub(crate) type SwitchInnerObserver<OE, OE1, T, E, OR> =
+    InnerObserverOf<OE, OE1, T, E, OR, Replace>;
+
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
     ContextDisposal<M, T, E, D, Replace, D1>,
@@ -103,8 +116,8 @@ where
 impl<T, E, OE, OE1, OR> Observable<OR> for Switch<OE, OE1>
 where
     OR: Observer<T, E>,
-    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Replace, Identity>, Item = OE1, Error = E>,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Replace>, Item = T, Error = E>,
+    OE: Observable<SwitchObserver<OE, OE1, T, E, OR>, Item = OE1, Error = E>,
+    OE1: Observable<SwitchInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // One inner observable at a time.

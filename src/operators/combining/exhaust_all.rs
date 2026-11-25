@@ -3,7 +3,9 @@
 //! The [`ExhaustAll`] operator, behind
 //! [`ObservableExt::exhaust_all`](crate::observable::ObservableExt::exhaust_all).
 
-use super::internal::flatten::{self, ContextDisposal, InnerObserverOf, SourceObserverOf};
+use super::internal::flatten::{
+    self, ContextDisposal, Identity, Ignore, InnerObserverOf, SourceObserverOf,
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -14,8 +16,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
-
-pub use super::internal::flatten::{Identity, Ignore, InnerObserver, SourceObserver};
 
 /// Flattens an observable of observables by emitting the items of one inner observable at a time,
 /// ignoring every inner observable that arrives while one is still running.
@@ -84,6 +84,21 @@ impl<OE, OE1> ExhaustAll<OE, OE1> {
     }
 }
 
+/// The observer an [`ExhaustAll`] or an operator on it gives its source, with the selector `F`
+/// that turns each item into an inner observable: the `Identity` of `ExhaustAll` itself, a user
+/// callback for [`ExhaustMap`](crate::operators::transforming::exhaust_map::ExhaustMap).
+pub(crate) type ExhaustAllObserverOf<OE, OE1, T, E, OR, F> =
+    SourceObserverOf<OE, OE1, T, E, OR, Ignore, F>;
+
+/// The observer an [`ExhaustAll`] gives its source, whose items are the inner observables
+/// themselves.
+pub(crate) type ExhaustAllObserver<OE, OE1, T, E, OR> =
+    ExhaustAllObserverOf<OE, OE1, T, E, OR, Identity>;
+
+/// The observer an [`ExhaustAll`] or an operator on it gives each inner observable.
+pub(crate) type ExhaustAllInnerObserver<OE, OE1, T, E, OR> =
+    InnerObserverOf<OE, OE1, T, E, OR, Ignore>;
+
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
     ContextDisposal<M, T, E, D, Ignore, D1>,
@@ -104,8 +119,8 @@ where
 impl<T, E, OE, OE1, OR> Observable<OR> for ExhaustAll<OE, OE1>
 where
     OR: Observer<T, E>,
-    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Ignore, Identity>, Item = OE1, Error = E>,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Ignore>, Item = T, Error = E>,
+    OE: Observable<ExhaustAllObserver<OE, OE1, T, E, OR>, Item = OE1, Error = E>,
+    OE1: Observable<ExhaustAllInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // One inner observable at a time.

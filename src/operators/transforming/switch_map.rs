@@ -8,8 +8,8 @@ use crate::{
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
     operators::combining::{
-        internal::flatten::{self, InnerObserverOf, Replace, SourceObserverOf},
-        switch,
+        internal::flatten::{self, Replace},
+        switch::{self, SwitchInnerObserver, SwitchObserverOf},
     },
     utils::MarkerType,
 };
@@ -93,8 +93,8 @@ where
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for SwitchMap<T0, OE, OE1, F>
 where
     OR: Observer<T, E>,
-    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Replace, F>, Item = T0, Error = E>,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Replace>, Item = T, Error = E>,
+    OE: Observable<SwitchObserverOf<OE, OE1, T, E, OR, F>, Item = T0, Error = E>,
+    OE1: Observable<SwitchInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
     F: FnMut(T0) -> OE1,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {

@@ -105,6 +105,16 @@ type lives, which does not compile. `Switch` and `ExhaustAll` allowed it, and st
 This is why the overflow is a type rather than three values in the model, and why the observers
 have a parameter for the type of the observables that wait.
 
+Each operator names its store and, where its items are the observables themselves, its selector,
+inside aliases of its own: `merge_all::MergeAllObserver` and `MergeAllInnerObserver` for the
+`Enqueue` pair, `switch::SwitchObserver` for `Replace`, `exhaust_all::ExhaustAllObserver` for
+`Ignore`, and a `*ObserverOf<.., F>` beside each for the `*_map` form, whose selector is the user's
+callback. An operator built on another takes those aliases as it takes its `Disposal`: `ConcatAll`
+is `MergeAll`'s pair, `ConcatMap` is `MergeAllObserverOf`. So no `Enqueue`, `Replace`, `Ignore` or
+`Identity` appears in an operator's where-clause, and none of them needs a path outside its
+module — the aliases are `pub(crate)`, as `flatten::SourceObserverOf` is, so the where-clauses of
+the public `Observable` impls name them without widening the public API.
+
 ### The selector runs on the source's thread
 
 A store keeps the observables the selector made, not the source's values: turning a value into

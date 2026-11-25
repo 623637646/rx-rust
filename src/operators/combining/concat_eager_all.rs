@@ -5,8 +5,8 @@
 //! [`ObservableExt::concat_eager_all`](crate::observable::ObservableExt::concat_eager_all).
 
 use super::internal::{
-    flatten::ContextDisposal,
-    reorder::{InnerObserverOf, SourceObserverOf, subscribe_eager},
+    flatten::{ContextDisposal, Enqueue, Identity},
+    reorder::{IndexedEvent, IndexedSource, InnerObserverOf, SourceObserverOf, subscribe_eager},
 };
 use crate::{
     delegate_disposal,
@@ -18,11 +18,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
-
-pub use super::internal::{
-    flatten::{Enqueue, Identity, InnerObserver, SourceObserver},
-    reorder::{IndexedEvent, IndexedSource, IndexingObserver, IndexingSelector, ReorderObserver},
-};
 
 /// Flattens an observable of observables by subscribing each inner observable as it arrives, and
 /// emitting all of the values of each, one inner observable after the other.
@@ -108,6 +103,22 @@ impl<OE, OE1> ConcatEagerAll<OE, OE1> {
     }
 }
 
+/// The observer a [`ConcatEagerAll`] or an operator on it gives its source, with the selector `F`
+/// that turns each item into an inner observable: the `Identity` of `ConcatEagerAll` itself, a
+/// user callback for
+/// [`ConcatEagerMap`](crate::operators::transforming::concat_eager_map::ConcatEagerMap).
+pub(crate) type ConcatEagerAllObserverOf<OE, OE1, T, E, OR, F> =
+    SourceObserverOf<OE, OE1, T, E, OR, F>;
+
+/// The observer a [`ConcatEagerAll`] gives its source, whose items are the inner observables
+/// themselves.
+pub(crate) type ConcatEagerAllObserver<OE, OE1, T, E, OR> =
+    ConcatEagerAllObserverOf<OE, OE1, T, E, OR, Identity>;
+
+/// The observer a [`ConcatEagerAll`] or an operator on it gives each inner observable, which sends
+/// each value with the position of its observable.
+pub(crate) type ConcatEagerAllInnerObserver<OE, OE1, T, E, OR> = InnerObserverOf<OE, OE1, T, E, OR>;
+
 delegate_disposal!(
     Disposal<M, T, E, D, OE1>,
     ContextDisposal<
@@ -135,8 +146,8 @@ where
 impl<T, E, OE, OE1, OR> Observable<OR> for ConcatEagerAll<OE, OE1>
 where
     OR: Observer<T, E>,
-    OE: Observable<SourceObserverOf<OE, OE1, T, E, OR, Identity>, Item = OE1, Error = E>,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR>, Item = T, Error = E>,
+    OE: Observable<ConcatEagerAllObserver<OE, OE1, T, E, OR>, Item = OE1, Error = E>,
+    OE1: Observable<ConcatEagerAllInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         subscribe_eager(self.source, Identity, observer, self.max_concurrency).map_inner_into()

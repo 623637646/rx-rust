@@ -4,8 +4,8 @@
 //! [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all).
 
 use super::{
-    internal::flatten::{self, InnerObserverOf, SourceObserverOf},
-    merge_all,
+    internal::flatten::{self, Enqueue, Identity},
+    merge_all::{self, MergeAllInnerObserver, MergeAllObserver},
 };
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -15,8 +15,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize};
-
-pub use super::internal::flatten::{Enqueue, Identity, InnerObserver, SourceObserver};
 
 /// Flattens an observable of observables by emitting all of the values of each inner observable,
 /// one inner observable after the other.
@@ -94,12 +92,8 @@ where
 impl<T, E, OE, OE1, OR> Observable<OR> for ConcatAll<OE, OE1>
 where
     OR: Observer<T, E>,
-    OE: Observable<
-            SourceObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>, Identity>,
-            Item = OE1,
-            Error = E,
-        >,
-    OE1: Observable<InnerObserverOf<OE, OE1, T, E, OR, Enqueue<OE1>>, Item = T, Error = E>,
+    OE: Observable<MergeAllObserver<OE, OE1, T, E, OR>, Item = OE1, Error = E>,
+    OE1: Observable<MergeAllInnerObserver<OE, OE1, T, E, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // One inner observable at a time.
