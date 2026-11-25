@@ -6,7 +6,7 @@ their central idea: single- or multi-threaded is chosen in the type, `Local` (`R
 nothing to be `Send`. They differ in where a scheduler comes from, how a consumer stops a source,
 what an item may be, and which operators exist.
 
-This page compares rx-rust 2.0 with rxRust 1.0.0-rc.6 (October 2026).
+This page compares rx-rust 3.0 (November 2026) with rxRust 1.0.0-rc.6 (October 2026).
 
 ## At a glance
 
@@ -87,8 +87,9 @@ of both, and was rejected:
   `LocalSet`.
 - **It doubles the API.** Rust has neither overloading nor default arguments, so each place
   that takes a scheduler — `delay`, `delay_subscription`, `debounce`, `audit`,
-  `throttle_latest`, `timeout`, `buffer_with_time`, `buffer_with_time_or_count`,
-  `window_with_time`, `window_with_time_or_count`, `observe_on`, `subscribe_on`, `Interval`,
+  `throttle_latest`, `timeout`, `buffer_with_time`, `buffer_with_time_and_shift`,
+  `buffer_with_time_or_count`, `window_with_time`, `window_with_time_and_shift`,
+  `window_with_time_or_count`, `observe_on`, `subscribe_on`, `Interval`,
   `Timer`, `FromFuture`, `FromTryFuture`, `FromStream`, `FromTryStream`, `FromStreamAcked`,
   `FromTryStreamAcked` — would need a second form.
 - **The saving is small.** It is one argument, `TokioScheduler::current()`, and `TokioScheduler`
@@ -164,12 +165,16 @@ own (`LocalCtx<T, MyScheduler>`).
 
 Both cover most of the [ReactiveX operators](https://reactivex.io/documentation/operators.html).
 
-- **rx-rust only**: `catch`, `timeout`, `window`, `window_with_count`, `window_with_time`,
-  `window_with_time_or_count`, `amb`, `sequence_equal`, `materialize`, `dematerialize`,
-  `timestamp`, `time_interval`, `replay`, `share_replay`, `publish_last`, `ReplaySubject`,
-  `AsyncSubject`.
-- **rxRust only**: none. `with_latest_from`, `pairwise`, `filter_map` and `delay_subscription`
-  are in both.
+- **rx-rust only**: `catch`, `timeout`, `repeat_source`, `Using`, `hold`, `window` and its five
+  count and time forms, `buffer_with_count_and_skip`, `buffer_with_time_and_shift`, `join`,
+  `group_join`, `fork_join`, `When`, `amb`, `concat_eager`, `exhaust_all`, `exhaust_map`,
+  `switch_if_empty`, `sequence_equal`, `single`, `element_at`, `audit`, `materialize`,
+  `dematerialize`, `timestamp`, `time_interval`, `replay`, `share_replay`, `publish_last`,
+  `ReplaySubject`, `AsyncSubject`, and the acknowledged stream sources, `FromStreamAcked` and
+  `FromTryStreamAcked`.
+- **rxRust only**: `delay_unsubscription`, `scan_map`, `take_while_inclusive`, a `throttle` whose
+  span an observable ends for each item, and the `_mut_ref` family
+  ([Borrowed items](#borrowed-items)).
 
 ## Which one to use
 
