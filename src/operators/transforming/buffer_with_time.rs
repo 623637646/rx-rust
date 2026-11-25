@@ -3,17 +3,19 @@
 //! The [`BufferWithTime`] operator, behind
 //! [`ObservableExt::buffer_with_time`](crate::observable::ObservableExt::buffer_with_time).
 
-use super::{
-    buffer_with_time_and_shift::{
-        self, BufferWithTimeAndShiftObserver, BufferWithTimeAndShiftTask,
-    },
-    internal::{bundle::Bundles, overlap::no_overlap, time_shift},
+use super::internal::{
+    bundle::Bundles,
+    overlap::NoOverlap,
+    time_shift::{self, TimeShiftObserver, TimeShiftTask},
 };
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::Observer,
     scheduler::{Scheduler, SchedulerTypes},
+    thread_mode::ThreadMode,
+    utils::subscribe_with_context,
 };
 use educe::Educe;
 use std::time::Duration;
@@ -83,6 +85,31 @@ impl<OE, S> BufferWithTime<OE, S> {
     }
 }
 
+/// The observer a [`BufferWithTime`] gives its source: that of a
+/// [`BufferWithTimeAndShift`](super::buffer_with_time_and_shift::BufferWithTimeAndShift) whose
+/// bundles never overlap, so that it does not ask its items to be [`Clone`].
+#[doc(hidden)]
+pub type BufferWithTimeObserver<M, T, E, OR, D> =
+    TimeShiftObserver<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D>;
+
+/// The task of a [`BufferWithTime`] timer. It holds the context strongly, so that the bundles keep
+/// being cut after the source has let go of its observer without a termination, until the
+/// subscription is disposed.
+type BufferWithTimeTask<T, E, OR, OE, S> =
+    TimeShiftTask<OE, S, Bundles<T, NoOverlap>, Vec<T>, E, OR>;
+
+delegate_disposal!(
+    Disposal<M, T, E, SD, D>,
+    subscribe_with_context::Disposal<
+        M,
+        Vec<T>,
+        E,
+        time_shift::Model<Bundles<T, NoOverlap>>,
+        ChainDisposal<SD, D>,
+    >,
+    where M: ThreadMode, SD: Disposable, D: Disposable
+);
+
 impl<T, E, OE, S> ObservableTypes for BufferWithTime<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -93,20 +120,14 @@ where
     /// The timer's thread emits the buffers, the source's the last one, so the mode is both
     /// joined.
     type Mode = JoinedSchedulerModeOf<OE, S>;
-    type Disposal = buffer_with_time_and_shift::Disposal<
-        JoinedSchedulerModeOf<OE, S>,
-        T,
-        E,
-        S::Disposal,
-        OE::Disposal,
-    >;
+    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTime<OE, S>
 where
     OR: Observer<Vec<T>, E>,
     OE: Observable<
-            BufferWithTimeAndShiftObserver<
+            BufferWithTimeObserver<
                 JoinedSchedulerModeOf<OE, S>,
                 T,
                 E,
@@ -116,7 +137,7 @@ where
             Item = T,
             Error = E,
         >,
-    S: Scheduler<BufferWithTimeAndShiftTask<T, E, OR, OE, S>>,
+    S: Scheduler<BufferWithTimeTask<T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // A `BufferWithTimeAndShift` whose buffers start as the one before ends: a single one is
@@ -126,7 +147,7 @@ where
             self.time_span,
             self.time_span,
             self.scheduler,
-            Bundles::with_room(no_overlap, 0),
+            Bundles::with_room(NoOverlap, 0),
             observer,
         )
         .map_inner_into()

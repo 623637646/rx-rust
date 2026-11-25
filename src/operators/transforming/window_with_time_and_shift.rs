@@ -3,7 +3,10 @@
 //! The [`WindowWithTimeAndShift`] operator, behind
 //! [`ObservableExt::window_with_time_and_shift`](crate::observable::ObservableExt::window_with_time_and_shift).
 
-use super::internal::time_shift::{self, TimeShiftTask};
+use super::internal::{
+    overlap::ByClone,
+    time_shift::{self, TimeShiftTask},
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
@@ -122,19 +125,25 @@ impl<OE, S> WindowWithTimeAndShift<'_, OE, S> {
 
 /// The observer a [`WindowWithTimeAndShift`] gives its source.
 #[doc(hidden)]
-pub type WindowWithTimeAndShiftObserver<'a, M, T, E, OR, D> =
-    TimeShiftObserver<M, Windows<T>, Action<T, E>, E, DelegateObserver<'a, M, T, E, OR>, D>;
+pub type WindowWithTimeAndShiftObserver<'a, M, T, E, OR, D> = TimeShiftObserver<
+    M,
+    Windows<T>,
+    Action<T, E>,
+    E,
+    DelegateObserver<'a, M, T, E, OR, ByClone>,
+    D,
+>;
 
 /// The task of a [`WindowWithTimeAndShift`] timer. It holds the context strongly, so that the
 /// windows keep being opened and completed after the source has let go of its observer without a
 /// termination, until the subscription is disposed.
-pub(super) type WindowWithTimeAndShiftTask<'a, T, E, OR, OE, S> = TimeShiftTask<
+type WindowWithTimeAndShiftTask<'a, T, E, OR, OE, S> = TimeShiftTask<
     OE,
     S,
     Windows<T>,
     Action<T, E>,
     E,
-    DelegateObserver<'a, JoinedSchedulerModeOf<OE, S>, T, E, OR>,
+    DelegateObserver<'a, JoinedSchedulerModeOf<OE, S>, T, E, OR, ByClone>,
 >;
 
 delegate_disposal!(
@@ -190,7 +199,7 @@ where
             self.time_shift,
             self.scheduler,
             Windows::new(),
-            DelegateObserver::new(observer, T::clone),
+            DelegateObserver::new(observer, ByClone),
         )
         .map_inner_into()
     }

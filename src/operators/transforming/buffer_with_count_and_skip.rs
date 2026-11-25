@@ -3,7 +3,11 @@
 //! The [`BufferWithCountAndSkip`] operator, behind
 //! [`ObservableExt::buffer_with_count_and_skip`](crate::observable::ObservableExt::buffer_with_count_and_skip).
 
-use super::internal::{bundle::Bundles, count::CountObserver};
+use super::internal::{
+    bundle::Bundles,
+    count::CountObserver,
+    overlap::{ByClone, Duplicate},
+};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -83,7 +87,7 @@ where
 
 /// The observer a [`BufferWithCountAndSkip`] gives its source.
 #[doc(hidden)]
-pub type BufferWithCountAndSkipObserver<T, OR> = CountObserver<Bundles<T>, OR>;
+pub type BufferWithCountAndSkipObserver<T, OR> = CountObserver<Bundles<T, ByClone>, OR>;
 
 impl<T, E, OE, OR> Observable<OR> for BufferWithCountAndSkip<OE>
 where
@@ -92,23 +96,24 @@ where
     T: Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        subscribe(self.source, observer, self.count, self.skip, T::clone)
+        subscribe(self.source, observer, self.count, self.skip, ByClone)
     }
 }
 
 /// Subscribes `source` with the observer of a [`BufferWithCountAndSkip`], or, with a `skip` equal
-/// to `count` and [`no_overlap`](super::internal::overlap::no_overlap) as the duplicate, of a
+/// to `count` and [`NoOverlap`](super::internal::overlap::NoOverlap) as the duplication, of a
 /// [`BufferWithCount`](super::buffer_with_count::BufferWithCount).
-pub(super) fn subscribe<T, E, OE, OR>(
+pub(super) fn subscribe<T, E, OE, OR, DU>(
     source: OE,
     observer: OR,
     count: NonZeroUsize,
     skip: NonZeroUsize,
-    duplicate: fn(&T) -> T,
+    duplicate: DU,
 ) -> DisposeOnDrop<OE::Disposal>
 where
     OR: Observer<Vec<T>, E>,
-    OE: Observable<BufferWithCountAndSkipObserver<T, OR>, Item = T, Error = E>,
+    DU: Duplicate<T>,
+    OE: Observable<CountObserver<Bundles<T, DU>, OR>, Item = T, Error = E>,
 {
     let mut observer = CountObserver::new(
         Bundles::with_room(duplicate, count.get()),

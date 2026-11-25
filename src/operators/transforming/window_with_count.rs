@@ -4,8 +4,12 @@
 //! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
 
 use super::{
-    internal::overlap::no_overlap,
-    window_with_count_and_skip::{self, WindowWithCountAndSkipObserver},
+    internal::{
+        count::CountObserver,
+        overlap::NoOverlap,
+        window::{DelegateObserver, Windows},
+    },
+    window_with_count_and_skip,
 };
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -71,6 +75,13 @@ impl<OE> WindowWithCount<'_, OE> {
     }
 }
 
+/// The observer a [`WindowWithCount`] gives its source: that of a
+/// [`WindowWithCountAndSkip`](super::window_with_count_and_skip::WindowWithCountAndSkip) whose
+/// windows never overlap, so that it does not ask its items to be [`Clone`].
+#[doc(hidden)]
+pub type WindowWithCountObserver<'a, M, T, E, OR> =
+    CountObserver<Windows<T>, DelegateObserver<'a, M, T, E, OR, NoOverlap>>;
+
 impl<'a, T, E, OE> ObservableTypes for WindowWithCount<'a, OE>
 where
     <OE as ObservableTypes>::Mode: ObserverMode,
@@ -88,7 +99,7 @@ where
     OR: Observer<BoxedUnicastObservable<'a, T, E, <OE as ObservableTypes>::Mode>, E>,
     E: Clone,
     OE: Observable<
-            WindowWithCountAndSkipObserver<'a, <OE as ObservableTypes>::Mode, T, E, OR>,
+            WindowWithCountObserver<'a, <OE as ObservableTypes>::Mode, T, E, OR>,
             Item = T,
             Error = E,
         >,
@@ -101,7 +112,7 @@ where
             observer,
             self.count,
             self.count,
-            no_overlap,
+            NoOverlap,
         )
     }
 }

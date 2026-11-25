@@ -5,13 +5,11 @@
 
 use super::{
     internal::{
-        overlap::no_overlap,
-        time_shift,
-        window::{DelegateObserver, Windows},
+        overlap::NoOverlap,
+        time_shift::{self, TimeShiftObserver, TimeShiftTask},
+        window::{Action, DelegateObserver, Windows},
     },
-    window_with_time_and_shift::{
-        self, WindowWithTimeAndShiftObserver, WindowWithTimeAndShiftTask,
-    },
+    window_with_time_and_shift,
 };
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -109,6 +107,31 @@ impl<OE, S> WindowWithTime<'_, OE, S> {
     }
 }
 
+/// The observer a [`WindowWithTime`] gives its source: that of a
+/// [`WindowWithTimeAndShift`](super::window_with_time_and_shift::WindowWithTimeAndShift) whose
+/// windows never overlap, so that it does not ask its items to be [`Clone`].
+#[doc(hidden)]
+pub type WindowWithTimeObserver<'a, M, T, E, OR, D> = TimeShiftObserver<
+    M,
+    Windows<T>,
+    Action<T, E>,
+    E,
+    DelegateObserver<'a, M, T, E, OR, NoOverlap>,
+    D,
+>;
+
+/// The task of a [`WindowWithTime`] timer. It holds the context strongly, so that the windows keep
+/// being rotated after the source has let go of its observer without a termination, until the
+/// subscription is disposed.
+type WindowWithTimeTask<'a, T, E, OR, OE, S> = TimeShiftTask<
+    OE,
+    S,
+    Windows<T>,
+    Action<T, E>,
+    E,
+    DelegateObserver<'a, JoinedSchedulerModeOf<OE, S>, T, E, OR, NoOverlap>,
+>;
+
 impl<'a, T, E, OE, S> ObservableTypes for WindowWithTime<'a, OE, S>
 where
     JoinedSchedulerModeOf<OE, S>: ObserverMode,
@@ -135,7 +158,7 @@ where
     OR: Observer<BoxedUnicastObservable<'a, T, E, JoinedSchedulerModeOf<OE, S>>, E>,
     E: Clone,
     OE: Observable<
-            WindowWithTimeAndShiftObserver<
+            WindowWithTimeObserver<
                 'a,
                 JoinedSchedulerModeOf<OE, S>,
                 T,
@@ -146,7 +169,7 @@ where
             Item = T,
             Error = E,
         >,
-    S: Scheduler<WindowWithTimeAndShiftTask<'a, T, E, OR, OE, S>>,
+    S: Scheduler<WindowWithTimeTask<'a, T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // A `WindowWithTimeAndShift` whose windows open as the one before is completed: a single
@@ -157,7 +180,7 @@ where
             self.time_span,
             self.scheduler,
             Windows::new(),
-            DelegateObserver::new(observer, no_overlap),
+            DelegateObserver::new(observer, NoOverlap),
         )
         .map_inner_into()
     }

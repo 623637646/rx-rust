@@ -4,7 +4,7 @@
 //! [`ObservableExt::buffer_with_time_or_count`](crate::observable::ObservableExt::buffer_with_time_or_count).
 
 use super::internal::{
-    overlap::no_overlap,
+    overlap::NoOverlap,
     time_or_count::{self, TimeOrCountTask},
 };
 use crate::{
@@ -96,12 +96,13 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 /// The observer a [`BufferWithTimeOrCount`] gives its source.
 #[doc(hidden)]
 pub type BufferWithTimeOrCountObserver<M, T, E, OR, D, C> =
-    TimeOrCountObserver<M, Bundles<T>, Vec<T>, E, OR, D, C>;
+    TimeOrCountObserver<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D, C>;
 
 /// The task of a [`BufferWithTimeOrCount`] timer. It holds the context strongly, so that the
 /// bundles keep being cut after the source has let go of its observer without a termination, until
 /// the subscription is disposed.
-type BufferWithTimeOrCountTask<T, E, OR, OE, S> = TimeOrCountTask<OE, S, Bundles<T>, Vec<T>, E, OR>;
+type BufferWithTimeOrCountTask<T, E, OR, OE, S> =
+    TimeOrCountTask<OE, S, Bundles<T, NoOverlap>, Vec<T>, E, OR>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -109,7 +110,7 @@ delegate_disposal!(
         M,
         Vec<T>,
         E,
-        time_or_count::Model<Bundles<T>>,
+        time_or_count::Model<Bundles<T, NoOverlap>>,
         ChainDisposal<SD, D>,
     >,
     where M: ThreadMode, SD: Disposable, D: Disposable
@@ -152,7 +153,7 @@ where
             self.count,
             self.time_span,
             self.scheduler,
-            Bundles::with_room(no_overlap, self.count.get()),
+            Bundles::with_room(NoOverlap, self.count.get()),
             observer,
         )
         .map_inner_into()

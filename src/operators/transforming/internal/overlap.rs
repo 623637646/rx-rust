@@ -13,27 +13,59 @@
 //!
 //! The operator without a skip or a shift is the same one with the step equal to the length: the
 //! oldest closes as the next opens, so no more than one is ever open, and no item is ever cloned.
-//! It passes [`no_overlap`] as the duplicate, so that it does not ask its items to be [`Clone`].
+//! It takes [`NoOverlap`] as its duplication, so that it does not ask its items to be [`Clone`].
+//!
+//! The duplication is a type, not a `fn(&T) -> T` field: [`ByClone`] and [`NoOverlap`] are
+//! zero-sized, so an [`Overlap`] carries nothing for it, and the call in [`Overlap::send`] is
+//! static — `value.clone()` inlined, which a `Copy` item reduces to a move, and nothing at all for
+//! [`NoOverlap`], whose `unreachable!` is dead code once monomorphized.
 
 use std::collections::VecDeque;
 
-/// The duplicate of an operator that never has more than one sink open, so never clones an item:
-/// the one without a skip or a shift.
-pub(crate) fn no_overlap<T>(_: &T) -> T {
-    unreachable!("a single sink is open at a time, so no item is cloned")
+/// How an [`Overlap`] duplicates an item for every open sink but the newest: [`ByClone`] where
+/// they overlap, [`NoOverlap`] where no two are ever open.
+pub(crate) trait Duplicate<T> {
+    /// Duplicates `value` for one of the open sinks.
+    fn duplicate(&self, value: &T) -> T;
+}
+
+/// Duplicates an item by cloning it: the duplication of an operator with a skip or a shift, whose
+/// sinks overlap.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct ByClone;
+
+impl<T: Clone> Duplicate<T> for ByClone {
+    #[inline(always)]
+    fn duplicate(&self, value: &T) -> T {
+        value.clone()
+    }
+}
+
+/// Never duplicates an item: the duplication of an operator that never has more than one sink
+/// open, the one without a skip or a shift, which therefore does not ask its items to be
+/// [`Clone`].
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct NoOverlap;
+
+impl<T> Duplicate<T> for NoOverlap {
+    fn duplicate(&self, _value: &T) -> T {
+        unreachable!("a single sink is open at a time, so no item is cloned")
+    }
 }
 
 /// The open sinks, in opening order.
-pub(crate) struct Overlap<S, T> {
+pub(crate) struct Overlap<S, DU> {
     /// The open sinks, the oldest first.
     sinks: VecDeque<S>,
-    /// Clones an item for every open sink but the newest: `T::clone`, or [`no_overlap`].
-    duplicate: fn(&T) -> T,
+    /// Duplicates an item for every open sink but the newest.
+    duplicate: DU,
 }
 
-impl<S, T> Overlap<S, T> {
+impl<S, DU> Overlap<S, DU> {
     /// No sink open yet.
-    pub(crate) fn new(duplicate: fn(&T) -> T) -> Self {
+    pub(crate) fn new(duplicate: DU) -> Self {
         Self {
             sinks: VecDeque::new(),
             duplicate,
@@ -56,7 +88,7 @@ impl<S, T> Overlap<S, T> {
     }
 
     /// Closes every open sink and hands them back, the oldest first.
-    pub(crate) fn close_all(&mut self) -> impl DoubleEndedIterator<Item = S> + use<S, T> {
+    pub(crate) fn close_all(&mut self) -> impl DoubleEndedIterator<Item = S> + use<S, DU> {
         std::mem::take(&mut self.sinks).into_iter()
     }
 
@@ -64,7 +96,10 @@ impl<S, T> Overlap<S, T> {
     /// The caller can keep `value` outside a lock so its item is dropped there even if cloning
     /// panics.
     #[inline(always)]
-    pub(crate) fn send(&mut self, value: &mut Option<T>, mut put: impl FnMut(&mut S, T)) {
+    pub(crate) fn send<T>(&mut self, value: &mut Option<T>, mut put: impl FnMut(&mut S, T))
+    where
+        DU: Duplicate<T>,
+    {
         // The newest taken from the back of the iterator leaves the older ones in it, with no
         // index to check: with one sink open, the common case, the loop below has nothing to do.
         let mut sinks = self.sinks.iter_mut();
@@ -73,7 +108,7 @@ impl<S, T> Overlap<S, T> {
         };
         if let Some(item) = value.as_ref() {
             for sink in sinks {
-                put(sink, (self.duplicate)(item));
+                put(sink, self.duplicate.duplicate(item));
             }
         }
         // Taken only once every clone is made, so that a clone that panics leaves it in `value`.

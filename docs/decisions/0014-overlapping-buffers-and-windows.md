@@ -26,7 +26,7 @@ shift equal to the length never uses.
 Each operator stays a public type of its own, in a module of its own, with its documentation and
 its constructors; "Rejected" says why the two of a pair are not one type with a parameter.
 `BufferWithCount`, `WindowWithCount`, `BufferWithTime` and `WindowWithTime` subscribe the
-observer of the general operator, given the length as the step and `no_overlap` as the duplicate:
+observer of the general operator, given the length as the step and `NoOverlap` as the duplication:
 
 | Operator          | Built on                 | Step        |
 |-------------------|--------------------------|-------------|
@@ -35,23 +35,44 @@ observer of the general operator, given the length as the step and `no_overlap` 
 | `BufferWithTime`  | `BufferWithTimeAndShift` | `time_span` |
 | `WindowWithTime`  | `WindowWithTimeAndShift` | `time_span` |
 
-Where the general operator has a `Disposal` of its own, the one without a skip or a shift takes
-it as it is, as `switch_map` takes `switch::Disposal`.
+Each one names its own observer, and its own task where it has one, since the duplication is
+part of those types ("Cloning is a type"): `BufferWithCountObserver` is the general operator's
+observer over bundles that never overlap. Where the general operator has a `Disposal` of its own,
+the one without a skip or a shift takes it as it is, as `switch_map` takes `switch::Disposal` —
+except `BufferWithTime`, whose model names the bundles and therefore their duplication, so it has
+a `Disposal` of its own too. `WindowWithTime` keeps `window_with_time_and_shift::Disposal`: a
+window machine's model holds only the `Windows`, the open senders being the delegate's.
 
-### Cloning is a function pointer, not a bound
+### Cloning is a type, not a bound — and not a function pointer either
 
-The `Overlap` holding the open sinks — in `Bundles` for a buffer, in the `DelegateObserver` for a
-window — holds a `duplicate: fn(&T) -> T`, which clones an item for every one open but the newest.
-The general operator passes `T::clone`, and asks `T: Clone` in its `Observable` impl and its
-fluent method only. The operator without a skip or a shift passes `no_overlap`, an
-`unreachable!`: with one open at a time, the loop over "all but the newest" never runs, so it is
-never called, and nothing asks `T: Clone`.
+How an item is duplicated for every open sink but the newest is a zero-sized type, the `DU` of the
+`Overlap` holding the open sinks — in `Bundles` for a buffer, in the `DelegateObserver` for a
+window. The crate-private `Duplicate<T>` trait of `overlap.rs` has two implementations: `ByClone`,
+for `T: Clone`, which the general operator passes, asking `T: Clone` in its `Observable` impl and
+its fluent method only; and `NoOverlap`, for every `T`, an `unreachable!` that the operator without
+a skip or a shift passes, so that nothing asks `T: Clone` of it.
 
-That one open at a time is a property of the step, not of a type: a mistake there panics rather
-than failing to compile. A type could carry it only by keeping the single sink in storage of its
-own (a `Vec` beside a `VecDeque<Vec<T>>`, one sender beside a queue of them), which is the whole
-state machine twice, and what this replaces. The flattening operators make the same trade with a
-store that queues nothing (decision 0013).
+It was a `duplicate: fn(&T) -> T` field (`T::clone` or a `no_overlap` function) until the call it
+costs on every item of an overlapping group was weighed against the public surface a type adds:
+
+- The duplication carries no state, so `ByClone` and `NoOverlap` are zero-sized: an `Overlap`
+  stores nothing for it, and `Overlap::send` calls `DU::duplicate` statically — `value.clone()`
+  inlined, which a `Copy` item reduces to a move, where a function pointer is an indirect call
+  that LLVM can only devirtualize where it sees the constructor. `NoOverlap`'s `unreachable!` is
+  dead code once monomorphized, rather than an indirect target that might be called.
+- The cost is that the duplication is part of every type that holds the open sinks, so each
+  operator names it inside its own aliases rather than taking it as a parameter: the four pairs
+  no longer share one observer alias, and `BufferWithTime` gained a task and a `Disposal` of its
+  own. In exchange no public signature mentions a duplication, so `ByClone` and `NoOverlap` need
+  no path outside the crate and no operator's parameters changed. Only the two `pub(super) fn
+  subscribe` helpers that a count pair shares stay generic over it.
+
+That one sink is open at a time is still a property of the step, not of a type: `NoOverlap`
+promises only that the operator never asks for a duplicate, so a mistake there panics rather than
+failing to compile. A type could carry it only by keeping the single sink in storage of its own (a
+`Vec` beside a `VecDeque<Vec<T>>`, one sender beside a queue of them), which is the whole state
+machine twice, and what this replaces. The flattening operators make the same trade with a store
+that queues nothing (decision 0013).
 
 ### One state machine per trigger, generic over the groups
 
@@ -122,8 +143,8 @@ delegate are all generic. Heap allocations are allowed where they keep the code 
 
 ### What is shared below the machines: the open sinks and the timetable
 
-`Overlap<S, T>` in `transforming/internal/overlap.rs` holds the open bundles or window senders in
-opening order. They have the same length, so the oldest is always the next to close. The caller
+`Overlap<S, DU>` in `transforming/internal/overlap.rs` holds the open bundles or window senders in
+opening order, duplicating an item for the older ones as its `DU` says. They have the same length, so the oldest is always the next to close. The caller
 owns each value until the copies for the older sinks have been made. A timed buffer therefore
 drops the original outside its context lock when no bundle is open or cloning panics.
 
@@ -161,8 +182,9 @@ for any `C`.
     `BufferWithTime::new` ambiguous (E0034): an expression path infers the parameter rather than
     taking its default. One of them would be renamed, or the type hidden behind two aliases.
   - `T: Clone` follows the parameter, which one bound cannot: two `Observable` impls, repeating
-    the largest where-clause of the module, or a hidden public trait over a marker type that
-    selects the duplicate — more public surface for one function pointer.
+    the largest where-clause of the module. The duplication is now such a marker type ("Cloning is
+    a type"), but it selects only how an item is duplicated, inside observer aliases users do not
+    read, rather than the operator's own type, constructors and documentation.
   - The two would differ by a `true` or a marker type in error messages and in the
     documentation, and the general operator would lose its module path.
   - `Merge` takes its parameter from a fluent method on one constructor, `max_concurrency`. For

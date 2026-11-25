@@ -1,13 +1,16 @@
 use super::Bundles;
 use crate::{
     observer::{Flow, Observer, Termination},
-    operators::transforming::internal::group::{Events, Groups},
+    operators::transforming::internal::{
+        group::{Events, Groups},
+        overlap::ByClone,
+    },
 };
 use std::convert::Infallible;
 
 #[test]
 fn test_bundles_with_room() {
-    let mut bundles = Bundles::with_room(i32::clone, 3);
+    let mut bundles = Bundles::with_room(ByClone, 3);
     let mut events = Events::new();
     let _ = Groups::<Infallible>::open(&mut bundles, &mut events);
     let _ = Groups::<Infallible>::put(&mut bundles, &mut Some(1), &mut events);
@@ -32,7 +35,7 @@ fn test_bundles_with_room() {
 
 #[test]
 fn test_bundles_room_of_last() {
-    let mut bundles = Bundles::with_room(i32::clone, 0);
+    let mut bundles = Bundles::with_room(ByClone, 0);
     let mut events = Events::new();
     let _ = Groups::<Infallible>::open(&mut bundles, &mut events);
     for value in 1..=5 {
@@ -49,7 +52,7 @@ fn test_bundles_room_of_last() {
 
 #[test]
 fn test_bundles_value_between_bundles_left() {
-    let mut bundles = Bundles::with_room(i32::clone, 2);
+    let mut bundles = Bundles::with_room(ByClone, 2);
     let mut value = Some(1);
     let mut events = Events::new();
     let _ = Groups::<Infallible>::put(&mut bundles, &mut value, &mut events);
@@ -71,7 +74,7 @@ fn test_bundles_end_emits_nothing_after_a_stop() {
         fn on_termination(self, _: Termination<Infallible>) {}
     }
 
-    let mut bundles = Bundles::with_room(i32::clone, 2);
+    let mut bundles = Bundles::with_room(ByClone, 2);
     let mut observer = TakeOne(Vec::new());
     let _ = Groups::<Infallible>::open(&mut bundles, &mut observer);
     let _ = Groups::<Infallible>::put(&mut bundles, &mut Some(1), &mut observer);

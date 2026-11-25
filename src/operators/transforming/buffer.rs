@@ -3,7 +3,7 @@
 //! The [`Buffer`] operator, behind
 //! [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer).
 
-use super::internal::{boundary, overlap::no_overlap};
+use super::internal::{boundary, overlap::NoOverlap};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
@@ -103,16 +103,17 @@ impl<OE, OE1> Buffer<OE, OE1> {
 
 /// The observer a [`Buffer`] gives its source.
 #[doc(hidden)]
-pub type BufferObserver<M, T, E, OR, D> = SourceObserver<M, Bundles<T>, Vec<T>, E, OR, D>;
+pub type BufferObserver<M, T, E, OR, D> =
+    SourceObserver<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D>;
 
 /// The observer a [`Buffer`] gives its boundary, whose completion ends the stream (`true`).
 #[doc(hidden)]
 pub type BoundaryObserver<M, T, E, OR, D> =
-    BoundaryObserver_<M, Bundles<T>, Vec<T>, E, OR, D, true>;
+    BoundaryObserver_<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D, true>;
 
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
-    subscribe_with_context::Disposal<M, Vec<T>, E, Bundles<T>, ChainDisposal<D, D1>>,
+    subscribe_with_context::Disposal<M, Vec<T>, E, Bundles<T, NoOverlap>, ChainDisposal<D, D1>>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -146,7 +147,7 @@ where
         boundary::subscribe(
             self.source,
             self.boundary,
-            Bundles::with_room(no_overlap, 0),
+            Bundles::with_room(NoOverlap, 0),
             observer,
         )
         .map_inner_into()

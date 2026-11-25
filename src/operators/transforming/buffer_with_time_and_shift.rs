@@ -3,7 +3,10 @@
 //! The [`BufferWithTimeAndShift`] operator, behind
 //! [`ObservableExt::buffer_with_time_and_shift`](crate::observable::ObservableExt::buffer_with_time_and_shift).
 
-use super::internal::time_shift::{self, TimeShiftTask};
+use super::internal::{
+    overlap::ByClone,
+    time_shift::{self, TimeShiftTask},
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
@@ -100,13 +103,13 @@ impl<OE, S> BufferWithTimeAndShift<OE, S> {
 /// The observer a [`BufferWithTimeAndShift`] gives its source.
 #[doc(hidden)]
 pub type BufferWithTimeAndShiftObserver<M, T, E, OR, D> =
-    TimeShiftObserver<M, Bundles<T>, Vec<T>, E, OR, D>;
+    TimeShiftObserver<M, Bundles<T, ByClone>, Vec<T>, E, OR, D>;
 
 /// The task of a [`BufferWithTimeAndShift`] timer. It holds the context strongly, so that the
 /// bundles keep being cut after the source has let go of its observer without a termination, until
 /// the subscription is disposed.
-pub(super) type BufferWithTimeAndShiftTask<T, E, OR, OE, S> =
-    TimeShiftTask<OE, S, Bundles<T>, Vec<T>, E, OR>;
+type BufferWithTimeAndShiftTask<T, E, OR, OE, S> =
+    TimeShiftTask<OE, S, Bundles<T, ByClone>, Vec<T>, E, OR>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -114,7 +117,7 @@ delegate_disposal!(
         M,
         Vec<T>,
         E,
-        time_shift::Model<Bundles<T>>,
+        time_shift::Model<Bundles<T, ByClone>>,
         ChainDisposal<SD, D>,
     >,
     where M: ThreadMode, SD: Disposable, D: Disposable
@@ -156,7 +159,7 @@ where
             self.time_span,
             self.time_shift,
             self.scheduler,
-            Bundles::with_room(T::clone, 0),
+            Bundles::with_room(ByClone, 0),
             observer,
         )
         .map_inner_into()

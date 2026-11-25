@@ -3,7 +3,7 @@
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 
-use super::internal::{boundary, overlap::no_overlap};
+use super::internal::{boundary, overlap::NoOverlap};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
@@ -105,14 +105,27 @@ impl<OE, OE1> Window<'_, OE, OE1> {
 
 /// The observer a [`Window`] gives its source.
 #[doc(hidden)]
-pub type SourceObserver<'a, M, T, E, OR, D> =
-    SourceObserver_<M, Windows<T>, Action<T, E>, E, DelegateObserver<'a, M, T, E, OR>, D>;
+pub type SourceObserver<'a, M, T, E, OR, D> = SourceObserver_<
+    M,
+    Windows<T>,
+    Action<T, E>,
+    E,
+    DelegateObserver<'a, M, T, E, OR, NoOverlap>,
+    D,
+>;
 
 /// The observer a [`Window`] gives its boundary, whose completion only stops the rotation
 /// (`false`).
 #[doc(hidden)]
-pub type BoundaryObserver<'a, M, T, E, OR, D> =
-    BoundaryObserver_<M, Windows<T>, Action<T, E>, E, DelegateObserver<'a, M, T, E, OR>, D, false>;
+pub type BoundaryObserver<'a, M, T, E, OR, D> = BoundaryObserver_<
+    M,
+    Windows<T>,
+    Action<T, E>,
+    E,
+    DelegateObserver<'a, M, T, E, OR, NoOverlap>,
+    D,
+    false,
+>;
 
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
@@ -153,7 +166,7 @@ where
             self.source,
             self.boundary,
             Windows::new(),
-            DelegateObserver::new(observer, no_overlap),
+            DelegateObserver::new(observer, NoOverlap),
         )
         .map_inner_into()
     }

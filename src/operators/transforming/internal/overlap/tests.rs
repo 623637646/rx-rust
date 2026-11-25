@@ -1,8 +1,8 @@
-use super::{Overlap, no_overlap};
+use super::{ByClone, NoOverlap, Overlap};
 
 #[test]
 fn test_send_to_every_open_sink() {
-    let mut overlap = Overlap::<Vec<i32>, i32>::new(i32::clone);
+    let mut overlap = Overlap::<Vec<i32>, _>::new(ByClone);
     let mut value = Some(1);
     overlap.send(&mut value, Vec::push);
     assert_eq!(value, Some(1));
@@ -30,7 +30,7 @@ fn test_send_to_every_open_sink() {
 fn test_newest_takes_the_item() {
     // Not `Clone`: the newest, here the only one, takes it without a duplicate.
     struct Unique(i32);
-    let mut overlap = Overlap::<Vec<Unique>, Unique>::new(no_overlap);
+    let mut overlap = Overlap::<Vec<Unique>, _>::new(NoOverlap);
     overlap.open(Vec::new());
     overlap.send(&mut Some(Unique(1)), Vec::push);
     let bundle = overlap.close_oldest().unwrap();
@@ -40,7 +40,7 @@ fn test_newest_takes_the_item() {
 #[test]
 #[should_panic(expected = "a single sink is open at a time")]
 fn test_no_overlap_with_two_open() {
-    let mut overlap = Overlap::<Vec<i32>, i32>::new(no_overlap);
+    let mut overlap = Overlap::<Vec<i32>, _>::new(NoOverlap);
     overlap.open(Vec::new());
     overlap.open(Vec::new());
     overlap.send(&mut Some(1), Vec::push);

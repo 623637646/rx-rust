@@ -5,6 +5,7 @@
 
 use super::internal::{
     count::CountObserver,
+    overlap::{ByClone, Duplicate},
     window::{DelegateObserver, Windows},
 };
 use crate::{
@@ -103,7 +104,7 @@ where
 /// The observer a [`WindowWithCountAndSkip`] gives its source.
 #[doc(hidden)]
 pub type WindowWithCountAndSkipObserver<'a, M, T, E, OR> =
-    CountObserver<Windows<T>, DelegateObserver<'a, M, T, E, OR>>;
+    CountObserver<Windows<T>, DelegateObserver<'a, M, T, E, OR, ByClone>>;
 
 impl<'a, T, E, OE, OR> Observable<OR> for WindowWithCountAndSkip<'a, OE>
 where
@@ -118,25 +119,30 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        subscribe(self.source, observer, self.count, self.skip, T::clone)
+        subscribe(self.source, observer, self.count, self.skip, ByClone)
     }
 }
 
 /// Subscribes `source` with the observer of a [`WindowWithCountAndSkip`], or, with a `skip` equal
-/// to `count` and [`no_overlap`](super::internal::overlap::no_overlap) as the duplicate, of a
+/// to `count` and [`NoOverlap`](super::internal::overlap::NoOverlap) as the duplication, of a
 /// [`WindowWithCount`](super::window_with_count::WindowWithCount).
-pub(super) fn subscribe<'a, M, T, E, OE, OR>(
+pub(super) fn subscribe<'a, M, T, E, OE, OR, DU>(
     source: OE,
     observer: OR,
     count: NonZeroUsize,
     skip: NonZeroUsize,
-    duplicate: fn(&T) -> T,
+    duplicate: DU,
 ) -> DisposeOnDrop<Disposal<OE::Disposal>>
 where
     M: ObserverMode,
     OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
     E: Clone,
-    OE: Observable<WindowWithCountAndSkipObserver<'a, M, T, E, OR>, Item = T, Error = E>,
+    DU: Duplicate<T>,
+    OE: Observable<
+            CountObserver<Windows<T>, DelegateObserver<'a, M, T, E, OR, DU>>,
+            Item = T,
+            Error = E,
+        >,
 {
     let delegate = DelegateObserver::new(observer, duplicate);
     let mut observer = CountObserver::new(Windows::new(), delegate, count, skip);

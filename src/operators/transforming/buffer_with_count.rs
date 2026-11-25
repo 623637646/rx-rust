@@ -4,8 +4,8 @@
 //! [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count).
 
 use super::{
-    buffer_with_count_and_skip::{self, BufferWithCountAndSkipObserver},
-    internal::overlap::no_overlap,
+    buffer_with_count_and_skip,
+    internal::{bundle::Bundles, count::CountObserver, overlap::NoOverlap},
 };
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -58,6 +58,12 @@ impl<OE> BufferWithCount<OE> {
     }
 }
 
+/// The observer a [`BufferWithCount`] gives its source: that of a
+/// [`BufferWithCountAndSkip`](super::buffer_with_count_and_skip::BufferWithCountAndSkip) whose
+/// bundles never overlap, so that it does not ask its items to be [`Clone`].
+#[doc(hidden)]
+pub type BufferWithCountObserver<T, OR> = CountObserver<Bundles<T, NoOverlap>, OR>;
+
 impl<T, E, OE> ObservableTypes for BufferWithCount<OE>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -71,7 +77,7 @@ where
 impl<T, E, OE, OR> Observable<OR> for BufferWithCount<OE>
 where
     OR: Observer<Vec<T>, E>,
-    OE: Observable<BufferWithCountAndSkipObserver<T, OR>, Item = T, Error = E>,
+    OE: Observable<BufferWithCountObserver<T, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // A `BufferWithCountAndSkip` whose bundles start as the one before is full: a single one
@@ -81,7 +87,7 @@ where
             observer,
             self.count,
             self.count,
-            no_overlap,
+            NoOverlap,
         )
     }
 }

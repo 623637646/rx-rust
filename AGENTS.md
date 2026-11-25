@@ -226,8 +226,15 @@ an issue when they fail.
   (decision 0014). `group.rs` holds only what the machines share; each kind of group is a module
   of its own.
   `buffer_with_count`, `window_with_count`, `buffer_with_time` and `window_with_time` are the
-  `*_and_skip` / `*_and_shift` operators with the step equal to the length and `no_overlap` as the
-  duplicate, so that they do not ask for `Clone`. A change to that machinery runs its unit tests,
+  `*_and_skip` / `*_and_shift` operators with the step equal to the length and `NoOverlap` as the
+  duplication, so that they do not ask for `Clone`. How an item is duplicated for the sinks that
+  overlap is a zero-sized type, not a `fn(&T) -> T`: `overlap.rs` holds the crate-private
+  `Duplicate<T>` trait, `ByClone` and `NoOverlap`. The call is then static, and the duplication is
+  part of the types holding the open sinks, so each of the twelve operators names it inside its own
+  observer alias — `BufferWithCountObserver` is `BufferWithCountAndSkipObserver` over bundles that
+  never overlap — and no public signature takes it as a parameter. `BufferWithTime` therefore has a
+  task and a `Disposal` of its own, where `WindowWithTime` still shares
+  `window_with_time_and_shift::Disposal`. A change to that machinery runs its unit tests,
   `cargo test --lib transforming::internal` and the integration tests of the twelve operators.
   The operators that flatten an observable of observables — `merge_all`, `concat_all`,
   `switch`, `exhaust_all` and their `*_map` forms (`flat_map` for `merge_all`) — are one state

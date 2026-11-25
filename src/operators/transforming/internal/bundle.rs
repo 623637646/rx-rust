@@ -5,7 +5,10 @@
 //! [`Windows`](super::window::Windows), need no delegate outside the lock: an item is pushed in the
 //! one update the machine takes anyway, and only a finished bundle is an event.
 
-use super::{group::Groups, overlap::Overlap};
+use super::{
+    group::Groups,
+    overlap::{Duplicate, Overlap},
+};
 use crate::observer::{Flow, Observer, Termination};
 
 /// The bundles of a buffer operator, the oldest first: each one is emitted as it closes, and those
@@ -18,17 +21,17 @@ use crate::observer::{Flow, Observer, Termination};
 /// bundle before it is freed, as `take_leaving_room` does: the allocator then never sees its memory
 /// go back and forth.
 #[doc(hidden)]
-pub struct Bundles<T> {
+pub struct Bundles<T, DU> {
     /// The open bundles, the oldest first.
-    bundles: Overlap<Vec<T>, T>,
+    bundles: Overlap<Vec<T>, DU>,
     /// The room a bundle is made with: the length of the last bundle emitted.
     room: usize,
 }
 
-impl<T> Bundles<T> {
-    /// No bundle open yet, the first ones made with room for `room` items. `duplicate` clones an
-    /// item for every open bundle but the newest.
-    pub(crate) fn with_room(duplicate: fn(&T) -> T, room: usize) -> Self {
+impl<T, DU> Bundles<T, DU> {
+    /// No bundle open yet, the first ones made with room for `room` items. `duplicate` duplicates
+    /// an item for every open bundle but the newest.
+    pub(crate) fn with_room(duplicate: DU, room: usize) -> Self {
         Self {
             bundles: Overlap::new(duplicate),
             room,
@@ -36,7 +39,10 @@ impl<T> Bundles<T> {
     }
 }
 
-impl<T, E> Groups<E> for Bundles<T> {
+impl<T, E, DU> Groups<E> for Bundles<T, DU>
+where
+    DU: Duplicate<T>,
+{
     type Item = T;
     type Event = Vec<T>;
 

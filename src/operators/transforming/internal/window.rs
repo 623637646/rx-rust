@@ -8,9 +8,12 @@
 //!
 //! The delegate keeps its windows in an [`Overlap`]: an operator with a shift or a skip keeps
 //! several open at once, the others one at a time, with
-//! [`no_overlap`](super::overlap::no_overlap) as the duplicate.
+//! [`NoOverlap`](super::overlap::NoOverlap) as the duplication.
 
-use super::{group::Groups, overlap::Overlap};
+use super::{
+    group::Groups,
+    overlap::{Duplicate, Overlap},
+};
 use crate::{
     observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
@@ -80,18 +83,18 @@ impl<T, E: Clone> Groups<E> for Windows<T> {
 /// Owns the open windows and the observer of the windows, so that a window is fed and emitted
 /// outside the lock of the machine that decides when the windows open and close.
 #[doc(hidden)]
-pub struct DelegateObserver<'a, M: ObserverMode, T, E, OR> {
+pub struct DelegateObserver<'a, M: ObserverMode, T, E, OR, DU> {
     outer_observer: OR,
     /// The sending ends of the windows that are open, which are the only place where the windows
     /// are fed from. None is open before the first window opens and after the last one ended, nor,
     /// with a skip or a shift larger than a window, between two windows.
-    windows: Overlap<BoxedUnicastSender<'a, T, E, M>, T>,
+    windows: Overlap<BoxedUnicastSender<'a, T, E, M>, DU>,
 }
 
-impl<M: ObserverMode, T, E, OR> DelegateObserver<'_, M, T, E, OR> {
-    /// Creates the delegate, with no window open yet. `duplicate` clones a value for every open
-    /// window but the newest.
-    pub(crate) fn new(outer_observer: OR, duplicate: fn(&T) -> T) -> Self {
+impl<M: ObserverMode, T, E, OR, DU> DelegateObserver<'_, M, T, E, OR, DU> {
+    /// Creates the delegate, with no window open yet. `duplicate` duplicates a value for every
+    /// open window but the newest.
+    pub(crate) fn new(outer_observer: OR, duplicate: DU) -> Self {
         Self {
             outer_observer,
             windows: Overlap::new(duplicate),
@@ -99,11 +102,12 @@ impl<M: ObserverMode, T, E, OR> DelegateObserver<'_, M, T, E, OR> {
     }
 }
 
-impl<'a, M, T, E, OR> Observer<Action<T, E>, E> for DelegateObserver<'a, M, T, E, OR>
+impl<'a, M, T, E, OR, DU> Observer<Action<T, E>, E> for DelegateObserver<'a, M, T, E, OR, DU>
 where
     M: ObserverMode,
     E: Clone,
     OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
+    DU: Duplicate<T>,
 {
     fn on_next(&mut self, action: Action<T, E>) -> Flow {
         match action {

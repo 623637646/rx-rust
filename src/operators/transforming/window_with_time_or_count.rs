@@ -4,7 +4,7 @@
 //! [`ObservableExt::window_with_time_or_count`](crate::observable::ObservableExt::window_with_time_or_count).
 
 use super::internal::{
-    overlap::no_overlap,
+    overlap::NoOverlap,
     time_or_count::{self, TimeOrCountTask},
 };
 use crate::{
@@ -120,8 +120,15 @@ impl<OE, S> WindowWithTimeOrCount<'_, OE, S> {
 
 /// The observer a [`WindowWithTimeOrCount`] gives its source.
 #[doc(hidden)]
-pub type WindowWithTimeOrCountObserver<'a, M, T, E, OR, D, C> =
-    TimeOrCountObserver<M, Windows<T>, Action<T, E>, E, DelegateObserver<'a, M, T, E, OR>, D, C>;
+pub type WindowWithTimeOrCountObserver<'a, M, T, E, OR, D, C> = TimeOrCountObserver<
+    M,
+    Windows<T>,
+    Action<T, E>,
+    E,
+    DelegateObserver<'a, M, T, E, OR, NoOverlap>,
+    D,
+    C,
+>;
 
 /// The task of a [`WindowWithTimeOrCount`] timer. It holds the context strongly, so that the
 /// windows keep being rotated after the source has let go of its observer without a termination,
@@ -132,7 +139,7 @@ type WindowWithTimeOrCountTask<'a, T, E, OR, OE, S> = TimeOrCountTask<
     Windows<T>,
     Action<T, E>,
     E,
-    DelegateObserver<'a, JoinedSchedulerModeOf<OE, S>, T, E, OR>,
+    DelegateObserver<'a, JoinedSchedulerModeOf<OE, S>, T, E, OR, NoOverlap>,
 >;
 
 delegate_disposal!(
@@ -188,7 +195,7 @@ where
             self.time_span,
             self.scheduler,
             Windows::new(),
-            DelegateObserver::new(observer, no_overlap),
+            DelegateObserver::new(observer, NoOverlap),
         )
         .map_inner_into()
     }
