@@ -1,3 +1,5 @@
+//! Turns every event, the termination included, into an item.
+//!
 //! The [`Materialize`] operator, behind
 //! [`ObservableExt::materialize`](crate::observable::ObservableExt::materialize).
 

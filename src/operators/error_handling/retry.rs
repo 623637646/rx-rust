@@ -1,3 +1,5 @@
+//! Subscribes again after an error.
+//!
 //! The [`Retry`] operator, behind
 //! [`ObservableExt::retry`](crate::observable::ObservableExt::retry).
 

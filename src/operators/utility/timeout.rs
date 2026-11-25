@@ -1,3 +1,5 @@
+//! Fails if an item does not arrive in time.
+//!
 //! The [`Timeout`] operator, behind
 //! [`ObservableExt::timeout`](crate::observable::ObservableExt::timeout).
 

@@ -1,3 +1,5 @@
+//! Divides the items into observables bounded by both a time span and a length.
+//!
 //! The [`WindowWithTimeOrCount`] operator, behind
 //! [`ObservableExt::window_with_time_or_count`](crate::observable::ObservableExt::window_with_time_or_count).
 

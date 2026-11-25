@@ -1,3 +1,5 @@
+//! Maps each item to an observable, and emits the items of the most recent one only.
+//!
 //! The [`SwitchMap`] operator, behind
 //! [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map).
 

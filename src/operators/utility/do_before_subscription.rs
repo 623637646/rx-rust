@@ -1,3 +1,5 @@
+//! Runs a callback before the source is subscribed to.
+//!
 //! The [`DoBeforeSubscription`] operator, behind
 //! [`ObservableExt::do_before_subscription`](crate::observable::ObservableExt::do_before_subscription).
 

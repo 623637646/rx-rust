@@ -1,3 +1,5 @@
+//! Emits the items that differ from the one before.
+//!
 //! The [`DistinctUntilChanged`] operator, behind
 //! [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed),
 //! [`ObservableExt::distinct_until_changed_with_key_selector`](crate::observable::ObservableExt::distinct_until_changed_with_key_selector).

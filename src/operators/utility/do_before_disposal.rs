@@ -1,3 +1,5 @@
+//! Runs a callback before the subscription is disposed.
+//!
 //! The [`DoBeforeDisposal`] operator, behind
 //! [`ObservableExt::do_before_disposal`](crate::observable::ObservableExt::do_before_disposal).
 

@@ -1,3 +1,5 @@
+//! Delivers nothing more to the observer once the subscription is disposed.
+//!
 //! The [`StopOnDisposal`] operator, behind
 //! [`ObservableExt::stop_on_disposal`](crate::observable::ObservableExt::stop_on_disposal).
 

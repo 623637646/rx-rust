@@ -1,3 +1,5 @@
+//! Pairs each item with an observable of the items of another source that overlap it in time.
+//!
 //! The [`GroupJoin`] operator, behind
 //! [`ObservableExt::group_join`](crate::observable::ObservableExt::group_join).
 

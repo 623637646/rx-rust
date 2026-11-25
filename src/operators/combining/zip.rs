@@ -1,3 +1,6 @@
+//! Combines the items of several sources by position: the first of each, then the second, and so
+//! on.
+//!
 //! The [`Zip`] operator, behind [`ObservableExt::zip`](crate::observable::ObservableExt::zip).
 
 use crate::{

@@ -1,3 +1,5 @@
+//! Creates an observable from a function that pushes to its observer.
+//!
 //! The [`Create`] source.
 
 use crate::{
@@ -190,6 +192,7 @@ use std::marker::PhantomData;
 /// an [`Emitter`] under `false` and the boxed observer of the mode under `true`. The lifetime that
 /// boxed observer may borrow for is not a parameter: it appears only in the builder's signature,
 /// and each subscription picks it.
+#[doc(alias("from_callback", "from_event", "from_event_pattern"))]
 #[derive(Educe)]
 #[educe(Debug, Clone(bound(F: Clone)))]
 pub struct Create<T, E, D, F, M, const BOXED: bool = false> {

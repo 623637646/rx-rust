@@ -1,3 +1,5 @@
+//! Emits the least item.
+//!
 //! The [`Min`] operator, behind [`ObservableExt::min`](crate::observable::ObservableExt::min).
 
 use crate::{

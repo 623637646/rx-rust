@@ -1,3 +1,5 @@
+//! Emits the items of a `Stream`.
+//!
 //! The [`FromStream`] source.
 
 use crate::{

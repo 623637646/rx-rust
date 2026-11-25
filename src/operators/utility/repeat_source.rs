@@ -1,3 +1,5 @@
+//! Subscribes again after a completion.
+//!
 //! The [`RepeatSource`] operator, behind
 //! [`ObservableExt::repeat_source`](crate::observable::ObservableExt::repeat_source).
 

@@ -1,3 +1,5 @@
+//! Emits a single value after a delay.
+//!
 //! The [`Timer`] source.
 
 use crate::{

@@ -1,3 +1,5 @@
+//! Completes without emitting anything.
+//!
 //! The [`Empty`] source.
 
 use crate::{

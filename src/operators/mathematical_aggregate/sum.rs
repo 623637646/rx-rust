@@ -1,3 +1,5 @@
+//! Emits the sum of the items.
+//!
 //! The [`Sum`] operator, behind [`ObservableExt::sum`](crate::observable::ObservableExt::sum).
 
 use crate::{

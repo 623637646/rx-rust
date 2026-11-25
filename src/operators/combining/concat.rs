@@ -1,3 +1,5 @@
+//! Emits the items of several sources, one source after the other.
+//!
 //! The [`Concat`] operator, behind
 //! [`ObservableExt::concat`](crate::observable::ObservableExt::concat).
 

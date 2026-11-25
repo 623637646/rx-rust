@@ -1,3 +1,5 @@
+//! Emits the latest item at the end of a time span that an item starts: a trailing-edge throttle.
+//!
 //! The [`Audit`] operator, behind
 //! [`ObservableExt::audit`](crate::observable::ObservableExt::audit).
 

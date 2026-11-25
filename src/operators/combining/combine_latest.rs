@@ -1,3 +1,5 @@
+//! Emits the latest item of every source, whenever any of them emits.
+//!
 //! The [`CombineLatest`] operator, behind
 //! [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest).
 

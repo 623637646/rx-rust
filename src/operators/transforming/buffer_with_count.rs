@@ -1,3 +1,5 @@
+//! Gathers items into `Vec`s of a given length.
+//!
 //! The [`BufferWithCount`] operator, behind
 //! [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count).
 

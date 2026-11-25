@@ -1,3 +1,5 @@
+//! Emits whether two sources emit the same sequence.
+//!
 //! The [`SequenceEqual`] operator, behind
 //! [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal).
 

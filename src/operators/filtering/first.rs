@@ -1,3 +1,5 @@
+//! Emits only the first item.
+//!
 //! The [`First`] operator, behind
 //! [`ObservableExt::first`](crate::observable::ObservableExt::first).
 

@@ -1,3 +1,5 @@
+//! Emits the return value of a function.
+//!
 //! The [`Start`] source.
 
 use crate::{
@@ -30,6 +32,7 @@ use std::convert::Infallible;
 ///
 /// assert_eq!(values, vec![42]);
 /// ```
+#[doc(alias("from_action", "from_callable", "once_with"))]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Start<F>(F);

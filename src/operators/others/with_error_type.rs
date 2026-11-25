@@ -1,3 +1,5 @@
+//! Gives an error type to an observable that never fails.
+//!
 //! The [`WithErrorType`] operator, behind
 //! [`ObservableExt::with_error_type`](crate::observable::ObservableExt::with_error_type).
 

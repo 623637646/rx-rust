@@ -444,6 +444,19 @@ when they fail.
 - Public items get doc comments; operators link to their reactivex.io page. `#![deny(missing_docs)]`
   enforces it, so an item that is `pub` only because the type system demands it — an operator's
   observer — takes `#[doc(hidden)]` instead of a doc comment.
+- **Finding an operator**: a new operator also gets
+  - a module whose first paragraph says in one sentence what the operator does, since the pages of
+    the categories show only that; which type and method it is comes after;
+  - a row in the task tables and a name in the category table of `src/operators/mod.rs`, and one in
+    the README's table;
+  - a `#[doc(alias)]` per name it has elsewhere: the [alphabetical list of
+    ReactiveX](https://reactivex.io/documentation/operators.html#alphabetical), RxJS, RxJava,
+    Rx.NET, RxSwift, Reactor, Combine, Rust's iterators and streams. Only for the same operation,
+    or a special case of it with an argument fixed (`map_to` for `map`, `race` for `amb`), not for
+    one that merely resembles it. It goes on the fluent method, or on the type of a source, in
+    snake_case, in alphabetical order; a type name stays in CamelCase
+    (`ConnectableObservable`). Rustdoc's search ignores case and underscores, so one spelling is
+    enough, and a name that differs from the operator's own only in those needs no alias.
 - **Turbofish**: write only the type arguments inference cannot reach — in the sources, the doc
   examples, the README and `examples/`, for every operator, subject and method call
   (`.collect::<…>()`, `Err::<…>`), not only constructors. Drop the turbofish when the code still

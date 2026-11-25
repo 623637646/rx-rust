@@ -1,3 +1,5 @@
+//! Runs a callback before each item is emitted.
+//!
 //! The [`DoBeforeNext`] operator, behind
 //! [`ObservableExt::do_before_next`](crate::observable::ObservableExt::do_before_next).
 

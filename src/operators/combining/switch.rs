@@ -1,3 +1,5 @@
+//! Emits the items of the most recent inner observable only.
+//!
 //! The [`Switch`] operator, behind
 //! [`ObservableExt::switch`](crate::observable::ObservableExt::switch).
 

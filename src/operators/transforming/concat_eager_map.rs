@@ -1,3 +1,6 @@
+//! Maps each item to an observable, subscribes them as they come, and emits their items one
+//! observable after the other.
+//!
 //! The [`ConcatEagerMap`] operator, behind
 //! [`ObservableExt::concat_eager_map`](crate::observable::ObservableExt::concat_eager_map).
 

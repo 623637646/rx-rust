@@ -1,3 +1,5 @@
+//! Continues with another observable after an error.
+//!
 //! The [`Catch`] operator, behind
 //! [`ObservableExt::catch`](crate::observable::ObservableExt::catch).
 

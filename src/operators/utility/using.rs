@@ -1,3 +1,5 @@
+//! Creates a resource for each subscription, and drops it when the subscription ends.
+//!
 //! The [`Using`] source.
 
 use crate::{
@@ -101,6 +103,7 @@ use educe::Educe;
 ///     |termination| assert_eq!(termination, Termination::Error("refused")),
 /// );
 /// ```
+#[doc(alias = "scope")]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Using<FR, FO> {

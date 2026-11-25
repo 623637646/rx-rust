@@ -1,3 +1,5 @@
+//! Mirrors whichever source emits or terminates first.
+//!
 //! The [`Amb`] operator, behind
 //! [`ObservableExt::amb`](crate::observable::ObservableExt::amb).
 

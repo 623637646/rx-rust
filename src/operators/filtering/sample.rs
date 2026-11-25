@@ -1,3 +1,5 @@
+//! Emits the latest item whenever another observable emits.
+//!
 //! The [`Sample`] operator, behind
 //! [`ObservableExt::sample`](crate::observable::ObservableExt::sample).
 

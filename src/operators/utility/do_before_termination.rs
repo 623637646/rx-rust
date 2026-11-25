@@ -1,3 +1,5 @@
+//! Runs a callback before the termination is emitted.
+//!
 //! The [`DoBeforeTermination`] operator, behind
 //! [`ObservableExt::do_before_termination`](crate::observable::ObservableExt::do_before_termination).
 

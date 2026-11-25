@@ -1,3 +1,5 @@
+//! Emits whether every item satisfies a predicate.
+//!
 //! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
 
 use crate::{

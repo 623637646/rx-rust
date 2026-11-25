@@ -1,3 +1,5 @@
+//! Continues with a fallback observable if the source completes empty.
+//!
 //! The [`SwitchIfEmpty`] operator, behind
 //! [`ObservableExt::switch_if_empty`](crate::observable::ObservableExt::switch_if_empty).
 

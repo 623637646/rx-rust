@@ -386,6 +386,11 @@ The full list, with a doc example for each, is on [docs.rs](https://docs.rs/rx-r
 types in `rx_rust::operators::creating`, plus `Using` in `rx_rust::operators::utility` and `When`
 in `rx_rust::operators::combining`; everything else is a method of `ObservableExt`.
 
+To find one, look up what it does in
+[Finding an operator](https://docs.rs/rx-rust/latest/rx_rust/operators/index.html#finding-an-operator),
+or search docs.rs for the name it has elsewhere: `tap`, `mergeMap` or `race` find `do_before_next`,
+`flat_map` and `amb`.
+
 Category                    | Operators
 --------------------------- | ---------
 Creating                    | `Create`, `Defer`, `Empty`, `FromFuture`, `FromTryFuture`, `FromIter`, `FromResult`, `FromStream`, `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked`, `Interval`, `Just`, `Never`, `Range`, `Repeat`, `Start`, `Throw`, `Timer`

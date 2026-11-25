@@ -1,3 +1,5 @@
+//! Lets a callback decide what to forward for each item.
+//!
 //! The [`HookOnNext`] operator, behind
 //! [`ObservableExt::hook_on_next`](crate::observable::ObservableExt::hook_on_next).
 

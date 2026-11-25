@@ -1,3 +1,5 @@
+//! Emits an item, then ignores those of the following time span: a leading-edge throttle.
+//!
 //! The [`Throttle`] operator, behind
 //! [`ObservableExt::throttle`](crate::observable::ObservableExt::throttle).
 

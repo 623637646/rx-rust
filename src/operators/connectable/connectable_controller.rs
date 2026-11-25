@@ -1,3 +1,5 @@
+//! Multicasts a source through a subject, once told to connect.
+//!
 //! The [`ConnectableController`], behind
 //! [`ObservableExt::multicast`](crate::observable::ObservableExt::multicast),
 //! [`ObservableExt::publish`](crate::observable::ObservableExt::publish),
@@ -194,6 +196,7 @@ impl<S, C> SubjectLifecycle<S, C> {
 ///     [("first", 1), ("second", 1), ("first", 2), ("second", 2)]
 /// );
 /// ```
+#[doc(alias = "ConnectableObservable")]
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct ConnectableController<OE, S, C = (), State = Disconnected>

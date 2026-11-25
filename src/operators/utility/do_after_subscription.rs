@@ -1,3 +1,5 @@
+//! Runs a callback after the source is subscribed to.
+//!
 //! The [`DoAfterSubscription`] operator, behind
 //! [`ObservableExt::do_after_subscription`](crate::observable::ObservableExt::do_after_subscription).
 

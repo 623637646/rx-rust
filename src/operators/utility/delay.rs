@@ -1,3 +1,5 @@
+//! Emits each item after a delay.
+//!
 //! The [`Delay`] operator, behind
 //! [`ObservableExt::delay`](crate::observable::ObservableExt::delay).
 

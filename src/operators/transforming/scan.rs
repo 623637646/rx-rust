@@ -1,3 +1,5 @@
+//! Accumulates the items, and emits every intermediate value.
+//!
 //! The [`Scan`] operator, behind [`ObservableExt::scan`](crate::observable::ObservableExt::scan).
 
 use crate::{

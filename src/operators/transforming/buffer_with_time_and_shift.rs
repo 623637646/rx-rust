@@ -1,3 +1,5 @@
+//! Gathers items into `Vec`s over time spans that overlap, or leave gaps.
+//!
 //! The [`BufferWithTimeAndShift`] operator, behind
 //! [`ObservableExt::buffer_with_time_and_shift`](crate::observable::ObservableExt::buffer_with_time_and_shift).
 

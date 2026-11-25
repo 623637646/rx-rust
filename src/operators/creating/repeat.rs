@@ -1,3 +1,5 @@
+//! Emits the same value several times.
+//!
 //! The [`Repeat`] source.
 
 use crate::{
@@ -33,6 +35,7 @@ use std::convert::Infallible;
 ///
 /// assert_eq!(values, vec!["ping", "ping", "ping"]);
 /// ```
+#[doc(alias = "repeat_n")]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Repeat<T> {

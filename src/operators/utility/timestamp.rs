@@ -1,3 +1,5 @@
+//! Pairs each item with the instant it arrived at.
+//!
 //! The [`Timestamp`] operator, behind
 //! [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp).
 

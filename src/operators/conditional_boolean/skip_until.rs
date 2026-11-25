@@ -1,3 +1,5 @@
+//! Skips items until another observable emits.
+//!
 //! The [`SkipUntil`] operator, behind
 //! [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until).
 

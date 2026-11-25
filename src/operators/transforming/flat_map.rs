@@ -1,3 +1,5 @@
+//! Maps each item to an observable, and emits their items as they arrive.
+//!
 //! The [`FlatMap`] operator, behind
 //! [`ObservableExt::flat_map`](crate::observable::ObservableExt::flat_map).
 

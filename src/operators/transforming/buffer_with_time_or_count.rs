@@ -1,4 +1,7 @@
-//! The [`BufferWithTimeOrCount`] operator.
+//! Gathers items into `Vec`s bounded by both a time span and a length.
+//!
+//! The [`BufferWithTimeOrCount`] operator, behind
+//! [`ObservableExt::buffer_with_time_or_count`](crate::observable::ObservableExt::buffer_with_time_or_count).
 
 use super::internal::{
     overlap::no_overlap,

@@ -1,3 +1,5 @@
+//! Gathers items into `Vec`s delimited by another observable.
+//!
 //! The [`Buffer`] operator, behind
 //! [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer).
 

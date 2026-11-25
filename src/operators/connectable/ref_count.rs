@@ -1,3 +1,5 @@
+//! Connects a multicast source while it has subscribers.
+//!
 //! The [`RefCount`] operator, behind
 //! [`ObservableExt::share`](crate::observable::ObservableExt::share),
 //! [`ObservableExt::share_behavior`](crate::observable::ObservableExt::share_behavior),

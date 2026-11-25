@@ -1,3 +1,5 @@
+//! Transforms the error of the source.
+//!
 //! The [`MapErr`] operator, behind
 //! [`ObservableExt::map_err`](crate::observable::ObservableExt::map_err).
 

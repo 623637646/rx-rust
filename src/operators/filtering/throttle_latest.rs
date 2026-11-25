@@ -1,3 +1,6 @@
+//! Emits an item at once, then the latest one at the end of each time span: a leading- and
+//! trailing-edge throttle.
+//!
 //! The [`ThrottleLatest`] operator, behind
 //! [`ObservableExt::throttle_latest`](crate::observable::ObservableExt::throttle_latest).
 

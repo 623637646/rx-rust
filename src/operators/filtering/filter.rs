@@ -1,3 +1,5 @@
+//! Emits the items that satisfy a predicate.
+//!
 //! The [`Filter`] operator, behind
 //! [`ObservableExt::filter`](crate::observable::ObservableExt::filter).
 

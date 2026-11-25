@@ -1,3 +1,5 @@
+//! Subscribes to the source on a scheduler.
+//!
 //! The [`SubscribeOn`] operator, behind
 //! [`ObservableExt::subscribe_on`](crate::observable::ObservableExt::subscribe_on).
 

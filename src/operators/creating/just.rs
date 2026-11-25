@@ -1,3 +1,5 @@
+//! Emits a single value.
+//!
 //! The [`Just`] source.
 
 use crate::{
@@ -30,6 +32,7 @@ use std::convert::Infallible;
 ///
 /// assert_eq!(values, vec!["hello"]);
 /// ```
+#[doc(alias("of", "once", "return", "return_value"))]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Just<T>(T);

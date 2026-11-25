@@ -1,3 +1,5 @@
+//! Emits the items that differ from every previous one.
+//!
 //! The [`Distinct`] operator, behind
 //! [`ObservableExt::distinct`](crate::observable::ObservableExt::distinct),
 //! [`ObservableExt::distinct_with_key_selector`](crate::observable::ObservableExt::distinct_with_key_selector).

@@ -1,3 +1,5 @@
+//! Maps each item to an `Option`, and emits those that are `Some`.
+//!
 //! The [`FilterMap`] operator, behind
 //! [`ObservableExt::filter_map`](crate::observable::ObservableExt::filter_map).
 

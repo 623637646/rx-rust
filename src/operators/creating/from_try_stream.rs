@@ -1,3 +1,5 @@
+//! Emits the values of a `Stream` of `Result`s, until an error.
+//!
 //! The [`FromTryStream`] source.
 
 use crate::{

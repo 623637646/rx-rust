@@ -1,3 +1,5 @@
+//! Emits only the last item.
+//!
 //! The [`Last`] operator, behind [`ObservableExt::last`](crate::observable::ObservableExt::last).
 
 use crate::{

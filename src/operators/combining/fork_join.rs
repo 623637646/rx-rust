@@ -1,3 +1,5 @@
+//! Emits the last item of every source once all of them have completed.
+//!
 //! The [`ForkJoin`] operator, behind
 //! [`ObservableExt::fork_join`](crate::observable::ObservableExt::fork_join).
 

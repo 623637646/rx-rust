@@ -1,5 +1,6 @@
-//! The [`When`] operator and the [`Pattern`]s and [`Plan`]s it is built from: ReactiveX's
-//! `And` / `Then` / `When`.
+//! Combines several sources by join patterns: ReactiveX's `And` / `Then` / `When`.
+//!
+//! The [`When`] operator and the [`Pattern`]s and [`Plan`]s it is built from.
 
 use crate::{
     delegate_disposal,

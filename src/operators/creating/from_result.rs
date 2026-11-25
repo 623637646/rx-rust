@@ -1,3 +1,5 @@
+//! Emits the value of a `Result`, or fails with its error.
+//!
 //! The [`FromResult`] source.
 
 use crate::{

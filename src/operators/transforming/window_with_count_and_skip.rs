@@ -1,3 +1,5 @@
+//! Divides the items into observables of a given length that overlap, or leave gaps.
+//!
 //! The [`WindowWithCountAndSkip`] operator, behind
 //! [`ObservableExt::window_with_count_and_skip`](crate::observable::ObservableExt::window_with_count_and_skip).
 

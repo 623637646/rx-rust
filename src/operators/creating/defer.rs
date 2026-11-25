@@ -1,3 +1,5 @@
+//! Builds a new observable for each subscription.
+//!
 //! The [`Defer`] source.
 
 use crate::{

@@ -1,3 +1,5 @@
+//! Maps each item to an observable, ignoring the items that arrive while one is running.
+//!
 //! The [`ExhaustMap`] operator, behind
 //! [`ObservableExt::exhaust_map`](crate::observable::ObservableExt::exhaust_map).
 

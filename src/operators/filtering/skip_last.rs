@@ -1,3 +1,5 @@
+//! Skips the last items.
+//!
 //! The [`SkipLast`] operator, behind
 //! [`ObservableExt::skip_last`](crate::observable::ObservableExt::skip_last).
 

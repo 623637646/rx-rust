@@ -1,3 +1,5 @@
+//! Divides the items into observables of a given length.
+//!
 //! The [`WindowWithCount`] operator, behind
 //! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
 

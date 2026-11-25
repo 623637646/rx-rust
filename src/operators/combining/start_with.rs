@@ -1,3 +1,5 @@
+//! Emits given values before the items of the source.
+//!
 //! The [`StartWith`] operator, behind
 //! [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with).
 

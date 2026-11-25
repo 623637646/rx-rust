@@ -1,3 +1,5 @@
+//! Emits only the first items.
+//!
 //! The [`Take`] operator, behind [`ObservableExt::take`](crate::observable::ObservableExt::take).
 
 use crate::{

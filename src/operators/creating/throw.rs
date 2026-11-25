@@ -1,3 +1,5 @@
+//! Fails without emitting anything.
+//!
 //! The [`Throw`] source.
 
 use crate::{
@@ -28,6 +30,7 @@ use std::convert::Infallible;
 /// );
 ///
 /// ```
+#[doc(alias("error", "fail", "raise_error", "throw_error", "throw_exception"))]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Throw<E>(E);

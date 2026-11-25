@@ -1,3 +1,5 @@
+//! Runs a callback once the stream is over, whatever ended it.
+//!
 //! The [`DoFinally`] operator, behind
 //! [`ObservableExt::do_finally`](crate::observable::ObservableExt::do_finally).
 

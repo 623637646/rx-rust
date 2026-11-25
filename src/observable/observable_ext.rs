@@ -86,9 +86,11 @@ use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 ///
 /// Each method builds the operator of the same name over `self`; the operator's own documentation
 /// in [`operators`](crate::operators) describes its behavior in detail and has an example. See the
-/// [module documentation](crate::observable) for a pipeline.
+/// [module documentation](crate::observable) for a pipeline, and
+/// [finding an operator](crate::operators#finding-an-operator) to look one up by what it does.
 pub trait ObservableExt: ObservableTypes + Sized {
     /// Emits a single `bool` indicating whether every item satisfies the provided predicate.
+    #[doc(alias("every", "forall", "is_empty"))]
     fn all<F>(self, callback: F) -> All<Self::Item, Self, F>
     where
         F: FnMut(Self::Item) -> bool,
@@ -97,6 +99,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Races two observables and mirrors whichever one emits an item or terminates first.
+    #[doc(alias("amb_with", "race", "race_with"))]
     fn amb<OE2>(self, source_2: OE2) -> Amb<(Self, OE2)>
     where
         OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -106,6 +109,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Emits the most recent item once `time_span` has passed since the item that started the
     /// span: a trailing-edge throttle.
+    #[doc(alias = "audit_time")]
     fn audit<S>(self, time_span: Duration, scheduler: S) -> Audit<Self, S> {
         Audit::new(self, time_span, scheduler)
     }
@@ -120,6 +124,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// buffer when non-empty and then completes, while an error from it discards the pending
     /// buffer and errors. Unlike [`window`](ObservableExt::window), a completed boundary does not
     /// leave the current buffer open.
+    #[doc(alias = "tumbling_buffer")]
     fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -128,12 +133,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Collects items into fixed-size buffers and emits each buffer as soon as it fills up.
+    #[doc(alias("buffer_count", "chunks", "partition_all", "tumbling_buffer"))]
     fn buffer_with_count(self, count: NonZeroUsize) -> BufferWithCount<Self> {
         BufferWithCount::new(self, count)
     }
 
     /// Gathers items into bundles of `count`, starting a new bundle every `skip` items: overlapping
     /// bundles for a `skip` below `count`, gaps for one above.
+    #[doc(alias("buffer_count", "sliding_buffer"))]
     fn buffer_with_count_and_skip(
         self,
         count: NonZeroUsize,
@@ -147,6 +154,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Collects items into a buffer emitted every `time_span`, the first one `time_span` after the
     /// subscription, on the provided scheduler.
+    #[doc(alias("buffer_time", "tumbling_buffer"))]
     fn buffer_with_time<S>(self, time_span: Duration, scheduler: S) -> BufferWithTime<Self, S> {
         BufferWithTime::new(self, time_span, scheduler)
     }
@@ -160,6 +168,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// # Panics
     ///
     /// Subscribing panics if `time_span` or `time_shift` is zero.
+    #[doc(alias("buffer_time", "sliding_buffer"))]
     fn buffer_with_time_and_shift<S>(
         self,
         time_span: Duration,
@@ -174,6 +183,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Collects items into buffers emitted when they reach `count` items or every `time_span`,
     /// whichever comes first; the timer first fires one `time_span` after the subscription.
+    #[doc(alias("buffer_time", "buffer_timeout", "chunks_timeout", "tumbling_buffer"))]
     fn buffer_with_time_or_count<S>(
         self,
         count: NonZeroUsize,
@@ -184,6 +194,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Recovers from errors by switching to another observable yielded by the callback.
+    #[doc(alias(
+        "catch_error",
+        "catch_exception",
+        "on_error_resume_next",
+        "on_error_return",
+        "on_error_return_item",
+        "rescue_error"
+    ))]
     fn catch<OE1, F>(self, callback: F) -> Catch<Self::Error, Self, F>
     where
         OE1: ObservableTypes<Item = Self::Item>,
@@ -194,11 +212,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Gathers all the items into a collection built with `Default` and `Extend`, and emits it
     /// when the source completes. See [`to_vec`](ObservableExt::to_vec) for the `Vec<T>` case.
+    #[doc(alias("collect_into", "to_dict", "to_dictionary", "to_map", "to_set"))]
     fn collect<C>(self) -> Collect<C, Self::Item, Self> {
         Collect::new(self)
     }
 
     /// Combines the latest values from both observables whenever either produces a new item.
+    #[doc(alias = "combine_latest_with")]
     fn combine_latest<OE2>(self, source_2: OE2) -> CombineLatest<(Self, OE2)>
     where
         OE2: ObservableTypes<Error = Self::Error>,
@@ -207,6 +227,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Concatenates the source with another observable, waiting for the first to complete.
+    #[doc(alias("chain", "concat_with", "end_with"))]
     fn concat<OE2>(self, source_2: OE2) -> Concat<(Self, OE2)>
     where
         OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -215,6 +236,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Flattens an observable-of-observables by concatenating each inner observable sequentially.
+    #[doc(alias = "flatten")]
     fn concat_all(self) -> ConcatAll<Self, Self::Item>
     where
         Self::Item: ObservableTypes<Error = Self::Error>,
@@ -235,6 +257,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Flattens an observable-of-observables by subscribing each inner observable as it arrives,
     /// and emitting their values one inner observable after the other.
     /// [`ConcatEagerAll::max_concurrency`] bounds how many are subscribed at a time.
+    #[doc(alias = "buffered")]
     fn concat_eager_all(self) -> ConcatEagerAll<Self, Self::Item>
     where
         Self::Item: ObservableTypes<Error = Self::Error>,
@@ -245,6 +268,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Maps each item to an observable, subscribes it at once, and emits the values of the
     /// resulting inner sequences one after the other.
     /// [`ConcatEagerMap::max_concurrency`] bounds how many are subscribed at a time.
+    #[doc(alias("concat_map_eager", "flat_map_sequential"))]
     fn concat_eager_map<OE1, F>(self, callback: F) -> ConcatEagerMap<Self::Item, Self, OE1, F>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -254,6 +278,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Maps each item to an observable and concatenates the resulting inner sequences.
+    #[doc(alias("concat_map_iterable", "map_cat", "select_concat"))]
     fn concat_map<OE1, F>(self, callback: F) -> ConcatMap<Self::Item, Self, OE1, F>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -268,17 +293,20 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Counts the number of items emitted and emits that count as a single value.
+    #[doc(alias("length", "long_count", "size"))]
     fn count(self) -> Count<Self::Item, Self> {
         Count::new(self)
     }
 
     /// Emits an item only once `time_span` has passed without the source emitting another one.
+    #[doc(alias("debounce_time", "throttle_with_timeout"))]
     fn debounce<S>(self, time_span: Duration, scheduler: S) -> Debounce<Self, S> {
         Debounce::new(self, time_span, scheduler)
     }
 
     /// Reports every event of the stream — subscription, values, termination, disposal — to
     /// `callback`, together with `context`.
+    #[doc(alias = "log")]
     fn debug<C, F>(self, context: C, callback: F) -> Debug<Self, C, F>
     where
         F: Fn(C, DebugEvent<'_, Self::Item, Self::Error>),
@@ -288,6 +316,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// [`debug`](ObservableExt::debug) that prints every event with `println!`, prefixed by
     /// `label`.
+    #[doc(alias("log", "print"))]
     fn debug_to_stdout<L>(
         self,
         label: L,
@@ -301,6 +330,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Emits a default value if the source completes without emitting any items.
+    #[doc(alias = "if_empty")]
     fn default_if_empty(self, default_value: Self::Item) -> DefaultIfEmpty<Self::Item, Self> {
         DefaultIfEmpty::new(self, default_value)
     }
@@ -321,6 +351,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Filters out duplicate items, keeping only the first occurrence of each value.
+    #[doc(alias = "unique")]
     #[allow(clippy::type_complexity)]
     fn distinct(self) -> Distinct<Self, fn(&Self::Item) -> Self::Item>
     where
@@ -330,6 +361,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Suppresses consecutive duplicate items, comparing the values directly.
+    #[doc(alias = "dedup")]
     #[allow(clippy::type_complexity)]
     fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&Self::Item) -> Self::Item>
     where
@@ -339,6 +371,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Suppresses consecutive duplicate items using a custom key selector.
+    #[doc(alias("dedup_by_key", "distinct_until_key_changed"))]
     fn distinct_until_changed_with_key_selector<F, K>(
         self,
         key_selector: F,
@@ -350,6 +383,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Filters out duplicates based on a key selector, keeping only unique keys.
+    #[doc(alias("distinct_key", "unique_by"))]
     fn distinct_with_key_selector<F, K>(self, key_selector: F) -> Distinct<Self, F>
     where
         F: FnMut(&Self::Item) -> K,
@@ -382,6 +416,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Invokes a callback after the source terminates, regardless of completion or error.
+    #[doc(alias = "do_after_terminate")]
     fn do_after_termination<F>(self, callback: F) -> DoAfterTermination<Self, F>
     where
         F: FnOnce(Termination<Self::Error>),
@@ -390,6 +425,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Invokes a callback right before the downstream subscription is disposed.
+    #[doc(alias("do_on_cancel", "do_on_dispose", "do_on_unsubscribe"))]
     fn do_before_disposal<F>(self, callback: F) -> DoBeforeDisposal<Self, F>
     where
         F: FnOnce(),
@@ -398,6 +434,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Invokes a callback with a reference to each item before it is sent downstream.
+    #[doc(alias("do_action", "do_on_next", "inspect", "tap", "tap_on_next"))]
     fn do_before_next<F>(self, callback: F) -> DoBeforeNext<Self, F>
     where
         F: FnMut(&Self::Item),
@@ -406,6 +443,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Invokes a callback just before the observer subscribes to the source.
+    #[doc(alias = "do_on_subscribe")]
     fn do_before_subscription<F>(self, callback: F) -> DoBeforeSubscription<Self, F>
     where
         F: FnOnce(),
@@ -414,6 +452,15 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Invokes a callback before the stream terminates, receiving the termination reason.
+    #[doc(alias(
+        "do_on_complete",
+        "do_on_completed",
+        "do_on_error",
+        "do_on_terminate",
+        "inspect_err",
+        "tap_on_completed",
+        "tap_on_error"
+    ))]
     fn do_before_termination<F>(self, callback: F) -> DoBeforeTermination<Self, F>
     where
         F: FnOnce(&Termination<Self::Error>),
@@ -423,6 +470,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Invokes a callback once the stream is over: terminated, disposed, or let go of by its
     /// source, whichever comes first.
+    #[doc(alias("finalize", "finally", "finally_action", "finally_do"))]
     fn do_finally<F>(self, callback: F) -> DoFinally<Self, F>
     where
         F: FnOnce(),
@@ -431,12 +479,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Emits only the item at the given zero-based index and then completes.
+    #[doc(alias = "nth")]
     fn element_at(self, index: usize) -> ElementAt<Self> {
         ElementAt::new(self, index)
     }
 
     /// Flattens an observable of observables, ignoring the inner observables that arrive while
     /// one is still running.
+    #[doc(alias("exclusive", "exhaust"))]
     fn exhaust_all(self) -> ExhaustAll<Self, Self::Item>
     where
         Self::Item: ObservableTypes<Error = Self::Error>,
@@ -446,6 +496,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Maps each item to an observable, ignoring the items that arrive while the previous one is
     /// still running.
+    #[doc(alias("flat_map_first", "select_switch_first"))]
     fn exhaust_map<OE1, F>(self, callback: F) -> ExhaustMap<Self::Item, Self, OE1, F>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -455,6 +506,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Filters items using a predicate, forwarding only values that return `true`.
+    #[doc(alias("keep", "select", "where"))]
     fn filter<F>(self, callback: F) -> Filter<Self, F>
     where
         F: FnMut(&Self::Item) -> bool,
@@ -471,12 +523,21 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Emits only the first item from the source, then completes; nothing if there was none.
+    #[doc(alias("first_element", "head"))]
     fn first(self) -> First<Self> {
         First::new(self)
     }
 
     /// Maps each item to an observable and merges the resulting inner sequences concurrently.
     /// [`FlatMap::max_concurrency`] bounds how many are subscribed at a time.
+    #[doc(alias(
+        "flat_map_iterable",
+        "flat_map_unordered",
+        "flat_map_with_max_concurrent",
+        "merge_map",
+        "select_many",
+        "select_with_max_concurrent"
+    ))]
     fn flat_map<OE1, F>(self, callback: F) -> FlatMap<Self::Item, Self, OE1, F>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -487,6 +548,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Waits for both observables to complete, then emits the last item of each as a pair and
     /// completes.
+    #[doc(alias = "join_all")]
     fn fork_join<OE2>(self, source_2: OE2) -> ForkJoin<(Self, OE2)>
     where
         OE2: ObservableTypes<Error = Self::Error>,
@@ -495,6 +557,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Groups items by key into multiple observable sequences.
+    #[doc(alias = "partition")]
     fn group_by<'a, F, K>(self, key_selector: F) -> GroupBy<'a, Self, F, K>
     where
         Self::Mode: ObserverMode,
@@ -672,6 +735,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///     .into_boxed()
     ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
     /// ```
+    #[doc(alias("as_observable", "boxed", "erase_to_any_publisher"))]
     fn into_boxed<'or, 'sub, 'oe>(self) -> BoxedObservableOf<'or, 'sub, 'oe, Self>
     where
         Self: IntoBoxedObservable<'or, 'sub, 'oe, <Self as ObservableTypes>::Mode>,
@@ -705,6 +769,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// A source that never sends an item or a completion keeps the future pending forever; see
     /// [`ObservableTryFuture`] for how to bound the wait.
+    #[doc(alias("first_value_from", "to_future"))]
     fn into_future(self) -> ObservableFuture<Self>
     where
         Self: ObservableTypes<Error = std::convert::Infallible>,
@@ -729,6 +794,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// A source that never completes keeps the stream pending after its last item; see
     /// [`ObservableTryStream`] for how to bound the wait.
+    #[doc(alias = "to_stream")]
     #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<Self::Item, Self>
     where
@@ -784,6 +850,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// A source that never sends an item or a termination keeps the future pending forever; see
     /// [`ObservableTryFuture`] for how to bound the wait.
+    #[doc(alias("first_value_from", "to_future"))]
     fn into_try_future(self) -> ObservableTryFuture<Self> {
         ObservableTryFuture::new(self)
     }
@@ -798,6 +865,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// A source that never terminates keeps the stream pending after its last item; see
     /// [`ObservableTryStream`] for how to bound the wait.
+    #[doc(alias = "to_stream")]
     #[cfg(feature = "futures")]
     fn into_try_stream(self) -> ObservableTryStream<Self::Item, Self::Error, Self> {
         ObservableTryStream::new(self)
@@ -846,11 +914,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Emits only the last item of the source, on completion; nothing if there was none.
+    #[doc(alias = "last_element")]
     fn last(self) -> Last<Self> {
         Last::new(self)
     }
 
     /// Transforms each item by applying a user-supplied mapping function.
+    #[doc(alias("map_to", "pluck", "select"))]
     fn map<T1, F>(self, callback: F) -> Map<Self::Item, Self, F>
     where
         F: FnMut(Self::Item) -> T1,
@@ -859,6 +929,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Transforms an error emitted by the source while leaving its items unchanged.
+    #[doc(alias("map_error", "on_error_map"))]
     fn map_err<E1, F>(self, callback: F) -> MapErr<Self::Error, Self, F>
     where
         F: FnOnce(Self::Error) -> E1,
@@ -878,6 +949,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Merges the source with another observable, interleaving both streams concurrently.
+    #[doc(alias("merge_with", "select_all"))]
     fn merge<OE2>(self, source_2: OE2) -> Merge<(Self, OE2)>
     where
         OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -887,6 +959,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Merges an observable-of-observables by interleaving items from inner streams.
     /// [`MergeAll::max_concurrency`] bounds how many are subscribed at a time.
+    #[doc(alias("buffer_unordered", "flatten", "flatten_unordered", "merge_concurrent"))]
     fn merge_all(self) -> MergeAll<Self, Self::Item>
     where
         Self::Item: ObservableTypes<Error = Self::Error>,
@@ -932,11 +1005,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Delivers the events downstream from tasks of the provided scheduler.
+    #[doc(alias("publish_on", "receive_on"))]
     fn observe_on<S>(self, scheduler: S) -> ObserveOn<Self, S> {
         ObserveOn::new(self, scheduler)
     }
 
     /// Emits each item paired with the one before it, as `(previous, current)`.
+    #[doc(alias = "tuple_windows")]
     fn pairwise(self) -> Pairwise<Self>
     where
         Self::Item: Clone,
@@ -960,6 +1035,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Each connection starts over from `initial_value`, which is cloned for it under the
     /// controller's lock, so its `Clone` must not reach back into this controller: see
     /// [`ConnectableController`].
+    #[doc(alias = "publish_value")]
     fn publish_behavior<'a>(
         self,
         initial_value: Self::Item,
@@ -985,6 +1061,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Aggregates the sequence using an initial seed and an accumulator function.
+    #[doc(alias("aggregate", "fold", "fold_left"))]
     fn reduce<T0, F>(self, initial_value: T0, callback: F) -> Reduce<T0, Self::Item, Self, F>
     where
         F: FnMut(T0, Self::Item) -> T0,
@@ -994,6 +1071,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Re-subscribes after a completion, to the observable the callback returns, until the
     /// callback returns `None`.
+    #[doc(alias(
+        "cycle",
+        "do_while",
+        "repeat",
+        "repeat_infinitely",
+        "repeat_until",
+        "repeat_when"
+    ))]
     fn repeat_source<OE1, F>(self, callback: F) -> RepeatSource<Self, F>
     where
         OE1: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -1004,6 +1089,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Multicasts the source using a `ReplaySubject` that keeps the last `buffer_size` values, or
     /// every value for `None`.
+    #[doc(alias = "publish_replay")]
     fn replay<'a>(
         self,
         buffer_size: Option<usize>,
@@ -1017,6 +1103,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Re-subscribes to the source based on the retry strategy returned by the callback.
+    #[doc(alias("retry_infinitely", "retry_until", "retry_when"))]
     fn retry<OE1, F>(self, callback: F) -> Retry<Self, F>
     where
         OE1: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -1026,6 +1113,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Samples the source whenever the sampler observable emits an event.
+    #[doc(alias("sample_time", "throttle_last"))]
     fn sample<OE1>(self, sampler: OE1) -> Sample<Self, OE1>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -1034,6 +1122,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Accumulates values over time, emitting each intermediate result.
+    #[doc(alias = "reductions")]
     fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, Self::Item, Self, F>
     where
         F: FnMut(T0, Self::Item) -> T0,
@@ -1042,6 +1131,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Compares two sequences element by element for equality.
+    #[doc(alias = "eq")]
     fn sequence_equal<OE2>(self, source_2: OE2) -> SequenceEqual<Self::Item, Self, OE2>
     where
         OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -1071,6 +1161,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// connection under the locks of the controller and of the [`RefCount`], so its `Clone` must
     /// not subscribe to this observable nor dispose a subscription of it: see
     /// [`ConnectableController`].
+    #[doc(alias = "share_value")]
     fn share_behavior<'a>(
         self,
         initial_value: Self::Item,
@@ -1116,22 +1207,26 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Emits the only item of the source once it completes; fails if there is none or more than
     /// one.
+    #[doc(alias = "exactly_one")]
     fn single(self) -> Single<Self> {
         Single::new(self)
     }
 
     /// Skips the first `count` items before emitting the remainder of the sequence.
+    #[doc(alias("drop", "rest", "tail"))]
     fn skip(self, count: usize) -> Skip<Self> {
         Skip::new(self, count)
     }
 
     /// Skips the last `count` items emitted by the source.
+    #[doc(alias("drop_last", "drop_right"))]
     fn skip_last(self, count: usize) -> SkipLast<Self> {
         SkipLast::new(self, count)
     }
 
     /// Ignores items from the source until the notifier observable emits; a notifier that
     /// completes without emitting completes the result.
+    #[doc(alias("drop_until", "skip_until_with_time", "skip_with_time"))]
     fn skip_until<OE1>(self, start: OE1) -> SkipUntil<Self, OE1>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -1140,6 +1235,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Skips items while the predicate returns `true`, then emits the remaining items.
+    #[doc(alias = "drop_while")]
     fn skip_while<F>(self, callback: F) -> SkipWhile<Self, F>
     where
         F: FnMut(&Self::Item) -> bool,
@@ -1148,6 +1244,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Emits the provided values first, then subscribes to the source.
+    #[doc(alias("cons", "prepend"))]
     fn start_with<I>(self, values: I) -> StartWith<Self, I>
     where
         I: IntoIterator<Item = Self::Item>,
@@ -1177,6 +1274,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// disposal alone does not hold back what an operator still has to send for the event it is
     /// handling. [`stop_on_disposal`](Self::stop_on_disposal) does, where the callback cannot
     /// answer.
+    #[doc(alias = "for_each")]
     fn subscribe_with_callback<FN, FT, R>(
         self,
         on_next: FN,
@@ -1197,6 +1295,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Switches to the most recent inner observable emitted by the source.
+    #[doc(alias("switch_all", "switch_latest", "switch_on_next"))]
     fn switch(self) -> Switch<Self, Self::Item>
     where
         Self::Item: ObservableTypes<Error = Self::Error>,
@@ -1205,6 +1304,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Continues with `fallback` if the source completes without emitting any item.
+    #[doc(alias = "if_empty")]
     fn switch_if_empty<OE1>(self, fallback: OE1) -> SwitchIfEmpty<Self, OE1>
     where
         OE1: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -1213,6 +1313,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Maps each item to an observable and switches to the latest inner sequence.
+    #[doc(alias("flat_map_latest", "select_switch"))]
     fn switch_map<OE1, F>(self, callback: F) -> SwitchMap<Self::Item, Self, OE1, F>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -1222,17 +1323,20 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Emits only the first `count` items from the source before completing.
+    #[doc(alias = "limit")]
     fn take(self, count: usize) -> Take<Self> {
         Take::new(self, count)
     }
 
     /// Emits only the last `count` items produced by the source.
+    #[doc(alias = "take_right")]
     fn take_last(self, count: usize) -> TakeLast<Self> {
         TakeLast::new(self, count)
     }
 
     /// Relays items until the notifier observable emits, then completes; a notifier that
     /// terminates first terminates the result the same way.
+    #[doc(alias("take_until_with_time", "take_with_time"))]
     fn take_until<OE1>(self, stop: OE1) -> TakeUntil<Self, OE1>
     where
         OE1: ObservableTypes<Error = Self::Error>,
@@ -1253,18 +1357,21 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Leading-edge: the cooldown is decided by comparing item arrival times, so no timer is
     /// spawned and a [`Clock`](crate::scheduler::Clock) is all it takes: `SystemClock`, or
     /// `scheduler.clock()`.
+    #[doc(alias("throttle_first", "throttle_time"))]
     fn throttle<C>(self, time_span: Duration, clock: C) -> Throttle<Self, C> {
         Throttle::new(self, time_span, clock)
     }
 
     /// Emits an item at once, then, while items keep coming, the most recent one at the end of
     /// each `time_span`: a leading- and trailing-edge throttle.
+    #[doc(alias = "throttle_time")]
     fn throttle_latest<S>(self, time_span: Duration, scheduler: S) -> ThrottleLatest<Self, S> {
         ThrottleLatest::new(self, time_span, scheduler)
     }
 
     /// Pairs each item with the time elapsed since the previous one, or since the subscription for
     /// the first, on `clock`: `SystemClock`, or `scheduler.clock()`.
+    #[doc(alias = "elapsed")]
     fn time_interval<C>(self, clock: C) -> TimeInterval<Self, C> {
         TimeInterval::new(self, clock)
     }
@@ -1285,6 +1392,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// [`collect`](ObservableExt::collect) specialized to `Vec<T>`, which is the shape that
     /// [`window`](ObservableExt::window) composes with:
     /// `source.window(boundary).concat_map(|window| window.to_vec())`.
+    #[doc(alias("to_array", "to_list", "to_vector"))]
     fn to_vec(self) -> Collect<Vec<Self::Item>, Self::Item, Self> {
         Collect::new(self)
     }
@@ -1292,6 +1400,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Collects items into windows that are opened and closed by another observable.
     /// Completing the boundary stops future window rotation without terminating the source.
     /// An error from the boundary terminates the current window and the outer observable.
+    #[doc(alias = "tumbling")]
     fn window<'a, OE1>(self, boundary: OE1) -> Window<'a, Self, OE1>
     where
         Self::Mode: ObserverMode,
@@ -1301,6 +1410,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Collects items into windows containing a fixed number of elements.
+    #[doc(alias("tumbling", "window_count"))]
     fn window_with_count<'a>(self, count: NonZeroUsize) -> WindowWithCount<'a, Self>
     where
         Self::Mode: ObserverMode,
@@ -1310,6 +1420,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Splits the items into windows of `count`, starting a new window every `skip` items:
     /// overlapping windows for a `skip` below `count`, gaps for one above.
+    #[doc(alias("sliding", "window_count"))]
     fn window_with_count_and_skip<'a>(
         self,
         count: NonZeroUsize,
@@ -1325,6 +1436,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Collects items into windows that each last `time_span`, on the provided scheduler: the
     /// first one opens at the subscription, and each following one as the one before is
     /// completed.
+    #[doc(alias("tumbling", "window_time"))]
     fn window_with_time<'a, S>(
         self,
         time_span: Duration,
@@ -1342,6 +1454,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// # Panics
     ///
     /// Subscribing panics if `time_span` or `time_shift` is zero.
+    #[doc(alias("sliding", "window_time"))]
     fn window_with_time_and_shift<'a, S>(
         self,
         time_span: Duration,
@@ -1356,6 +1469,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Collects items into windows completed when they reach `count` items or every `time_span`,
     /// whichever comes first; the timer first fires one `time_span` after the subscription.
+    #[doc(alias("tumbling", "window_time", "window_timeout"))]
     fn window_with_time_or_count<'a, S>(
         self,
         count: NonZeroUsize,
@@ -1367,6 +1481,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Gives an observable whose error type is `Infallible` a concrete error type, so that it
     /// can be joined to a fallible one (`merge`, `concat`, …), which requires the same error type.
+    #[doc(alias = "set_failure_type")]
     fn with_error_type<E1>(self) -> WithErrorType<E1, Self> {
         WithErrorType::new(self)
     }
@@ -1386,6 +1501,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Pairs items from both observables by index and emits tuples of corresponding values.
+    #[doc(alias = "zip_with")]
     fn zip<OE2>(self, source_2: OE2) -> Zip<(Self, OE2)>
     where
         OE2: ObservableTypes<Error = Self::Error>,

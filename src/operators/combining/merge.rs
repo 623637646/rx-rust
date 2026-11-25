@@ -1,3 +1,5 @@
+//! Emits the items of several sources as they arrive.
+//!
 //! The [`Merge`] operator, behind
 //! [`ObservableExt::merge`](crate::observable::ObservableExt::merge).
 

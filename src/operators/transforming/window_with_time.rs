@@ -1,3 +1,5 @@
+//! Divides the items into observables, one per time span.
+//!
 //! The [`WindowWithTime`] operator, behind
 //! [`ObservableExt::window_with_time`](crate::observable::ObservableExt::window_with_time).
 

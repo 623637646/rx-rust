@@ -1,3 +1,5 @@
+//! Declares an observable `Shared`, whatever its own mode.
+//!
 //! The [`IntoShared`] operator, behind
 //! [`ObservableExt::into_shared`](crate::observable::ObservableExt::into_shared).
 

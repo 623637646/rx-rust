@@ -1,3 +1,5 @@
+//! Ignores every item, and passes on the termination only.
+//!
 //! The [`IgnoreElements`] operator, behind
 //! [`ObservableExt::ignore_elements`](crate::observable::ObservableExt::ignore_elements).
 

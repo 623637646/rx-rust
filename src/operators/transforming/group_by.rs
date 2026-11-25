@@ -1,3 +1,5 @@
+//! Divides the items by key into one observable per key.
+//!
 //! The [`GroupBy`] operator, behind
 //! [`ObservableExt::group_by`](crate::observable::ObservableExt::group_by).
 

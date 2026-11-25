@@ -1,3 +1,5 @@
+//! Emits the number of items.
+//!
 //! The [`Count`] operator, behind
 //! [`ObservableExt::count`](crate::observable::ObservableExt::count).
 

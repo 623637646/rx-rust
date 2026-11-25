@@ -1,3 +1,6 @@
+//! Emits the values of a `Stream` of `Result`s, with a limit on those not yet acknowledged, until
+//! an error.
+//!
 //! The [`FromTryStreamAcked`] source.
 
 use crate::{

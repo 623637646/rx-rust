@@ -1,3 +1,5 @@
+//! Delivers the events on a scheduler.
+//!
 //! The [`ObserveOn`] operator, behind
 //! [`ObservableExt::observe_on`](crate::observable::ObservableExt::observe_on).
 

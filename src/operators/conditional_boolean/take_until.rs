@@ -1,3 +1,5 @@
+//! Emits items until another observable emits or terminates.
+//!
 //! The [`TakeUntil`] operator, behind
 //! [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until).
 

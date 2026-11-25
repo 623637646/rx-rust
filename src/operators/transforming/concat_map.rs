@@ -1,3 +1,5 @@
+//! Maps each item to an observable, and emits their items one observable after the other.
+//!
 //! The [`ConcatMap`] operator, behind
 //! [`ObservableExt::concat_map`](crate::observable::ObservableExt::concat_map).
 

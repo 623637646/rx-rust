@@ -1,3 +1,5 @@
+//! Lets a callback subscribe the observer to the source.
+//!
 //! The [`HookOnSubscription`] operator, behind
 //! [`ObservableExt::hook_on_subscription`](crate::observable::ObservableExt::hook_on_subscription).
 

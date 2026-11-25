@@ -1,3 +1,5 @@
+//! Emits an item once the source has been quiet for a time span.
+//!
 //! The [`Debounce`] operator, behind
 //! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
 

@@ -1,3 +1,5 @@
+//! Runs a callback after each item is emitted.
+//!
 //! The [`DoAfterNext`] operator, behind
 //! [`ObservableExt::do_after_next`](crate::observable::ObservableExt::do_after_next).
 

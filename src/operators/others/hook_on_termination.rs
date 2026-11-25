@@ -1,3 +1,5 @@
+//! Lets a callback decide what to deliver for the termination.
+//!
 //! The [`HookOnTermination`] operator, behind
 //! [`ObservableExt::hook_on_termination`](crate::observable::ObservableExt::hook_on_termination).
 

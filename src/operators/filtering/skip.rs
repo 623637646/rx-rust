@@ -1,3 +1,5 @@
+//! Skips the first items.
+//!
 //! The [`Skip`] operator, behind [`ObservableExt::skip`](crate::observable::ObservableExt::skip).
 
 use crate::{

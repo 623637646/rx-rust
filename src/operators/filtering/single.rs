@@ -1,3 +1,5 @@
+//! Emits the only item of the source, and fails if there is not exactly one.
+//!
 //! The [`Single`] operator, behind
 //! [`ObservableExt::single`](crate::observable::ObservableExt::single).
 

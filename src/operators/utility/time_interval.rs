@@ -1,3 +1,5 @@
+//! Pairs each item with the time since the previous one.
+//!
 //! The [`TimeInterval`] operator, behind
 //! [`ObservableExt::time_interval`](crate::observable::ObservableExt::time_interval).
 

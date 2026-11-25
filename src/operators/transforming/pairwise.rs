@@ -1,3 +1,5 @@
+//! Pairs each item with the one before.
+//!
 //! The [`Pairwise`] operator, behind
 //! [`ObservableExt::pairwise`](crate::observable::ObservableExt::pairwise).
 

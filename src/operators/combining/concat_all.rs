@@ -1,3 +1,5 @@
+//! Emits the items of inner observables, one observable after the other.
+//!
 //! The [`ConcatAll`] operator, behind
 //! [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all).
 

@@ -1,3 +1,5 @@
+//! Emits a counter at every period.
+//!
 //! The [`Interval`] source.
 
 use crate::{

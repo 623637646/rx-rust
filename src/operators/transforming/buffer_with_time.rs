@@ -1,3 +1,5 @@
+//! Gathers items into `Vec`s, one per time span.
+//!
 //! The [`BufferWithTime`] operator, behind
 //! [`ObservableExt::buffer_with_time`](crate::observable::ObservableExt::buffer_with_time).
 

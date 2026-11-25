@@ -1,3 +1,5 @@
+//! Divides the items into observables over time spans that overlap, or leave gaps.
+//!
 //! The [`WindowWithTimeAndShift`] operator, behind
 //! [`ObservableExt::window_with_time_and_shift`](crate::observable::ObservableExt::window_with_time_and_shift).
 

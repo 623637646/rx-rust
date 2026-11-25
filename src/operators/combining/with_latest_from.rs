@@ -1,3 +1,5 @@
+//! Combines each item with the latest item of every other source.
+//!
 //! The [`WithLatestFrom`] operator, behind
 //! [`ObservableExt::with_latest_from`](crate::observable::ObservableExt::with_latest_from).
 

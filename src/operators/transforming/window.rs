@@ -1,3 +1,5 @@
+//! Divides the items into observables delimited by another observable.
+//!
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 

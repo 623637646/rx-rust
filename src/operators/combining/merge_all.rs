@@ -1,3 +1,5 @@
+//! Emits the items of inner observables as they arrive.
+//!
 //! The [`MergeAll`] operator, behind
 //! [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all).
 

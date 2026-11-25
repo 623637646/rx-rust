@@ -1,3 +1,5 @@
+//! Emits the output of a `Future`.
+//!
 //! The [`FromFuture`] source.
 
 use crate::{
@@ -66,6 +68,7 @@ use std::convert::Infallible;
 /// let _subscription = FromFuture::new(async move { *value }, TokioScheduler::current())
 ///     .subscribe_with_callback(|_| {}, |_| {});
 /// ```
+#[doc(alias = "from_promise")]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromFuture<FU, S> {

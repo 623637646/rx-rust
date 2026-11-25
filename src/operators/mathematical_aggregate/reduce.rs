@@ -1,3 +1,5 @@
+//! Accumulates the items into one value, emitted on completion.
+//!
 //! The [`Reduce`] operator, behind
 //! [`ObservableExt::reduce`](crate::observable::ObservableExt::reduce).
 

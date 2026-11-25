@@ -1,3 +1,5 @@
+//! Emits the greatest item.
+//!
 //! The [`Max`] operator, behind [`ObservableExt::max`](crate::observable::ObservableExt::max).
 
 use crate::{

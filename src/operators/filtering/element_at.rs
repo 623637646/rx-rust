@@ -1,3 +1,5 @@
+//! Emits only the item at an index.
+//!
 //! The [`ElementAt`] operator, behind
 //! [`ObservableExt::element_at`](crate::observable::ObservableExt::element_at).
 

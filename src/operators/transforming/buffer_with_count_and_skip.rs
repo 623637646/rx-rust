@@ -1,3 +1,5 @@
+//! Gathers items into `Vec`s of a given length that overlap, or leave gaps.
+//!
 //! The [`BufferWithCountAndSkip`] operator, behind
 //! [`ObservableExt::buffer_with_count_and_skip`](crate::observable::ObservableExt::buffer_with_count_and_skip).
 

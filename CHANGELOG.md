@@ -102,6 +102,9 @@ All notable changes to this project are documented here. The format follows
   stream that is already over has no use for.
 - `examples/large_file.rs`: a file read chunk by chunk, each chunk uploaded before the next is
   read.
+- Operators are found by the names they have in other ReactiveX libraries and in Rust's iterators
+  and streams (`tap`, `merge_map`, `race`, `dedup`, …), as `#[doc(alias)]`s, and by what they do,
+  in the tables of the `operators` module. Each operator's module now starts with what it does.
 
 ### Changed
 

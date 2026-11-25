@@ -1,3 +1,5 @@
+//! Emits a default value if the source completes empty.
+//!
 //! The [`DefaultIfEmpty`] operator, behind
 //! [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty).
 

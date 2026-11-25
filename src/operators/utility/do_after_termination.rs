@@ -1,3 +1,5 @@
+//! Runs a callback after the termination is emitted.
+//!
 //! The [`DoAfterTermination`] operator, behind
 //! [`ObservableExt::do_after_termination`](crate::observable::ObservableExt::do_after_termination).
 

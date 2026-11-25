@@ -1,3 +1,5 @@
+//! Emits the value a `Future` of a `Result` resolves to, or fails with its error.
+//!
 //! The [`FromTryFuture`] source.
 
 use crate::{
@@ -36,6 +38,7 @@ use educe::Educe;
 ///     assert_eq!(result, Err("boom"));
 /// }
 /// ```
+#[doc(alias = "from_promise")]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromTryFuture<FU, S> {

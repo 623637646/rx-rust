@@ -1,3 +1,5 @@
+//! Pairs the items of two sources that overlap in time.
+//!
 //! The [`Join`] operator, behind [`ObservableExt::join`](crate::observable::ObservableExt::join).
 
 use super::internal::join::{

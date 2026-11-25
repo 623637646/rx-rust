@@ -1,3 +1,5 @@
+//! Subscribes to the source after a delay.
+//!
 //! The [`DelaySubscription`] operator, behind
 //! [`ObservableExt::delay_subscription`](crate::observable::ObservableExt::delay_subscription).
 

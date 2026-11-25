@@ -1,3 +1,5 @@
+//! Emits the items of an iterator.
+//!
 //! The [`FromIter`] source.
 
 use crate::{
@@ -30,6 +32,16 @@ use std::convert::Infallible;
 ///
 /// assert_eq!(values, vec![1, 2, 3]);
 /// ```
+#[doc(alias(
+    "from_array",
+    "from_iterable",
+    "from_list",
+    "generate",
+    "items",
+    "of",
+    "of_array",
+    "to_observable"
+))]
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromIter<I>(I);

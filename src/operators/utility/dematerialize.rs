@@ -1,3 +1,5 @@
+//! Turns event items back into the events they describe.
+//!
 //! The [`Dematerialize`] operator, behind
 //! [`ObservableExt::dematerialize`](crate::observable::ObservableExt::dematerialize).
 

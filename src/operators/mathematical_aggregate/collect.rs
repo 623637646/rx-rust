@@ -1,3 +1,5 @@
+//! Gathers every item into a collection.
+//!
 //! The [`Collect`] operator, behind
 //! [`ObservableExt::collect`](crate::observable::ObservableExt::collect),
 //! [`ObservableExt::to_vec`](crate::observable::ObservableExt::to_vec).

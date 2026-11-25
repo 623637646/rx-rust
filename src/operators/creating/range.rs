@@ -1,3 +1,5 @@
+//! Emits the values of a range.
+//!
 //! The [`Range`] source.
 
 use crate::{

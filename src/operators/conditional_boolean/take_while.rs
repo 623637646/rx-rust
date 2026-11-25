@@ -1,3 +1,5 @@
+//! Emits items for as long as a predicate holds.
+//!
 //! The [`TakeWhile`] operator, behind
 //! [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while).
 

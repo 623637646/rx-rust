@@ -1,3 +1,5 @@
+//! Emits the average of the items.
+//!
 //! The [`Average`] operator, behind
 //! [`ObservableExt::average`](crate::observable::ObservableExt::average).
 

@@ -1,3 +1,5 @@
+//! Emits nothing and never terminates.
+//!
 //! The [`Never`] source.
 
 use crate::{
@@ -24,6 +26,7 @@ use std::convert::Infallible;
 ///     |_| panic!("`Never` should not terminate"),
 /// );
 /// ```
+#[doc(alias = "pending")]
 #[derive(Debug, Clone)]
 pub struct Never;
 

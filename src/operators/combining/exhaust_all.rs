@@ -1,3 +1,5 @@
+//! Emits the items of one inner observable at a time, ignoring those that arrive meanwhile.
+//!
 //! The [`ExhaustAll`] operator, behind
 //! [`ObservableExt::exhaust_all`](crate::observable::ObservableExt::exhaust_all).
 

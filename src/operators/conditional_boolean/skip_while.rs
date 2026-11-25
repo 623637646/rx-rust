@@ -1,3 +1,5 @@
+//! Skips items for as long as a predicate holds.
+//!
 //! The [`SkipWhile`] operator, behind
 //! [`ObservableExt::skip_while`](crate::observable::ObservableExt::skip_while).
 

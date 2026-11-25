@@ -1,3 +1,5 @@
+//! Reports every event of the stream to a callback.
+//!
 //! The [`struct@Debug`] operator, behind
 //! [`ObservableExt::debug`](crate::observable::ObservableExt::debug),
 //! [`ObservableExt::debug_to_stdout`](crate::observable::ObservableExt::debug_to_stdout).

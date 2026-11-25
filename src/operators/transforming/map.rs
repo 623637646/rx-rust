@@ -1,3 +1,5 @@
+//! Transforms each item with a function.
+//!
 //! The [`Map`] operator, behind [`ObservableExt::map`](crate::observable::ObservableExt::map).
 
 use crate::{

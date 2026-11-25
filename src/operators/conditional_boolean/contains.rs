@@ -1,3 +1,5 @@
+//! Emits whether the source emits a given item.
+//!
 //! The [`Contains`] operator, behind
 //! [`ObservableExt::contains`](crate::observable::ObservableExt::contains).
 

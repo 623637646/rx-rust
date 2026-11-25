@@ -1,3 +1,6 @@
+//! Subscribes inner observables as they arrive, and emits their items one observable after the
+//! other.
+//!
 //! The [`ConcatEagerAll`] operator, behind
 //! [`ObservableExt::concat_eager_all`](crate::observable::ObservableExt::concat_eager_all).
 

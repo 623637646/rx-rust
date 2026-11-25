@@ -1,3 +1,5 @@
+//! Emits the items of a `Stream`, with a limit on those not yet acknowledged.
+//!
 //! The [`FromStreamAcked`] source.
 
 use crate::{

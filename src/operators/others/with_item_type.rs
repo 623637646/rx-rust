@@ -1,3 +1,5 @@
+//! Gives an item type to an observable that never emits.
+//!
 //! The [`WithItemType`] operator, behind
 //! [`ObservableExt::with_item_type`](crate::observable::ObservableExt::with_item_type).
 

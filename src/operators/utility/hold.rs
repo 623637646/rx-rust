@@ -1,3 +1,5 @@
+//! Holds a value for as long as the subscription lasts.
+//!
 //! The [`Hold`] operator, behind
 //! [`ObservableExt::hold`](crate::observable::ObservableExt::hold).
 

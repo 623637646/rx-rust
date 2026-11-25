@@ -1,3 +1,5 @@
+//! Subscribes several sources at once, and emits their items one source after the other.
+//!
 //! The [`ConcatEager`] operator, behind
 //! [`ObservableExt::concat_eager`](crate::observable::ObservableExt::concat_eager).
 
