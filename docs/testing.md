@@ -140,6 +140,10 @@ wait is needed before checking `State::Dropped`. `test_async` alone stays on `bl
 case about a real scheduler, and runs on all of them. It runs on real time six times over, so keep
 it well under nextest's 3 s `leak-timeout`: a long test among millisecond ones gets those reported
 as leaky on macOS. Shorten its durations (`DURATION_100_MS / 2`, …) rather than drop its steps.
+Where a test compares times read from a real clock, it checks that nothing is early, or that a time
+falls in the range it measured around the step (`assert_times_in`), not that a step is at most some
+margin late: how late depends on the load of the machine, and the exact times are the virtual
+clock's to check.
 
 A bridge between futures, streams and observables (`from_future`, `from_stream`, `into_stream`,
 their `try` twins, `subscribe_on`) waits on a waker rather than on the clock, and is tested on the

@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::{
-    DURATION_30_MS, assert_times_within,
+    DURATION_30_MS, assert_times_in,
     checker::{Checker, State},
     test_channel::{ChannelState, test_channel, test_channels},
     test_scheduler::block_on,
@@ -265,7 +265,6 @@ fn test_async() {
         let observable = observable.timestamp(scheduler.clock());
         scheduler.sleep(DURATION_30_MS).await;
 
-        let start = Instant::now();
         let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
             .await;
@@ -273,41 +272,49 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
+        let before = Instant::now();
         let mut sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(111).is_continue());
                 sender
             })
             .await;
-        assert_times_within(checker.values(), &[(111, start)], DURATION_30_MS);
+        let first = before..=Instant::now();
+        assert_times_in(checker.values(), &[(111, first.clone())]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
+        let before = Instant::now();
         let mut sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(222).is_continue());
                 sender
             })
             .await;
-        assert_times_within(
+        let second = before..=Instant::now();
+        assert_times_in(
             checker.values(),
-            &[(111, start), (222, start)],
-            DURATION_30_MS,
+            &[(111, first.clone()), (222, second.clone())],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         scheduler.sleep(DURATION_30_MS).await;
+        let before = Instant::now();
         let sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(333).is_continue());
                 sender
             })
             .await;
-        assert_times_within(
+        let third = before..=Instant::now();
+        assert_times_in(
             checker.values(),
-            &[(111, start), (222, start), (333, start + DURATION_30_MS)],
-            DURATION_30_MS,
+            &[
+                (111, first.clone()),
+                (222, second.clone()),
+                (333, third.clone()),
+            ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -318,10 +325,13 @@ fn test_async() {
                 sender.on_termination(Termination::<Infallible>::Completed);
             })
             .await;
-        assert_times_within(
+        assert_times_in(
             checker.values(),
-            &[(111, start), (222, start), (333, start + DURATION_30_MS)],
-            DURATION_30_MS,
+            &[
+                (111, first.clone()),
+                (222, second.clone()),
+                (333, third.clone()),
+            ],
         );
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);

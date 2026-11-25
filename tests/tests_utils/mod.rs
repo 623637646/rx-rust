@@ -15,7 +15,7 @@ pub(crate) mod window_checker;
 
 use std::{
     fmt::Debug,
-    ops::Sub,
+    ops::RangeInclusive,
     time::{Duration, Instant},
 };
 
@@ -30,21 +30,18 @@ pub(crate) const DURATION_1_YEAR: Duration = Duration::from_secs(365 * 24 * 60 *
 /// How long a test waits for another thread, through a channel, before it fails.
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Checks values paired with a time read from a real clock, which is only close to the expected
-/// one. On a virtual clock the times are exact: compare them with `assert_eq!`.
-pub(crate) fn assert_times_within<T, C>(
-    values: Vec<(T, C)>,
-    expected: &[(T, C)],
-    tolerance: Duration,
-) where
+/// Checks values paired with a time read from a real clock, each within the range that the test
+/// measured around it: how long a step takes depends on the load of the machine, so a fixed
+/// tolerance would not hold. On a virtual clock the times are exact: compare them with `assert_eq!`.
+pub(crate) fn assert_times_in<T, C>(values: Vec<(T, C)>, expected: &[(T, RangeInclusive<C>)])
+where
     T: PartialEq + Debug,
-    C: Ord + Copy + Debug + Sub<Output = Duration>,
+    C: PartialOrd + Debug,
 {
     assert_eq!(values.len(), expected.len());
     for (value, expected) in values.iter().zip(expected) {
         assert_eq!(value.0, expected.0);
-        let diff = value.1.max(expected.1) - value.1.min(expected.1);
-        assert!(diff < tolerance, "{value:?} != {expected:?}");
+        assert!(expected.1.contains(&value.1), "{value:?} != {expected:?}");
     }
 }
 

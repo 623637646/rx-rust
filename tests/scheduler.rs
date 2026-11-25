@@ -43,6 +43,19 @@ use std::{
 
 const RECURSION_EXECUTION_TIMES: usize = 20;
 
+/// Checks that every call was made, the first one due at `first` and each of the others 10 ms after
+/// the one before it, and none of them early. How late a call is depends on the load of the
+/// machine, so nothing bounds it here: `tests/virtual_time_scheduler.rs` checks the exact rate.
+fn assert_never_early(calls: Vec<Instant>, first: Instant) {
+    assert_eq!(calls.len(), RECURSION_EXECUTION_TIMES);
+    for (index, call) in calls.iter().enumerate() {
+        assert!(
+            *call >= first + DURATION_10_MS * index as u32,
+            "call {index} is early: {calls:?}, first: {first:?}"
+        );
+    }
+}
+
 #[test]
 fn test_thread_checker_executor_runs_nested_tasks_until_stalled() {
     let executor = ThreadCheckerExecutor::new("nested_tasks");
@@ -526,10 +539,9 @@ fn test_schedule_with_late_abort() {
 #[test]
 fn test_schedule_recursively_without_delay() {
     block_on(|scheduler| async move {
-        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let (tx, rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
         let first = Instant::now();
-        let start_instant = Instant::now();
         let disposal = scheduler.schedule_recursively(
             move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -542,14 +554,7 @@ fn test_schedule_recursively_without_delay() {
             },
             None,
         );
-        let mut count = 0;
-        while let Some(call_instant) = rx.next().await {
-            let duration = call_instant - start_instant;
-            let diff = duration - (count as u32 * DURATION_10_MS);
-            assert!(diff < DURATION_30_MS, "diff: {diff:?}, count: {count}");
-            count += 1;
-        }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        assert_never_early(rx.collect().await, first);
         disposal.dispose();
     });
 }
@@ -557,10 +562,9 @@ fn test_schedule_recursively_without_delay() {
 #[test]
 fn test_schedule_recursively_with_delay() {
     block_on(|scheduler| async move {
-        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let (tx, rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
         let first = Instant::now() + DURATION_10_MS;
-        let start_instant = Instant::now();
         let disposal = scheduler.schedule_recursively(
             move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -573,14 +577,7 @@ fn test_schedule_recursively_with_delay() {
             },
             Some(DURATION_10_MS),
         );
-        let mut count = 0;
-        while let Some(call_instant) = rx.next().await {
-            let duration = call_instant - start_instant;
-            let diff = duration - (count as u32 * DURATION_10_MS);
-            assert!(diff < DURATION_30_MS, "diff: {diff:?}, count: {count}");
-            count += 1;
-        }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        assert_never_early(rx.collect().await, first);
         disposal.dispose();
     });
 }
@@ -661,9 +658,9 @@ fn test_schedule_recursively_continue_at_past_instant_yields_and_disposes() {
 #[test]
 fn test_schedule_periodically_without_delay() {
     block_on(|scheduler| async move {
-        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let (tx, rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
-        let start_instant = Instant::now();
+        let first = Instant::now();
         let disposal = scheduler.schedule_periodically(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -677,14 +674,7 @@ fn test_schedule_periodically_without_delay() {
             DURATION_10_MS,
             None,
         );
-        let mut count = 0;
-        while let Some(call_instant) = rx.next().await {
-            let duration = call_instant - start_instant;
-            let diff = duration - (count as u32 * DURATION_10_MS);
-            assert!(diff < DURATION_30_MS, "diff: {diff:?}, count: {count}");
-            count += 1;
-        }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        assert_never_early(rx.collect().await, first);
         disposal.dispose();
     });
 }
@@ -692,9 +682,9 @@ fn test_schedule_periodically_without_delay() {
 #[test]
 fn test_schedule_periodically_with_delay() {
     block_on(|scheduler| async move {
-        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let (tx, rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
-        let start_instant = Instant::now();
+        let first = Instant::now() + DURATION_10_MS;
         let disposal = scheduler.schedule_periodically(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -708,14 +698,7 @@ fn test_schedule_periodically_with_delay() {
             DURATION_10_MS,
             Some(DURATION_10_MS),
         );
-        let mut count = 0;
-        while let Some(call_instant) = rx.next().await {
-            let duration = call_instant - start_instant;
-            let diff = duration - (count as u32 * DURATION_10_MS);
-            assert!(diff < DURATION_30_MS, "diff: {diff:?}, count: {count}");
-            count += 1;
-        }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        assert_never_early(rx.collect().await, first);
         disposal.dispose();
     });
 }
