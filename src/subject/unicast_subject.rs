@@ -327,7 +327,11 @@ impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
 
     /// Queues or discards the event that `payload` makes, or prepares to deliver it directly. On
     /// [`Prepared::Deliver`], the sender holds the observer from now on.
-    fn prepare_send<V>(&mut self, payload: V, into_event: fn(V) -> Event<T, E>) -> Prepared<V> {
+    fn prepare_send<V>(
+        &mut self,
+        payload: V,
+        into_event: impl FnOnce(V) -> Event<T, E>,
+    ) -> Prepared<V> {
         let state = match &self.state {
             SenderState::Direct(_) => return Prepared::Deliver(payload),
             SenderState::Closed => return Prepared::Answer(Flow::Break(())),
