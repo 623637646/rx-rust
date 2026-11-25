@@ -6,8 +6,7 @@
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
-    observer::Observer,
-    operators::filtering::filter::{Filter, FilterObserver},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -63,9 +62,29 @@ where
 impl<T, E, OE, OR> Observable<OR> for IgnoreElements<OE>
 where
     OR: Observer<T, E>,
-    OE: Observable<FilterObserver<OR, fn(&T) -> bool>, Item = T, Error = E>,
+    OE: Observable<IgnoreElementsObserver<OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        Filter::new(self.source, (|_| false) as fn(&T) -> bool).subscribe(observer)
+        self.source.subscribe(IgnoreElementsObserver { observer })
+    }
+}
+
+#[doc(hidden)]
+pub struct IgnoreElementsObserver<OR> {
+    observer: OR,
+}
+
+impl<T, E, OR> Observer<T, E> for IgnoreElementsObserver<OR>
+where
+    OR: Observer<T, E>,
+{
+    /// Drops the item: the downstream observer never sees one, so it cannot have stopped, and the
+    /// termination is still to come.
+    fn on_next(&mut self, _value: T) -> Flow {
+        Flow::Continue(())
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        self.observer.on_termination(termination);
     }
 }
