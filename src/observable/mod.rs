@@ -48,14 +48,11 @@ use crate::{
 };
 
 pub use crate::utils::positional::combination::Combination;
-#[doc(hidden)]
-pub use crate::utils::positional::{
-    position::TupleIndex,
-    slots::{ListSlots, ReservationSlot, TupleSlots},
-    tuple::IntoReversed,
-};
 pub use observable_ext::ObservableExt;
-pub use sources::{CollectedCursor, IterSources, SameItemSources, SourceSet};
+pub use sources::{IterSources, SameItemSources, SourceSet};
+
+#[doc(hidden)]
+pub use sources::CollectedCursor;
 
 /// The thread mode of an operator with the two sources `A` and `B`: their modes
 /// [`Joined`], `Shared` as soon as one of them is.
