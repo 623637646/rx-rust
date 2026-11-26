@@ -347,7 +347,7 @@ type ObserveOnTask<M, T, E, OR, D> = WakeableContext<Delivery<M, T, E, OR, D>, M
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
     ChainDisposal<ChainDisposal<InboxHandle<M, T, E>, SD>, ReplaceableDisposal<M, D>>,
-    where M: ThreadMode, SD: Disposable, D: Disposable
+    where M: ThreadMode, D: Disposable
 );
 
 impl<T, E, OE, S> ObservableTypes for ObserveOn<OE, S>

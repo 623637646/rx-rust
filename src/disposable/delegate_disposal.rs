@@ -3,19 +3,33 @@
 /// Defines a named disposal type wrapping an inner one, to which it delegates
 /// [`Disposable::dispose`].
 ///
-/// An operator's `type Disposal` is one of three:
+/// What decides an operator's `type Disposal` is whether another implementation would change it:
+/// the type is part of the public API, so one that follows the implementation makes a rewrite a
+/// breaking change. A type no implementation would change is written out:
 ///
 /// - one passed through: the disposal of its source or scheduler (`OE::Disposal`,
-///   `S::Disposal`), or that of the operator it is built on;
-/// - the named disposal of a [`utils`](crate::utils) helper, used as it is, when its parameters
-///   are only the operator's own (`subscribe_with_auto_dispose_on_termination::DisposalOf<OE>`);
-/// - a `Disposal` of the operator's own module.
+///   `S::Disposal`), the user's, or `()` for a source with nothing to dispose;
+/// - that of the operator this one is by definition — a special case of it or a fixed composition
+///   with it (`first` is `element_at(0)`, `switch_map` is `map` then `switch`) — not merely one it
+///   happens to be built on;
+/// - a disposal that is what the observable is rather than how it is built: an
+///   [`EitherObservable`](crate::observable::either_observable::EitherObservable) has an
+///   [`EitherDisposal`](crate::disposable::either_disposal::EitherDisposal).
 ///
-/// Anything else — a combination such as `ChainDisposal<ReplaceableDisposal<M, D2>, D1>`,
-/// or a type naming one of the operator's private types, such as its model — gets its `Disposal`
-/// from this macro. The public `type Disposal` then shows neither how the disposal is built nor the
-/// types inside it, which stay private: the field of the generated type is private, and an
-/// associated type cannot name a private type itself.
+/// Anything else — a combination, however shallow, such as `Option<D>` or
+/// `ChainDisposal<ReplaceableDisposal<M, D2>, D1>`, the named disposal of a
+/// [`utils`](crate::utils) helper, which another helper would change, or a type naming one of the
+/// operator's private types, such as its model — gets its `Disposal` from this macro, or from a
+/// struct written by hand when disposing does more than delegate. The public `type Disposal` then
+/// shows neither how the disposal is built nor the types inside it, which stay private: the field
+/// of the generated type is private, and an associated type cannot name a private type itself. A
+/// `pub type` alias would do neither: it is transparent, and cannot name a private type. Nor does a
+/// delegate go around a type passed through, which would lose the type it shares with its source
+/// and nest with the chain.
+///
+/// Its parameters are what the operator's types decide — the mode, the items, the disposals of its
+/// sources and scheduler — and what is built of them goes inside, so that the public type shows
+/// none of it. Its `where` clause holds only what the inner type needs to be well formed.
 ///
 /// The generated type is documented by the attributes given, or by a generic sentence without
 /// them.

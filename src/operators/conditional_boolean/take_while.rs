@@ -4,9 +4,11 @@
 //! [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while).
 
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::subscribe_with_auto_dispose_on_termination::{
         self, subscribe_with_auto_dispose_on_termination,
     },
@@ -57,6 +59,12 @@ impl<OE, F> TakeWhile<OE, F> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, D>,
+    subscribe_with_auto_dispose_on_termination::Disposal<M, D>,
+    where M: ThreadMode, D: Disposable
+);
+
 impl<T, E, OE, F> ObservableTypes for TakeWhile<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -64,7 +72,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
+    type Disposal = Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for TakeWhile<OE, F>
@@ -85,6 +93,7 @@ where
             };
             self.source.subscribe(observer)
         })
+        .map_inner_into()
     }
 }
 

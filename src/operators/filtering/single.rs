@@ -4,9 +4,11 @@
 //! [`ObservableExt::single`](crate::observable::ObservableExt::single).
 
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::{
         emit_then_terminate::emit_then_terminate,
         subscribe_with_auto_dispose_on_termination::{
@@ -79,6 +81,12 @@ impl<OE> Single<OE> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, D>,
+    subscribe_with_auto_dispose_on_termination::Disposal<M, D>,
+    where M: ThreadMode, D: Disposable
+);
+
 impl<T, E, OE> ObservableTypes for Single<OE>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -86,7 +94,7 @@ where
     type Item = T;
     type Error = Error<E>;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
+    type Disposal = Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for Single<OE>
@@ -105,6 +113,7 @@ where
                 value: None,
             })
         })
+        .map_inner_into()
     }
 }
 

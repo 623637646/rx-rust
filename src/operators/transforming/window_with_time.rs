@@ -142,6 +142,9 @@ where
     /// The timer's thread rotates the windows, the source's feeds them and ends the last one, so
     /// the mode is both joined.
     type Mode = JoinedSchedulerModeOf<OE, S>;
+    /// The disposal of the
+    /// [`WindowWithTimeAndShift`](crate::operators::transforming::window_with_time_and_shift::WindowWithTimeAndShift)
+    /// this operator is, with a shift equal to the time span.
     type Disposal = window_with_time_and_shift::Disposal<
         JoinedSchedulerModeOf<OE, S>,
         T,

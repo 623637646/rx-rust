@@ -83,8 +83,9 @@ where
     type Item = T;
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
-    /// The disposal of the [`MergeAll`](crate::operators::combining::merge_all::MergeAll) this
-    /// operator shares its machinery with.
+    /// The disposal of the [`ConcatAll`](crate::operators::combining::concat_all::ConcatAll) this
+    /// operator is, after a map: that of a
+    /// [`MergeAll`](crate::operators::combining::merge_all::MergeAll).
     type Disposal = merge_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
 }
 

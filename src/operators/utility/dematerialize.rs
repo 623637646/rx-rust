@@ -4,9 +4,11 @@
 //! [`ObservableExt::dematerialize`](crate::observable::ObservableExt::dematerialize).
 
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Event, Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::subscribe_with_auto_dispose_on_termination::{
         self, subscribe_with_auto_dispose_on_termination,
     },
@@ -55,6 +57,12 @@ impl<OE> Dematerialize<OE> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, D>,
+    subscribe_with_auto_dispose_on_termination::Disposal<M, D>,
+    where M: ThreadMode, D: Disposable
+);
+
 impl<T, E, OE> ObservableTypes for Dematerialize<OE>
 where
     OE: ObservableTypes<Item = Event<T, E>, Error = Infallible>,
@@ -62,7 +70,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
+    type Disposal = Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for Dematerialize<OE>
@@ -78,6 +86,7 @@ where
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             self.0.subscribe(DematerializeObserver(Some(observer)))
         })
+        .map_inner_into()
     }
 }
 

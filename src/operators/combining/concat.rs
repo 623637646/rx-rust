@@ -218,7 +218,7 @@ pub struct ConcatPair<OE1, OE2> {
 delegate_disposal!(
     Disposal<M, D1, D2>,
     ChainDisposal<ReplaceableDisposal<M, D2>, D1>,
-    where M: ThreadMode, D1: Disposable, D2: Disposable
+    where M: ThreadMode, D2: Disposable
 );
 
 impl<T, E, OE1, OE2> ObservableTypes for ConcatPair<OE1, OE2>

@@ -7,13 +7,13 @@
 //! operator is built on the other: each is a projection of those actions, ended as the
 //! [`Ending`] of its delegate says.
 //!
-//! The module is private. What a public signature of either operator names, the [`Disposal`] and
-//! the aliases, is re-exported by both. The observers the sources and the durations are subscribed
-//! with stay `pub`, with no path: a source built with a non-boxed `Create` hands its observer to
-//! user code, which may not hold a value of a private type, but no user names one.
+//! The module is private, and has no path: each operator names its own `Disposal` with
+//! `delegate_disposal!` over [`ContextDisposal`], and spells its mode out. The observers the sources
+//! and the durations are subscribed with stay `pub`, with no path: a source built with a non-boxed
+//! `Create` hands its observer to user code, which may not hold a value of a private type, but no
+//! user names one.
 
 use crate::{
-    delegate_disposal,
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{EventBatch, Flow, Observer, Termination},
@@ -23,7 +23,7 @@ use crate::{
         reservation_map::ReservationMap,
         serialized_delivery::{StopView, UpdateOutcome},
         subscribe_with_context::{
-            self, SubscriptionContext, subscribe_with_context_two_steps_with_stop_view,
+            SubscriptionContext, TwoStepsDisposal, subscribe_with_context_two_steps_with_stop_view,
         },
     },
 };
@@ -31,25 +31,24 @@ use crate::{
 /// The thread mode of a join of `OE` and `OE2` whose windows last as long as `DL` and `DR`:
 /// `Shared` as soon as one of them is, since the durations are subscribed with the operator's
 /// context too.
-pub type ModeOf<OE, OE2, DL, DR> = Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>;
+pub(crate) type ModeOf<OE, OE2, DL, DR> = Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>;
 
-delegate_disposal!(
-    /// The disposal of a [`Join`](super::super::join::Join) or
-    /// [`GroupJoin`](super::super::group_join::GroupJoin) subscription: it stops the context,
-    /// which tells the observer that emits the pairs or windows to stop, then disposes the sources
-    /// and the durations.
-    Disposal<M, L, R, E, SD, DLD, DRD>,
-    subscribe_with_context::Disposal<M, Action<L, R>, E, Model<DLD, DRD>, SD>,
-    where M: ThreadMode, SD: Disposable, DLD: Disposable, DRD: Disposable
-);
+/// The disposal of the context of a join whose left and right sources are disposed by `D` and
+/// `D2`, and whose durations by `DLD` and `DRD`: it stops the context, which tells the delegate to
+/// stop, then disposes the sources and the durations. Each operator names it with
+/// `delegate_disposal!`.
+pub(crate) type ContextDisposal<M, L, R, E, D, D2, DLD, DRD> =
+    TwoStepsDisposal<M, Action<L, R>, E, Model<DLD, DRD>, D, D2>;
 
-/// The [`Disposal`] of a join of `OE` and `OE2` whose windows last as long as `DL` and `DR`.
-pub type DisposalOf<OE, OE2, DL, DR> = Disposal<
+/// The [`ContextDisposal`] of a join of `OE` and `OE2` whose windows last as long as `DL` and
+/// `DR`.
+pub(crate) type ContextDisposalOf<OE, OE2, DL, DR> = ContextDisposal<
     ModeOf<OE, OE2, DL, DR>,
     <OE as ObservableTypes>::Item,
     <OE2 as ObservableTypes>::Item,
     <OE as ObservableTypes>::Error,
-    ChainDisposalOf<OE2, OE>,
+    <OE as ObservableTypes>::Disposal,
+    <OE2 as ObservableTypes>::Disposal,
     <DL as ObservableTypes>::Disposal,
     <DR as ObservableTypes>::Disposal,
 >;
@@ -100,7 +99,7 @@ pub(crate) fn subscribe<L, R, E, OR, OE, OE2, FL, FR, DL, DR>(
     (left, right): (OE, OE2),
     (left_duration_selector, right_duration_selector): (FL, FR),
     delegate_builder: impl FnOnce(StopView<ModeOf<OE, OE2, DL, DR>>) -> OR,
-) -> DisposeOnDrop<DisposalOf<OE, OE2, DL, DR>>
+) -> DisposeOnDrop<ContextDisposalOf<OE, OE2, DL, DR>>
 where
     OR: Observer<Action<L, R>, E> + Ending,
     OE: Observable<LeftObserverOf<OE, OE2, DL, DR, OR, FL>, Item = L, Error = E>,
@@ -126,7 +125,6 @@ where
             }))
         },
     )
-    .map_inner_into()
 }
 
 /// What the observers of a join ask the delegate to do, in the order they decided it under the
@@ -145,7 +143,7 @@ pub(crate) enum Action<L, R> {
 }
 
 /// The duration subscriptions of the open windows.
-struct Model<DLD: Disposable, DRD: Disposable> {
+pub(crate) struct Model<DLD: Disposable, DRD: Disposable> {
     /// The windows of the left values, `None` once the right source has completed: a left value
     /// waits for right values only, so from then on no window of one stays open, nor opens.
     lefts: Windows<DLD>,

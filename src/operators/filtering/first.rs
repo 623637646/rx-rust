@@ -7,7 +7,7 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
-    operators::filtering::element_at::{ElementAt, ElementAtObserver},
+    operators::filtering::element_at::{self, ElementAt, ElementAtObserver},
     utils::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
@@ -59,7 +59,8 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
+    /// The disposal of the [`ElementAt`] this operator is, at index zero.
+    type Disposal = element_at::Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for First<OE>

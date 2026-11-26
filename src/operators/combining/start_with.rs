@@ -5,7 +5,7 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::Observer,
 };
@@ -55,11 +55,7 @@ impl<OE, I> StartWith<OE, I> {
     }
 }
 
-delegate_disposal!(
-    Disposal<D>,
-    Option<D>,
-    where D: Disposable
-);
+delegate_disposal!(Disposal<D>, Option<D>);
 
 impl<T, E, OE, I> ObservableTypes for StartWith<OE, I>
 where

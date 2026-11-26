@@ -314,8 +314,11 @@ an issue when they fail.
     `type Disposal = window_with_count_and_skip::Disposal<…>`, `scheduler::StreamAck`;
   - a `#[macro_export]` macro has its path at the crate root, and is imported from there.
 
-  Of the machinery in an `internal/` module, what users name (`Disposal`, `Unlimited`) is
-  re-exported by each operator naming it, as none of them is its home. The rest, observers and
+  Of the machinery in an `internal/` module, what users name (`Unlimited`) is re-exported by
+  each operator naming it, as none of them is its home. A disposal is not: the machinery names
+  the disposal of its context in a crate-private `ContextDisposal`, and each operator wraps it in a
+  `Disposal` of its own with `delegate_disposal!` (`merge`, `join`), and spells its mode out
+  rather than naming the machinery's `ModeOf`. The rest, observers and
   their generic arguments, needs only to be `pub`, not to have a path: add a `#[doc(hidden)]`
   re-export only where `unreachable_pub` asks for one (`MergeObserver`). An operator on such
   machinery names the observer it subscribes its source with in a `pub(crate)` alias of its own
@@ -396,13 +399,36 @@ an issue when they fail.
   operators carry the same capture as a plain function pointer, typed by what they queue
   (`Infallible` for a store that queues nothing). See
   `docs/decisions/0002-observable-types-and-thread-mode.md`.
-- **The `Disposal`** is one of three: one passed through — the source's or scheduler's
-  (`OE::Disposal`), or that of the operator it is built on (`switch_map` takes `switch::Disposal`)
-  — a `utils` helper's named disposal used as it is when its parameters are only the operator's
-  own (`subscribe_with_auto_dispose_on_termination::DisposalOf<OE>`), or a
-  `Disposal` of the operator's own module. Anything else — a combination of combinators, or a type naming the
-  operator's model or another of its private types — is named by `delegate_disposal!`, and the
-  types inside stay private. `grep -rn "type Disposal = " src/operators` lists them all.
+- **The `Disposal`**: what decides is whether another implementation would change the type. The
+  reason is the public API: an operator's `Disposal` is part of it, so a type that follows the
+  implementation makes a rewrite a breaking change — and, as a bonus, keeps from users what
+  `DisposeOnDrop::map_inner` would hand them (a `ReplaceableDisposal`'s `replace_with`). A type
+  no implementation would change is written out: one passed through — the source's, scheduler's
+  or user's (`OE::Disposal`, `S::Disposal`, `create`'s `D`), `()` for a source with nothing to
+  dispose; that of the operator this one is by definition — a special case of it or a fixed
+  composition with it (`switch_map` is `map` then `switch` and takes `switch::Disposal`, `first`
+  is `element_at(0)` and takes `element_at::Disposal`), not merely one it happens to be built on;
+  or a disposal that is what the observable is rather than how it is built (`EitherObservable`'s
+  `EitherDisposal`). Anything else is a `Disposal` of the operator's own module, however shallow
+  the type inside: an `Option<OE::Disposal>`, a `ReplaceableDisposal`, a `utils` helper's named
+  disposal (`take_while`'s is `subscribe_with_auto_dispose_on_termination::Disposal<M, D>`, which
+  another helper would change), or a type naming the operator's model or another private type.
+  It is `delegate_disposal!` over that type, the types inside staying private, with
+  `.map_inner_into()` at the end of `subscribe`, or a struct written by hand when disposing does
+  more than delegate (`amb`, `debug`, `do_finally`). Not a `pub type` alias, which is transparent
+  yet cannot name a private type, and not a delegate around what is passed through, which would
+  lose the type it shares with its source and nest with the chain.
+  `grep -rn "type Disposal = " src` lists them all; the schedulers' own disposals
+  (`TokioDisposal`, …) and the macros' `$disposal` in that list are not operators', so this rule
+  does not apply to them.
+  The parameters of a delegated `Disposal` are what the operator's types decide — the mode, the
+  items, the disposals of its sources and scheduler — never a composition of them, which goes
+  inside: `with_latest_from` takes the slots and the source's disposal, not the tuple holding
+  them, and `join` its sources' disposals, not their `ChainDisposal`. A type it can project from
+  one parameter is not another (`zip`'s queues come from its item). Its where-clause holds only
+  what the inner type needs to be well formed — `M: ThreadMode`, `D: Disposable` under a
+  `ReplaceableDisposal` or a context — and nothing under an `Option`, a `ChainDisposal` or an
+  `EitherDisposal`, whose `Disposable` impls ask for it themselves.
 - **Type aliases for repeated shapes**: a helper names the types an operator built on it spells
   out, from the operator's source and scheduler types: `XxxOf<OE, …>` in the helper's module
   (`subscribe_with_auto_dispose_on_termination::{ObserverOf, DisposalOf}`), `JoinedModeOf<A, B>` and

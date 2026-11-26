@@ -130,9 +130,9 @@ type ModeOf<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SourceSet>::Mod
 type ItemOf<OE, S> = <<S as SourceSet>::Item as Combination>::After<<OE as ObservableTypes>::Item>;
 
 delegate_disposal!(
-    Disposal<M, T, E, I, D>,
-    subscribe_with_context::Disposal<M, T, E, Model<I>, D>,
-    where M: ThreadMode, I: Combination, D: Disposable
+    Disposal<M, T, E, I, SL, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<I>, (SL, Option<DisposeOnDrop<D>>)>,
+    where M: ThreadMode, I: Combination, SL: Disposable, D: Disposable
 );
 
 impl<OE, S> ObservableTypes for WithLatestFrom<OE, S>
@@ -151,7 +151,8 @@ where
         <S::Item as Combination>::After<OE::Item>,
         OE::Error,
         S::Item,
-        (S::SubscriptionSlots, Option<DisposeOnDrop<OE::Disposal>>),
+        S::SubscriptionSlots,
+        OE::Disposal,
     >;
 }
 

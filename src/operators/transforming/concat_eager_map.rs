@@ -110,7 +110,7 @@ where
     type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the
     /// [`ConcatEagerAll`](crate::operators::combining::concat_eager_all::ConcatEagerAll) this
-    /// operator is built on.
+    /// operator is, after a map.
     type Disposal = concat_eager_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
 }
 

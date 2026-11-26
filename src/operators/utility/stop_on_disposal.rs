@@ -6,8 +6,7 @@
 use crate::{
     delegate_disposal,
     disposable::{
-        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-        flag_disposal::FlagDisposal,
+        chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop, flag_disposal::FlagDisposal,
     },
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
@@ -115,7 +114,7 @@ where
 delegate_disposal!(
     Disposal<M, D>,
     ChainDisposal<D, FlagDisposal<<M as ThreadMode>::Flag>>,
-    where M: ThreadMode, D: Disposable
+    where M: ThreadMode
 );
 
 #[doc(hidden)]

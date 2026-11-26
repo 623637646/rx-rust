@@ -69,7 +69,7 @@ impl<OE, OE1> SwitchIfEmpty<OE, OE1> {
 delegate_disposal!(
     Disposal<M, D, D1>,
     ChainDisposal<ReplaceableDisposal<M, D1>, D>,
-    where M: ThreadMode, D: Disposable, D1: Disposable
+    where M: ThreadMode, D1: Disposable
 );
 
 impl<T, E, OE, OE1> ObservableTypes for SwitchIfEmpty<OE, OE1>

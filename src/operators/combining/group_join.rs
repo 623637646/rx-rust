@@ -4,19 +4,20 @@
 //! [`ObservableExt::group_join`](crate::observable::ObservableExt::group_join).
 
 use super::internal::join::{
-    self, Action, DurationObserverOf, Ending, LeftObserverOf, RightObserverOf, Side,
+    self, Action, ContextDisposal, DurationObserverOf, Ending, LeftObserverOf, ModeOf,
+    RightObserverOf, Side,
 };
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{Observable, ObservableTypes},
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
+    thread_mode::{Joined, ThreadMode},
     utils::{MarkerType, id_generator::Id, serialized_delivery::StopView},
 };
 use educe::Educe;
 use std::{collections::BTreeMap, marker::PhantomData};
-
-pub use super::internal::join::{Disposal, DisposalOf, ModeOf};
 
 /// Pairs every value of the left observable with a window of the right values that overlap it:
 /// every value opens a window that lasts until the observable its duration selector returns for
@@ -121,6 +122,14 @@ impl<OE, OE2, FL, FR, DL, DR> GroupJoin<'_, OE, OE2, FL, FR, DL, DR> {
     }
 }
 
+delegate_disposal!(
+    /// The disposal of a [`GroupJoin`] subscription: it stops the context, which tells the observer
+    /// that emits the windows to stop, then disposes the sources and the durations.
+    Disposal<M, L, R, E, D, D2, DLD, DRD>,
+    ContextDisposal<M, L, R, E, D, D2, DLD, DRD>,
+    where M: ThreadMode, D: Disposable, D2: Disposable, DLD: Disposable, DRD: Disposable
+);
+
 impl<'a, L, R, E, OE, OE2, FL, FR, DL, DR> ObservableTypes
     for GroupJoin<'a, OE, OE2, FL, FR, DL, DR>
 where
@@ -130,11 +139,22 @@ where
     DL: ObservableTypes<Error = E>,
     DR: ObservableTypes<Error = E>,
 {
-    type Item = (L, BoxedUnicastObservable<'a, R, E, ModeOf<OE, OE2, DL, DR>>);
+    type Item = (
+        L,
+        BoxedUnicastObservable<'a, R, E, Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>>,
+    );
     type Error = E;
-    type Mode = ModeOf<OE, OE2, DL, DR>;
-    /// The disposal of the machinery shared with [`Join`](super::join::Join).
-    type Disposal = DisposalOf<OE, OE2, DL, DR>;
+    type Mode = Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>;
+    type Disposal = Disposal<
+        Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>,
+        L,
+        R,
+        E,
+        OE::Disposal,
+        OE2::Disposal,
+        DL::Disposal,
+        DR::Disposal,
+    >;
 }
 
 /// The [`GroupJoinDelegate`] of a group join of `OE` and `OE2` whose windows last as long as `DL`
@@ -186,6 +206,7 @@ where
                 rights: BTreeMap::new(),
             },
         )
+        .map_inner_into()
     }
 }
 

@@ -3,19 +3,19 @@
 //! The [`Join`] operator, behind [`ObservableExt::join`](crate::observable::ObservableExt::join).
 
 use super::internal::join::{
-    self, Action, DurationObserverOf, Ending, LeftObserverOf, RightObserverOf, Side,
+    self, Action, ContextDisposal, DurationObserverOf, Ending, LeftObserverOf, ModeOf,
+    RightObserverOf, Side,
 };
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{Observable, ObservableTypes},
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    thread_mode::ThreadMode,
+    thread_mode::{Joined, ThreadMode},
     utils::{MarkerType, id_generator::Id, serialized_delivery::StopView},
 };
 use educe::Educe;
 use std::{collections::BTreeMap, marker::PhantomData};
-
-pub use super::internal::join::{Disposal, DisposalOf, ModeOf};
 
 /// Combines the values of two observables whose windows overlap: every value opens a window that
 /// lasts until the observable its duration selector returns for it emits or completes, and a value
@@ -116,6 +116,14 @@ impl<OE, OE2, FL, FR, F, DL, DR, T> Join<OE, OE2, FL, FR, F, DL, DR, T> {
     }
 }
 
+delegate_disposal!(
+    /// The disposal of a [`Join`] subscription: it stops the context, which tells the observer
+    /// that emits the pairs to stop, then disposes the sources and the durations.
+    Disposal<M, L, R, E, D, D2, DLD, DRD>,
+    ContextDisposal<M, L, R, E, D, D2, DLD, DRD>,
+    where M: ThreadMode, D: Disposable, D2: Disposable, DLD: Disposable, DRD: Disposable
+);
+
 impl<L, R, T, E, OE, OE2, FL, FR, F, DL, DR> ObservableTypes for Join<OE, OE2, FL, FR, F, DL, DR, T>
 where
     OE: ObservableTypes<Item = L, Error = E>,
@@ -125,8 +133,17 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = ModeOf<OE, OE2, DL, DR>;
-    type Disposal = DisposalOf<OE, OE2, DL, DR>;
+    type Mode = Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>;
+    type Disposal = Disposal<
+        Joined<JoinedModeOf<OE, OE2>, JoinedModeOf<DL, DR>>,
+        L,
+        R,
+        E,
+        OE::Disposal,
+        OE2::Disposal,
+        DL::Disposal,
+        DR::Disposal,
+    >;
 }
 
 /// The [`JoinDelegate`] of a join of `OE` and `OE2` whose windows last as long as `DL` and `DR`.
@@ -170,6 +187,7 @@ where
                 rights: BTreeMap::new(),
             },
         )
+        .map_inner_into()
     }
 }
 

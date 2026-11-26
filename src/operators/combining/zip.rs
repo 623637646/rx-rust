@@ -93,9 +93,9 @@ impl<I> Zip<IterSources<I>> {
 }
 
 delegate_disposal!(
-    Disposal<M, T, E, Q, D>,
-    subscribe_with_context::Disposal<M, T, E, Model<Q>, D>,
-    where M: ThreadMode, D: Disposable
+    Disposal<M, T, E, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<<T as Combination>::Queues>, D>,
+    where M: ThreadMode, T: Combination, D: Disposable
 );
 
 impl<S> ObservableTypes for Zip<S>
@@ -106,13 +106,7 @@ where
     type Error = S::Error;
     type Mode = S::Mode;
     /// The sources are disposed the last subscribed first.
-    type Disposal = Disposal<
-        S::Mode,
-        S::Item,
-        S::Error,
-        <S::Item as Combination>::Queues,
-        S::SubscriptionSlots,
-    >;
+    type Disposal = Disposal<S::Mode, S::Item, S::Error, S::SubscriptionSlots>;
 }
 
 /// The context of a [`Zip`] over `S`, subscribed with `OR`.

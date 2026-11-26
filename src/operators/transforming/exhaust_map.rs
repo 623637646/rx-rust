@@ -86,7 +86,7 @@ where
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the [`ExhaustAll`](crate::operators::combining::exhaust_all::ExhaustAll) this
-    /// operator shares its machinery with.
+    /// operator is, after a map.
     type Disposal = exhaust_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 

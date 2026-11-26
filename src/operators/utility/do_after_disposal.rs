@@ -6,7 +6,7 @@
 use crate::{
     delegate_disposal,
     disposable::{
-        Disposable, callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal,
+        callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal,
         dispose_on_drop::DisposeOnDrop,
     },
     observable::{Observable, ObservableTypes},
@@ -53,7 +53,7 @@ impl<OE, F> DoAfterDisposal<OE, F> {
 delegate_disposal!(
     Disposal<D, F>,
     ChainDisposal<D, CallbackDisposal<F>>,
-    where D: Disposable, F: FnOnce()
+    where F: FnOnce()
 );
 
 impl<T, E, OE, F> ObservableTypes for DoAfterDisposal<OE, F>

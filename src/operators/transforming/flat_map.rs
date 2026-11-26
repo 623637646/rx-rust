@@ -124,7 +124,7 @@ where
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the [`MergeAll`](crate::operators::combining::merge_all::MergeAll) this
-    /// operator shares its machinery with.
+    /// operator is, after a map.
     type Disposal = merge_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
 }
 

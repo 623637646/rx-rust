@@ -10,7 +10,7 @@ use super::internal::{
 };
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Observer, boxed_observer::ObserverMode},
     subject::unicast_subject::BoxedUnicastObservable,
@@ -84,11 +84,7 @@ impl<OE> WindowWithCountAndSkip<'_, OE> {
     }
 }
 
-delegate_disposal!(
-    Disposal<D>,
-    Option<D>,
-    where D: Disposable
-);
+delegate_disposal!(Disposal<D>, Option<D>);
 
 impl<'a, T, E, OE> ObservableTypes for WindowWithCountAndSkip<'a, OE>
 where

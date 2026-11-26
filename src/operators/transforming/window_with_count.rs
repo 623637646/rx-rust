@@ -89,6 +89,9 @@ where
     type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;
     type Error = E;
     type Mode = OE::Mode;
+    /// The disposal of the
+    /// [`WindowWithCountAndSkip`](crate::operators::transforming::window_with_count_and_skip::WindowWithCountAndSkip)
+    /// this operator is, with a skip equal to the count.
     type Disposal = window_with_count_and_skip::Disposal<OE::Disposal>;
 }
 

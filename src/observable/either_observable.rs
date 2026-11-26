@@ -2,8 +2,7 @@
 
 use super::{JoinedModeOf, Observable, ObservableTypes};
 use crate::{
-    delegate_disposal,
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop, either_disposal::EitherDisposal},
+    disposable::{dispose_on_drop::DisposeOnDrop, either_disposal::EitherDisposal},
     observer::Observer,
 };
 use educe::Educe;
@@ -41,14 +40,6 @@ pub enum EitherObservable<A, B> {
     Right(B),
 }
 
-delegate_disposal!(
-    /// The disposal of an [`EitherObservable`] subscription: the subscription of the side that was
-    /// subscribed to.
-    Disposal<D1, D2>,
-    EitherDisposal<D1, D2>,
-    where D1: Disposable, D2: Disposable
-);
-
 impl<A, B> ObservableTypes for EitherObservable<A, B>
 where
     A: ObservableTypes,
@@ -58,7 +49,8 @@ where
     type Error = A::Error;
     /// Either side can be the one subscribed to, so the mode is both sides' joined.
     type Mode = JoinedModeOf<A, B>;
-    type Disposal = Disposal<A::Disposal, B::Disposal>;
+    /// The subscription of the side that was subscribed to.
+    type Disposal = EitherDisposal<A::Disposal, B::Disposal>;
 }
 
 impl<A, B, OR> Observable<OR> for EitherObservable<A, B>
@@ -71,12 +63,10 @@ where
         match self {
             Self::Left(observable) => observable
                 .subscribe(observer)
-                .map_inner(EitherDisposal::Left)
-                .map_inner_into(),
+                .map_inner(EitherDisposal::Left),
             Self::Right(observable) => observable
                 .subscribe(observer)
-                .map_inner(EitherDisposal::Right)
-                .map_inner_into(),
+                .map_inner(EitherDisposal::Right),
         }
     }
 }

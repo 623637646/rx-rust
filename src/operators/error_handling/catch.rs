@@ -69,7 +69,7 @@ impl<E0, OE, F> Catch<E0, OE, F> {
 delegate_disposal!(
     Disposal<M, D, D1>,
     ChainDisposal<ReplaceableDisposal<M, D1>, D>,
-    where M: ThreadMode, D: Disposable, D1: Disposable
+    where M: ThreadMode, D1: Disposable
 );
 
 impl<T, E0, E, OE, OE1, F> ObservableTypes for Catch<E0, OE, F>

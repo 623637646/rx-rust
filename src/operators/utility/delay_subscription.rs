@@ -82,9 +82,9 @@ where
 {
     type Item = T;
     type Error = E;
-    /// The mode of the [`SubscribeOn`] it is built on.
+    /// The mode of the [`SubscribeOn`] it is, with a delay.
     type Mode = JoinedSchedulerModeOf<OE, S>;
-    /// The disposal of the [`SubscribeOn`] it is built on.
+    /// The disposal of the [`SubscribeOn`] it is, with a delay.
     type Disposal = subscribe_on::Disposal<JoinedSchedulerModeOf<OE, S>, S::Disposal, OE::Disposal>;
 }
 

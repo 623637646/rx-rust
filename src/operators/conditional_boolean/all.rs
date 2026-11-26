@@ -3,9 +3,11 @@
 //! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
 
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::{
         MarkerType,
         emit_then_terminate::emit_then_terminate,
@@ -66,6 +68,12 @@ impl<T, OE, F> All<T, OE, F> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, D>,
+    subscribe_with_auto_dispose_on_termination::Disposal<M, D>,
+    where M: ThreadMode, D: Disposable
+);
+
 impl<T, E, OE, F> ObservableTypes for All<T, OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -73,7 +81,7 @@ where
     type Item = bool;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
+    type Disposal = Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for All<T, OE, F>
@@ -94,6 +102,7 @@ where
             };
             self.source.subscribe(observer)
         })
+        .map_inner_into()
     }
 }
 

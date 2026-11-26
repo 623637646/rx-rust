@@ -127,7 +127,7 @@ impl<OE, S> SubscribeOn<OE, S> {
 delegate_disposal!(
     Disposal<M, SD, D>,
     ChainDisposal<SD, ReplaceableDisposal<M, D>>,
-    where M: ThreadMode, SD: Disposable, D: Disposable
+    where M: ThreadMode, D: Disposable
 );
 
 /// The slot the task puts the source's subscription into once it has subscribed.
