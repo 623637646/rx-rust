@@ -1,12 +1,14 @@
 //! Emits only the last item.
 //!
 //! The [`Last`] operator, behind [`ObservableExt::last`](crate::observable::ObservableExt::last).
+//! It keeps the one item it may emit in an `Option`, rather than being a
+//! [`TakeLast`](crate::operators::filtering::take_last::TakeLast) of one with its queue.
 
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
-    observer::Observer,
-    operators::filtering::take_last::{TakeLast, TakeLastObserver},
+    observer::{Flow, Observer, Termination},
+    utils::emit_then_terminate::emit_then_terminate,
 };
 use educe::Educe;
 
@@ -63,9 +65,34 @@ where
 impl<T, E, OE, OR> Observable<OR> for Last<OE>
 where
     OR: Observer<T, E>,
-    OE: Observable<TakeLastObserver<T, OR>, Item = T, Error = E>,
+    OE: Observable<LastObserver<T, OR>, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        TakeLast::new(self.source, 1).subscribe(observer)
+        self.source.subscribe(LastObserver {
+            observer,
+            last: None,
+        })
+    }
+}
+
+#[doc(hidden)]
+pub struct LastObserver<T, OR> {
+    observer: OR,
+    last: Option<T>,
+}
+
+impl<T, E, OR> Observer<T, E> for LastObserver<T, OR>
+where
+    OR: Observer<T, E>,
+{
+    fn on_next(&mut self, value: T) -> Flow {
+        // The item is only emitted on completion, so the source must run to its end: stopping it
+        // here would leave downstream without its termination.
+        self.last = Some(value);
+        Flow::Continue(())
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        emit_then_terminate(self.observer, self.last, termination);
     }
 }
