@@ -33,9 +33,11 @@
 //! with one of them. An observable of observables pushes its sources rather than being pulled,
 //! and goes to [`flatten`](super::flatten) instead.
 //!
-//! The module is private, but what a public signature of those operators names stays `pub` and
-//! is re-exported by them: the observer each source is subscribed with, since a source built with
-//! a non-boxed `Create` hands it to user code, and the tags in its generic arguments.
+//! The module is private. What a public signature of those operators names, [`Unlimited`], is
+//! re-exported by them. The observer each source is subscribed with, and the tags in its generic
+//! arguments, stay `pub`, since a source built with a non-boxed `Create` hands it to user code,
+//! with no path but the `#[doc(hidden)]` one of [`MergeObserver`], which `unreachable_pub` asks
+//! for.
 
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,

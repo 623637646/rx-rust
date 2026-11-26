@@ -7,10 +7,10 @@
 //! operator is built on the other: each is a projection of those actions, ended as the
 //! [`Ending`] of its delegate says.
 //!
-//! The module is private, but what a public signature of either operator names stays `pub` and is
-//! re-exported by both: the [`Disposal`] and the aliases, and the observers the sources and the
-//! durations are subscribed with, since a source built with a non-boxed `Create` hands its
-//! observer to user code, which may not hold a value of a private type.
+//! The module is private. What a public signature of either operator names, the [`Disposal`] and
+//! the aliases, is re-exported by both. The observers the sources and the durations are subscribed
+//! with stay `pub`, with no path: a source built with a non-boxed `Create` hands its observer to
+//! user code, which may not hold a value of a private type, but no user names one.
 
 use crate::{
     delegate_disposal,

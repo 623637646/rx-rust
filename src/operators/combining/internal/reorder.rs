@@ -13,8 +13,8 @@
 //! keeps the others by position. Positions run from 0 with no gap. The sources are what tell their
 //! position, not the merge: neither machine knows of it.
 //!
-//! The module is private; the types stay `pub`, re-exported by those operators, since the
-//! observers their sources are subscribed with, and their disposals, name them.
+//! The module is private; the types stay `pub`, with no path, since the observers the sources of
+//! those operators are subscribed with, and their disposals, name them.
 
 use super::flatten::{self, Enqueue, Selector};
 use crate::{
