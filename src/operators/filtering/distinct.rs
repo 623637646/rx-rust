@@ -15,6 +15,13 @@ use std::{collections::HashSet, hash::Hash};
 /// Emits the items of the source observable that are distinct from every previous one.
 /// See <https://reactivex.io/documentation/operators/distinct.html>
 ///
+/// # `new` or `new_with_key_selector`
+///
+/// [`new`](Distinct::new) keeps the items themselves, so they are the keys: they need
+/// [`Clone`], [`Eq`] and [`Hash`], and nothing is called per item.
+/// [`new_with_key_selector`](Distinct::new_with_key_selector) keeps the keys `F` computes, which
+/// it calls for every item; the items then need none of the three.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
@@ -38,13 +45,27 @@ use std::{collections::HashSet, hash::Hash};
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Distinct<OE, F> {
+pub struct Distinct<OE, F = ()> {
     source: OE,
+    /// Nothing, the default `()`, where the items are their own keys.
     key_selector: F,
 }
 
+impl<OE> Distinct<OE> {
+    /// Creates a [`Distinct`] over `source` that keeps the items themselves;
+    /// [`ObservableExt::distinct`](crate::observable::ObservableExt::distinct) is the fluent form.
+    pub fn new(source: OE) -> Self {
+        Self {
+            source,
+            key_selector: (),
+        }
+    }
+}
+
 impl<OE, F> Distinct<OE, F> {
-    /// Creates a [`Distinct`] over `source` that compares the keys `key_selector` computes.
+    /// Creates a [`Distinct`] over `source` that compares the keys `key_selector` computes;
+    /// [`ObservableExt::distinct_with_key_selector`](crate::observable::ObservableExt::distinct_with_key_selector)
+    /// is the fluent form.
     pub fn new_with_key_selector<T, K>(source: OE, key_selector: F) -> Self
     where
         OE: ObservableTypes<Item = T>,
@@ -53,21 +74,6 @@ impl<OE, F> Distinct<OE, F> {
         Self {
             source,
             key_selector,
-        }
-    }
-}
-
-impl<T, OE> Distinct<OE, fn(&T) -> T> {
-    /// Creates a [`Distinct`] over `source`;
-    /// [`ObservableExt::distinct`](crate::observable::ObservableExt::distinct) is the fluent form.
-    pub fn new(source: OE) -> Self
-    where
-        T: Clone,
-        OE: ObservableTypes<Item = T>,
-    {
-        Self {
-            source,
-            key_selector: |value| value.clone(),
         }
     }
 }
@@ -82,15 +88,30 @@ where
     type Disposal = OE::Disposal;
 }
 
+impl<T, E, OE, OR> Observable<OR> for Distinct<OE>
+where
+    T: Clone + Eq + Hash,
+    OR: Observer<T, E>,
+    OE: Observable<DistinctObserver<OR, T>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        let observer = DistinctObserver {
+            observer,
+            emitted: HashSet::new(),
+        };
+        self.source.subscribe(observer)
+    }
+}
+
 impl<T, E, OE, F, K, OR> Observable<OR> for Distinct<OE, F>
 where
     OR: Observer<T, E>,
-    OE: Observable<DistinctObserver<OR, F, K>, Item = T, Error = E>,
+    OE: Observable<DistinctByKeyObserver<OR, F, K>, Item = T, Error = E>,
     F: FnMut(&T) -> K,
     K: Eq + Hash,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let observer = DistinctObserver {
+        let observer = DistinctByKeyObserver {
             observer,
             key_selector: self.key_selector,
             emitted_keys: HashSet::new(),
@@ -100,13 +121,39 @@ where
 }
 
 #[doc(hidden)]
-pub struct DistinctObserver<OR, F, K> {
+pub struct DistinctObserver<OR, T> {
+    observer: OR,
+    emitted: HashSet<T>,
+}
+
+impl<T, E, OR> Observer<T, E> for DistinctObserver<OR, T>
+where
+    T: Clone + Eq + Hash,
+    OR: Observer<T, E>,
+{
+    fn on_next(&mut self, value: T) -> Flow {
+        // The item is its own key, so the set takes a clone of what is emitted; one of a repeat is
+        // dropped as the insertion fails, which is one hash either way.
+        if self.emitted.insert(value.clone()) {
+            self.observer.on_next(value)
+        } else {
+            Flow::Continue(())
+        }
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        self.observer.on_termination(termination)
+    }
+}
+
+#[doc(hidden)]
+pub struct DistinctByKeyObserver<OR, F, K> {
     observer: OR,
     key_selector: F,
     emitted_keys: HashSet<K>,
 }
 
-impl<T, E, OR, F, K> Observer<T, E> for DistinctObserver<OR, F, K>
+impl<T, E, OR, F, K> Observer<T, E> for DistinctByKeyObserver<OR, F, K>
 where
     OR: Observer<T, E>,
     F: FnMut(&T) -> K,

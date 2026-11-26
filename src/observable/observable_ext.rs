@@ -352,11 +352,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Filters out duplicate items, keeping only the first occurrence of each value.
     #[doc(alias = "unique")]
-    #[allow(clippy::type_complexity)]
-    fn distinct(self) -> Distinct<Self, fn(&Self::Item) -> Self::Item>
-    where
-        Self::Item: Clone,
-    {
+    fn distinct(self) -> Distinct<Self> {
         Distinct::new(self)
     }
 
