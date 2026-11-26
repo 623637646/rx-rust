@@ -362,11 +362,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Suppresses consecutive duplicate items, comparing the values directly.
     #[doc(alias = "dedup")]
-    #[allow(clippy::type_complexity)]
-    fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&Self::Item) -> Self::Item>
-    where
-        Self::Item: Clone,
-    {
+    fn distinct_until_changed(self) -> DistinctUntilChanged<Self> {
         DistinctUntilChanged::new(self)
     }
 
