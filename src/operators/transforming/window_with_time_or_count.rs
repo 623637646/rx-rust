@@ -5,7 +5,8 @@
 
 use super::internal::{
     overlap::NoOverlap,
-    time_or_count::{self, TimeOrCountTask},
+    time_or_count::{self, TimeOrCountObserver, TimeOrCountTask},
+    window::{Action, DelegateObserver, Windows},
 };
 use crate::{
     delegate_disposal,
@@ -19,12 +20,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, num::NonZeroUsize, time::Duration};
-
-#[doc(hidden)]
-pub use super::internal::{
-    time_or_count::TimeOrCountObserver,
-    window::{Action, DelegateObserver, Windows},
-};
 
 /// Subdivides the items of an observable into observable windows, a new one either when the
 /// current window reaches `count` items or every `time_span`, whichever happens first.
@@ -119,8 +114,7 @@ impl<OE, S> WindowWithTimeOrCount<'_, OE, S> {
 }
 
 /// The observer a [`WindowWithTimeOrCount`] gives its source.
-#[doc(hidden)]
-pub type WindowWithTimeOrCountObserver<'a, M, T, E, OR, D, C> = TimeOrCountObserver<
+pub(crate) type WindowWithTimeOrCountObserver<'a, M, T, E, OR, D, C> = TimeOrCountObserver<
     M,
     Windows<T>,
     Action<T, E>,

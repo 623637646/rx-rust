@@ -17,9 +17,6 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-#[doc(hidden)]
-pub use super::internal::span::SpanObserver;
-
 /// Emits an item from the source observable only after a particular time span has passed without
 /// another source emission.
 /// See <https://reactivex.io/documentation/operators/debounce.html>

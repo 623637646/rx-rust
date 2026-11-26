@@ -78,8 +78,7 @@ impl<OE> WindowWithCount<'_, OE> {
 /// The observer a [`WindowWithCount`] gives its source: that of a
 /// [`WindowWithCountAndSkip`](super::window_with_count_and_skip::WindowWithCountAndSkip) whose
 /// windows never overlap, so that it does not ask its items to be [`Clone`].
-#[doc(hidden)]
-pub type WindowWithCountObserver<'a, M, T, E, OR> =
+pub(crate) type WindowWithCountObserver<'a, M, T, E, OR> =
     CountObserver<Windows<T>, DelegateObserver<'a, M, T, E, OR, NoOverlap>>;
 
 impl<'a, T, E, OE> ObservableTypes for WindowWithCount<'a, OE>

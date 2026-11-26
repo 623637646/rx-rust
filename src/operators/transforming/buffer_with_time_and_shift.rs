@@ -4,8 +4,9 @@
 //! [`ObservableExt::buffer_with_time_and_shift`](crate::observable::ObservableExt::buffer_with_time_and_shift).
 
 use super::internal::{
+    bundle::Bundles,
     overlap::ByClone,
-    time_shift::{self, TimeShiftTask},
+    time_shift::{self, TimeShiftObserver, TimeShiftTask},
 };
 use crate::{
     delegate_disposal,
@@ -18,9 +19,6 @@ use crate::{
 };
 use educe::Educe;
 use std::time::Duration;
-
-#[doc(hidden)]
-pub use super::internal::{bundle::Bundles, time_shift::TimeShiftObserver};
 
 /// Gathers the items of an observable into bundles that each last `time_span`, starting a new
 /// bundle every `time_shift`, and emits each as a `Vec<T>` as it ends, empty or not.
@@ -101,8 +99,7 @@ impl<OE, S> BufferWithTimeAndShift<OE, S> {
 }
 
 /// The observer a [`BufferWithTimeAndShift`] gives its source.
-#[doc(hidden)]
-pub type BufferWithTimeAndShiftObserver<M, T, E, OR, D> =
+pub(crate) type BufferWithTimeAndShiftObserver<M, T, E, OR, D> =
     TimeShiftObserver<M, Bundles<T, ByClone>, Vec<T>, E, OR, D>;
 
 /// The task of a [`BufferWithTimeAndShift`] timer. It holds the context strongly, so that the

@@ -110,8 +110,7 @@ impl<OE, S> WindowWithTime<'_, OE, S> {
 /// The observer a [`WindowWithTime`] gives its source: that of a
 /// [`WindowWithTimeAndShift`](super::window_with_time_and_shift::WindowWithTimeAndShift) whose
 /// windows never overlap, so that it does not ask its items to be [`Clone`].
-#[doc(hidden)]
-pub type WindowWithTimeObserver<'a, M, T, E, OR, D> = TimeShiftObserver<
+pub(crate) type WindowWithTimeObserver<'a, M, T, E, OR, D> = TimeShiftObserver<
     M,
     Windows<T>,
     Action<T, E>,

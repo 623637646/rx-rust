@@ -5,7 +5,8 @@
 
 use super::internal::{
     overlap::ByClone,
-    time_shift::{self, TimeShiftTask},
+    time_shift::{self, TimeShiftObserver, TimeShiftTask},
+    window::{Action, DelegateObserver, Windows},
 };
 use crate::{
     delegate_disposal,
@@ -19,12 +20,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{marker::PhantomData, time::Duration};
-
-#[doc(hidden)]
-pub use super::internal::{
-    time_shift::TimeShiftObserver,
-    window::{Action, DelegateObserver, Windows},
-};
 
 /// Subdivides the items of an observable into observable windows that each last `time_span`,
 /// opening a new window every `time_shift`.
@@ -124,8 +119,7 @@ impl<OE, S> WindowWithTimeAndShift<'_, OE, S> {
 }
 
 /// The observer a [`WindowWithTimeAndShift`] gives its source.
-#[doc(hidden)]
-pub type WindowWithTimeAndShiftObserver<'a, M, T, E, OR, D> = TimeShiftObserver<
+pub(crate) type WindowWithTimeAndShiftObserver<'a, M, T, E, OR, D> = TimeShiftObserver<
     M,
     Windows<T>,
     Action<T, E>,

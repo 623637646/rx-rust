@@ -86,8 +86,7 @@ where
 }
 
 /// The observer a [`BufferWithCountAndSkip`] gives its source.
-#[doc(hidden)]
-pub type BufferWithCountAndSkipObserver<T, OR> = CountObserver<Bundles<T, ByClone>, OR>;
+pub(crate) type BufferWithCountAndSkipObserver<T, OR> = CountObserver<Bundles<T, ByClone>, OR>;
 
 impl<T, E, OE, OR> Observable<OR> for BufferWithCountAndSkip<OE>
 where

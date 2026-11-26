@@ -61,8 +61,7 @@ impl<OE> BufferWithCount<OE> {
 /// The observer a [`BufferWithCount`] gives its source: that of a
 /// [`BufferWithCountAndSkip`](super::buffer_with_count_and_skip::BufferWithCountAndSkip) whose
 /// bundles never overlap, so that it does not ask its items to be [`Clone`].
-#[doc(hidden)]
-pub type BufferWithCountObserver<T, OR> = CountObserver<Bundles<T, NoOverlap>, OR>;
+pub(crate) type BufferWithCountObserver<T, OR> = CountObserver<Bundles<T, NoOverlap>, OR>;
 
 impl<T, E, OE> ObservableTypes for BufferWithCount<OE>
 where

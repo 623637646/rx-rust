@@ -19,7 +19,10 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, num::NonZeroUsize};
 
-pub use super::internal::merge::{MergeObserver, Unlimited};
+pub use super::internal::merge::Unlimited;
+
+#[doc(hidden)]
+pub use super::internal::merge::MergeObserver;
 
 /// Combines multiple observables into a single observable that emits all of their emissions.
 /// See <https://reactivex.io/documentation/operators/merge.html>

@@ -3,7 +3,11 @@
 //! The [`Buffer`] operator, behind
 //! [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer).
 
-use super::internal::{boundary, overlap::NoOverlap};
+use super::internal::{
+    boundary::{self, BoundaryObserver as BoundaryObserver_, SourceObserver},
+    bundle::Bundles,
+    overlap::NoOverlap,
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
@@ -13,12 +17,6 @@ use crate::{
     utils::subscribe_with_context,
 };
 use educe::Educe;
-
-#[doc(hidden)]
-pub use super::internal::{
-    boundary::{BoundaryObserver as BoundaryObserver_, SourceObserver},
-    bundle::Bundles,
-};
 
 /// Gathers items from an observable into bundles and emits these bundles as `Vec<T>`, whenever a
 /// `boundary` observable emits an item.
@@ -102,13 +100,11 @@ impl<OE, OE1> Buffer<OE, OE1> {
 }
 
 /// The observer a [`Buffer`] gives its source.
-#[doc(hidden)]
-pub type BufferObserver<M, T, E, OR, D> =
+pub(crate) type BufferObserver<M, T, E, OR, D> =
     SourceObserver<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D>;
 
 /// The observer a [`Buffer`] gives its boundary, whose completion ends the stream (`true`).
-#[doc(hidden)]
-pub type BoundaryObserver<M, T, E, OR, D> =
+pub(crate) type BoundaryObserver<M, T, E, OR, D> =
     BoundaryObserver_<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D, true>;
 
 delegate_disposal!(

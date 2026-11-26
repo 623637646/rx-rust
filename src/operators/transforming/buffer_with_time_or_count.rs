@@ -4,8 +4,9 @@
 //! [`ObservableExt::buffer_with_time_or_count`](crate::observable::ObservableExt::buffer_with_time_or_count).
 
 use super::internal::{
+    bundle::Bundles,
     overlap::NoOverlap,
-    time_or_count::{self, TimeOrCountTask},
+    time_or_count::{self, TimeOrCountObserver, TimeOrCountTask},
 };
 use crate::{
     delegate_disposal,
@@ -18,9 +19,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{num::NonZeroUsize, time::Duration};
-
-#[doc(hidden)]
-pub use super::internal::{bundle::Bundles, time_or_count::TimeOrCountObserver};
 
 /// Gathers items from an observable into bundles and emits these bundles as `Vec<T>`, either when
 /// the bundle reaches `count` items or every `time_span`, whichever happens first.
@@ -94,8 +92,7 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 }
 
 /// The observer a [`BufferWithTimeOrCount`] gives its source.
-#[doc(hidden)]
-pub type BufferWithTimeOrCountObserver<M, T, E, OR, D, C> =
+pub(crate) type BufferWithTimeOrCountObserver<M, T, E, OR, D, C> =
     TimeOrCountObserver<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D, C>;
 
 /// The task of a [`BufferWithTimeOrCount`] timer. It holds the context strongly, so that the

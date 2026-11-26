@@ -88,8 +88,7 @@ impl<OE, S> BufferWithTime<OE, S> {
 /// The observer a [`BufferWithTime`] gives its source: that of a
 /// [`BufferWithTimeAndShift`](super::buffer_with_time_and_shift::BufferWithTimeAndShift) whose
 /// bundles never overlap, so that it does not ask its items to be [`Clone`].
-#[doc(hidden)]
-pub type BufferWithTimeObserver<M, T, E, OR, D> =
+pub(crate) type BufferWithTimeObserver<M, T, E, OR, D> =
     TimeShiftObserver<M, Bundles<T, NoOverlap>, Vec<T>, E, OR, D>;
 
 /// The task of a [`BufferWithTime`] timer. It holds the context strongly, so that the bundles keep

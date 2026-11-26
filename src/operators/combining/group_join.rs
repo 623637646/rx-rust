@@ -16,9 +16,7 @@ use crate::{
 use educe::Educe;
 use std::{collections::BTreeMap, marker::PhantomData};
 
-pub use super::internal::join::{
-    Disposal, DisposalOf, DurationObserver, LeftObserver, ModeOf, RightObserver,
-};
+pub use super::internal::join::{Disposal, DisposalOf, ModeOf};
 
 /// Pairs every value of the left observable with a window of the right values that overlap it:
 /// every value opens a window that lasts until the observable its duration selector returns for

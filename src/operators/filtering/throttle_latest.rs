@@ -18,9 +18,6 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-#[doc(hidden)]
-pub use super::internal::span::SpanObserver;
-
 /// Emits an item at once, then, while items keep coming, the most recent one at the end of each
 /// time span.
 /// See <https://reactivex.io/documentation/operators/sample.html>; RxJava calls it

@@ -102,8 +102,7 @@ where
 }
 
 /// The observer a [`WindowWithCountAndSkip`] gives its source.
-#[doc(hidden)]
-pub type WindowWithCountAndSkipObserver<'a, M, T, E, OR> =
+pub(crate) type WindowWithCountAndSkipObserver<'a, M, T, E, OR> =
     CountObserver<Windows<T>, DelegateObserver<'a, M, T, E, OR, ByClone>>;
 
 impl<'a, T, E, OE, OR> Observable<OR> for WindowWithCountAndSkip<'a, OE>

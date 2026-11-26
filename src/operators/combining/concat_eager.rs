@@ -5,7 +5,7 @@
 
 use super::internal::{
     merge::{ContextDisposal, DriverOf, Pause, subscribe_limited, subscribe_unlimited},
-    reorder::IndexSourcesOps,
+    reorder::{IndexSourcesOps, IndexedEvent, ReorderObserver},
 };
 use crate::{
     delegate_disposal,
@@ -21,11 +21,8 @@ use educe::Educe;
 use std::{convert::Infallible, num::NonZeroUsize};
 
 pub use super::internal::{
-    merge::{MergeObserver, Unlimited},
-    reorder::{
-        IndexSources, IndexedEvent, IndexedSource, IndexedSourcesIter, IndexingObserver,
-        ReorderObserver,
-    },
+    merge::Unlimited,
+    reorder::{IndexSources, IndexedSourcesIter},
 };
 
 /// Subscribes all of the observables at once, and emits all of the values of the first, then, once
@@ -191,7 +188,8 @@ where
 pub type IndexedCursorOf<S> = <<S as IndexSources>::Indexed as SourceSet>::Cursor;
 
 /// The [`Driver`](super::internal::merge::Driver) of the merge a [`ConcatEager`] over `S`,
-/// subscribed with `OR`, is made of: its sources made [`IndexedSource`]s, which send their values
+/// subscribed with `OR`, is made of: its sources made
+/// [`IndexedSource`](super::internal::reorder::IndexedSource)s, which send their values
 /// with their positions, put back in order by [`ReorderObserver`].
 type EagerDriverOf<S, OR, C> = DriverOf<
     <S as IndexSources>::Indexed,

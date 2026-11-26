@@ -3,7 +3,11 @@
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 
-use super::internal::{boundary, overlap::NoOverlap};
+use super::internal::{
+    boundary::{self, BoundaryObserver as BoundaryObserver_, SourceObserver as SourceObserver_},
+    overlap::NoOverlap,
+    window::{Action, DelegateObserver, Windows},
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
@@ -15,12 +19,6 @@ use crate::{
 };
 use educe::Educe;
 use std::marker::PhantomData;
-
-#[doc(hidden)]
-pub use super::internal::{
-    boundary::{BoundaryObserver as BoundaryObserver_, SourceObserver as SourceObserver_},
-    window::{Action, DelegateObserver, Windows},
-};
 
 /// Subdivides the items of an observable into observable windows, opening a new one whenever the
 /// `boundary` observable emits an item.
@@ -104,8 +102,7 @@ impl<OE, OE1> Window<'_, OE, OE1> {
 }
 
 /// The observer a [`Window`] gives its source.
-#[doc(hidden)]
-pub type SourceObserver<'a, M, T, E, OR, D> = SourceObserver_<
+pub(crate) type SourceObserver<'a, M, T, E, OR, D> = SourceObserver_<
     M,
     Windows<T>,
     Action<T, E>,
@@ -116,8 +113,7 @@ pub type SourceObserver<'a, M, T, E, OR, D> = SourceObserver_<
 
 /// The observer a [`Window`] gives its boundary, whose completion only stops the rotation
 /// (`false`).
-#[doc(hidden)]
-pub type BoundaryObserver<'a, M, T, E, OR, D> = BoundaryObserver_<
+pub(crate) type BoundaryObserver<'a, M, T, E, OR, D> = BoundaryObserver_<
     M,
     Windows<T>,
     Action<T, E>,

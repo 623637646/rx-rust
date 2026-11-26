@@ -17,9 +17,6 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-#[doc(hidden)]
-pub use super::internal::span::SpanObserver;
-
 /// Emits the most recent item of the source once a time span has passed since the first item that
 /// started it, then waits for the next item to start another.
 /// See <https://reactivex.io/documentation/operators/sample.html>; RxJS calls it `auditTime`.

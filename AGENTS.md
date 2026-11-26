@@ -315,7 +315,14 @@ an issue when they fail.
   Of the machinery in an `internal/` module, what users name (`Disposal`, `Unlimited`) is
   re-exported by each operator naming it, as none of them is its home. The rest, observers and
   their generic arguments, needs only to be `pub`, not to have a path: add a `#[doc(hidden)]`
-  re-export only where `unreachable_pub` asks for one (`MergeObserver`). `grep -rnE "^pub use" src`
+  re-export only where `unreachable_pub` asks for one (`MergeObserver`). An operator on such
+  machinery names the observer it subscribes its source with in a `pub(crate)` alias of its own
+  module (`merge_all::MergeAllObserver`, `buffer_with_count::BufferWithCountObserver`), which
+  holds the machinery's parameters — a store, a selector, a duplication — so that the where-clause
+  of its `Observable` impl names none of them; an operator built on another takes that one's
+  aliases, as it takes its `Disposal` (`flat_map` takes `merge_all::MergeAllObserverOf`).
+  Privacy does not check those where-clauses, so neither the alias nor what it names needs a public
+  path, and the alias is not `#[doc(hidden)] pub`. `grep -rnE "^pub use" src`
   lists the re-exports. After removing or moving a path, run `cargo check --all-targets`, and
   search the docs and the doctests for the old one.
 - **Debug-only code**: `cfg(debug_assertions)` gates whole items — a check, the helpers only it
