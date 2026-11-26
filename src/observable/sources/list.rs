@@ -1,7 +1,7 @@
 //! The list backend: [`IterSources`] over any homogeneous iterator, stored in `Vec`s and
 //! addressed by a `usize`.
 
-use super::{CollectedCursor, SameItemSources, SourceOps, SourceSet, sealed};
+use super::{CollectedCursor, InternalSourceSet, SameItemSources, SourceSet, sealed};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::ObservableTypes,
@@ -33,14 +33,15 @@ where
     type Mode = OE::Mode;
     type Cursor = Enumerate<I::IntoIter>;
     type SubscriptionSlots = ListSlots<DisposeOnDrop<OE::Disposal>>;
-    type CollectedCursor = CollectedCursor<Enumerate<std::vec::IntoIter<OE>>>;
 }
 
-impl<I, OE> SourceOps for IterSources<I>
+impl<I, OE> InternalSourceSet for IterSources<I>
 where
     I: IntoIterator<Item = OE>,
     OE: ObservableTypes,
 {
+    type CollectedCursor = CollectedCursor<Enumerate<std::vec::IntoIter<OE>>>;
+
     fn into_collected_cursor(self) -> (Self::CollectedCursor, usize) {
         let sources: Vec<OE> = self.0.into_iter().collect();
         let position_count = sources.len();

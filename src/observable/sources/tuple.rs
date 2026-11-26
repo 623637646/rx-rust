@@ -2,7 +2,7 @@
 //! and disposal types, addressed by a
 //! [`TupleIndex`](crate::utils::positional::position::TupleIndex).
 
-use super::{CollectedCursor, SameItemSources, SourceOps, SourceSet, sealed};
+use super::{CollectedCursor, InternalSourceSet, SameItemSources, SourceSet, sealed};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::ObservableTypes,
@@ -38,13 +38,14 @@ macro_rules! impl_source_tuple {
             type Cursor = ($(Option<$source>,)+);
             type SubscriptionSlots =
                 TupleSlots<($(ReservationSlot<DisposeOnDrop<<$source as ObservableTypes>::Disposal>>,)+)>;
-            type CollectedCursor = CollectedCursor<Self::Cursor>;
         }
 
-        impl<E, $($source),+> SourceOps for ($($source,)+)
+        impl<E, $($source),+> InternalSourceSet for ($($source,)+)
         where
             $($source: ObservableTypes<Error = E>,)+
         {
+            type CollectedCursor = CollectedCursor<Self::Cursor>;
+
             fn into_collected_cursor(self) -> (Self::CollectedCursor, usize) {
                 (CollectedCursor(self.into_cursor()), const { [$($position),+].len() })
             }

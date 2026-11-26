@@ -7,7 +7,7 @@ use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
         Observable, ObservableTypes, SourceSet,
-        sources::{SourceOps, SourceSubscriber, SubscribeEach},
+        sources::{InternalSourceSet, SourceSubscriber, SubscribeEach},
     },
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -534,7 +534,7 @@ where
 
 impl<S, P, OR> Observable<OR> for When<S, P>
 where
-    S: Sources + SourceOps,
+    S: Sources + InternalSourceSet,
     <S as SourceSet>::Cursor: SubscribeEach<
         Context<<S as SourceSet>::Mode, <S as SourceSet>::Error, OR, <S as Sources>::Inputs, P>,
     >,

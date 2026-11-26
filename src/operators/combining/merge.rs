@@ -11,7 +11,7 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{
         IterSources, Observable, ObservableTypes, SameItemSources, SourceSet,
-        sources::{SourceOps, SubscribeEach},
+        sources::{InternalSourceSet, SubscribeEach},
     },
     observer::Observer,
     thread_mode::ThreadMode,
@@ -226,7 +226,7 @@ type MergeDriverOf<S, OR, C> = DriverOf<S, <S as SameItemSources>::SameItem, OR,
 
 impl<S, OR> Observable<OR> for Merge<S>
 where
-    S: SameItemSources + SourceOps,
+    S: SameItemSources + InternalSourceSet,
     <S as SourceSet>::Cursor: for<'a> SubscribeEach<&'a MergeDriverOf<S, OR, Infallible>, Pause>,
     OR: Observer<<S as SameItemSources>::SameItem, <S as SourceSet>::Error>,
 {
@@ -237,7 +237,7 @@ where
 
 impl<S, OR> Observable<OR> for Merge<S, NonZeroUsize>
 where
-    S: SameItemSources + SourceOps,
+    S: SameItemSources + InternalSourceSet,
     <S as SourceSet>::Cursor:
         for<'a> SubscribeEach<&'a MergeDriverOf<S, OR, <S as SourceSet>::Cursor>, Pause>,
     OR: Observer<<S as SameItemSources>::SameItem, <S as SourceSet>::Error>,

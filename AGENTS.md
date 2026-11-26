@@ -132,8 +132,10 @@ an issue when they fail.
   `SourceSet` and `SameItemSources` cover tuples and the `IterSources<I>` adapter. `SourceSet`
   holds `Item`, `Error` and `Mode` — `Item` is a `Combination`, a type selection that asks
   nothing of the items (no `Clone`, no `Send`) — and selects, hidden, the
-  resources operators keep for the sources: `Cursor`, `CollectedCursor` and `SubscriptionSlots`, the
-  one store of subscriptions — types only; the operations returning them are crate-private. Typed positions keep
+  resources operators keep for the sources that public disposals name: `Cursor` and
+  `SubscriptionSlots`, the one store of subscriptions. The split is by visibility, which the
+  compiler checks: what no public signature needs — the operations and `CollectedCursor` — is on
+  the crate-private `InternalSourceSet`. Typed positions keep
   tuple access static and list access dynamic; storage capabilities let both forms share operator
   state machines. The source-independent structure lives in `utils::positional`. In
   `combination`, the public, sealed `Combination` — a tuple of items or a `Vec` — only selects
@@ -171,7 +173,7 @@ an issue when they fail.
   backends make, and a cursor from `into_cursor()` has no `subscribe_batch`. The `Enumerate`
   impl of `SubscribeEach` asks the subscriber's `still_running`, a required method, after each
   `Iterator::next`, user code, before subscribing the source it returned; the tuple impl takes its
-  sources directly and never asks. The crate-private `SourceOps` holds the operations needing no observer:
+  sources directly and never asks. The operations on `InternalSourceSet` need no observer:
   `into_collected_cursor()` collects every source and returns a cursor over them with their
   position count (decision 0012), and `into_cursor()` prepares the cursor of sources not collected. The collected
   cursor is subscribed by `SubscribeBatch`; the operator creates its storage for the count

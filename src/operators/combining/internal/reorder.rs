@@ -20,7 +20,8 @@ use super::flatten::{self, Enqueue, Selector};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{
-        IterSources, JoinedModeOf, Observable, ObservableTypes, SameItemSources, sources::SourceOps,
+        IterSources, JoinedModeOf, Observable, ObservableTypes, SameItemSources,
+        sources::InternalSourceSet,
     },
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -93,8 +94,8 @@ pub trait IndexSources: SameItemSources {
 }
 
 /// The operation of [`IndexSources`], apart so that it stays out of the public API, as
-/// [`SourceOps`] is apart from [`SourceSet`](crate::observable::SourceSet).
-pub(crate) trait IndexSourcesOps: IndexSources<Indexed: SourceOps> {
+/// [`InternalSourceSet`] is apart from [`SourceSet`](crate::observable::SourceSet).
+pub(crate) trait IndexSourcesOps: IndexSources<Indexed: InternalSourceSet> {
     /// Makes each source an [`IndexedSource`] at its position, subscribing none.
     fn into_indexed_sources(self) -> Self::Indexed;
 }

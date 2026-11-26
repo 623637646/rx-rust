@@ -64,16 +64,16 @@ The two input shapes share their operator state machines through `observable::so
 keeping their own storage and output shapes:
 
 - `SourceSet` (public, sealed, re-exported by `observable`) describes `Item`, `Error` and `Mode`,
-  `Item` being a `Combination` (see below), and selects, as hidden associated items, the resources operators keep for the sources:
-  `Cursor`, the sources not
-  pulled yet and their positions; `CollectedCursor`, the cursor over every source once they are
-  all collected; and `SubscriptionSlots`, each source's subscription at its position,
+  `Item` being a `Combination` (see below), and selects, as hidden associated items, the resources operators keep for the sources
+  that public disposals name: `Cursor`, the sources not
+  pulled yet and their positions; and `SubscriptionSlots`, each source's subscription at its position,
   the one store of subscriptions: a batch fills it and holds it whole, an operator pulling its
   sources one at a time releases each slot as its source completes. They are hidden because no user names them. `SourceSet` carries types only, as the
   public `Combination` does: a method on it, hidden or not, could be called by any user who imports
-  the trait. A type is not an operation: `Cursor` and `CollectedCursor`, the two forms the sources are
-  prepared in, sit together here, whether or not a public disposal names one (merge with a limit
-  names `Cursor`; nothing public names `CollectedCursor`). Every source set
+  the trait. It holds only what a public signature needs: `CollectedCursor`, the cursor over every
+  source once they are all collected, which no public type names, is on the crate-private
+  `InternalSourceSet` (see "History"), while `Cursor` stays here because Merge and ConcatEager
+  with a limit name it in their disposals. Every source set
   provides all of them, on the same bounds as its metadata, so one trait selects them rather than
   one per resource. `SameItemSources` adds the common item type that Merge and Amb need, which
   not every source set has. Inspecting source metadata requires no collection, storage, cloning
@@ -84,11 +84,12 @@ keeping their own storage and output shapes:
   The trait is public and re-exported by `observable`. Each projection had a public alias
   (`ItemAfterOf<S, T>`, `QueuesOf<S>`); each served one operator, and an alias a public
   associated type names must stay public, so they were removed rather than made private.
-- `SourceOps: SourceSet` is crate-private and holds the operations that need no observer:
-  `into_collected_cursor` collects every source together with their position count, before any source is
-  subscribed (see below), and `into_cursor` prepares the cursor; they return `SourceSet`'s
-  `CollectedCursor` and `Cursor`. Every source set implements it on the same terms as `SourceSet`; it
-  is apart only so that the operations stay out of the public API.
+- `InternalSourceSet: SourceSet` is crate-private and holds what no public signature needs: the
+  operations that need no observer — `into_collected_cursor` collects every source together with
+  their position count, before any source is subscribed (see below), and `into_cursor` prepares
+  the cursor — and `CollectedCursor`, the type the first returns; the second returns
+  `SourceSet::Cursor`. Every source set implements it on the same terms as `SourceSet`; it is
+  apart so that all of this stays out of the public API.
   Collecting a tuple only prepares its cursor; `IterSources<I>` collects a homogeneous finite
   iterator into a `Vec`, and enumerates it, only when an operator needs its position count to
   initialize readiness and completion state. Fewer sources may be subscribed when the operator
@@ -179,7 +180,7 @@ keeping their own storage and output shapes:
   over `CollectedCursor` (see "One subscription path" below); the trait remains as the bound an operator
   writes instead of naming the batch. CombineLatest, Zip,
   ForkJoin and WithLatestFrom collect their sources first and subscribe
-  `SourceSet::CollectedCursor` through it. Lists store their subscriptions as they consume sources,
+  `InternalSourceSet::CollectedCursor` through it. Lists store their subscriptions as they consume sources,
   without reserving a length. Enumeration checks for a stop
   both before pulling and before subscribing: `Iterator::next` can re-enter a source already
   subscribed and end the stream itself.
@@ -197,7 +198,7 @@ keeping their own storage and output shapes:
   subscribing it (its `observer` answers `None` otherwise), and stores each subscription in that source's input as soon as it is
   made, so that a later source releasing it disposes it at once. Its context is the subscriber,
   as it is the `ObserverFamily` of the others.
-  `SourceOps::into_cursor` prepares the cursor without a subscriber: a tuple wraps its sources in
+  `InternalSourceSet::into_cursor` prepares the cursor without a subscriber: a tuple wraps its sources in
   `Some`, and `IterSources<I>` enumerates `I::IntoIter`. Preparation does not collect the iterator
   or subscribe any source. The iterator cursor's traversal uses the iterator's own `try_for_each`.
 - A batch stores its subscriptions in the source set's `SubscriptionSlots`, released last
@@ -394,7 +395,7 @@ be a merge of tagged sources under an observer that combines them, and none of t
 ## Sources are collected with their position count
 
 The collecting operators — `CombineLatest`, `Zip`, `ForkJoin`, `WithLatestFrom` — collect their
-sources with `SourceOps::into_collected_cursor()`, before subscribing anything, and get their position count
+sources with `InternalSourceSet::into_collected_cursor()`, before subscribing anything, and get their position count
 from the same call: a tuple's arity, or the length of the `Vec` a list adapter collected. The
 operator then creates its value storage for that count — `LatestOps::empty(n)`, or Zip's `Model::empty(n)` — and Zip's count of empty queues
 starts at it. The storage does not report its positions back: the count
@@ -409,7 +410,7 @@ one — a lazy `IterSources` does not know how many sources it will yield — so
 `position_count` would need a trait of its own for collected sets, and an operator could ask it
 of the wrong value.
 
-The collection comes as a cursor, `SourceSet::CollectedCursor`: the `CollectedCursor<C>` wrapper around the
+The collection comes as a cursor, `InternalSourceSet::CollectedCursor`: the `CollectedCursor<C>` wrapper around the
 tuple's own cursor, or around an enumeration of the `Vec`, subscribed by `SubscribeBatch`. It was a source set first,
 `SourceSet::Collected` — the tuple itself or an `IterSources` over the `Vec`, bound to select the
 same slots — whose only use was to have its cursor prepared again; the operation, then named
@@ -441,7 +442,7 @@ Not chosen:
 
 ## One subscription path
 
-Every operator subscribes its sources the same way: a cursor, from `SourceOps::into_cursor` or
+Every operator subscribes its sources the same way: a cursor, from `InternalSourceSet::into_cursor` or
 `into_collected_cursor`, then `SubscribeEach` with a `SourceSubscriber`, each subscription stored in `SubscriptionSlots` at the
 position of its source. `When`, Amb and Merge bring a subscriber of their own; the
 batch of the collecting operators — CombineLatest, Zip, ForkJoin, WithLatestFrom — is the shared
@@ -462,8 +463,8 @@ backends reach, and `SubscribeBatch` is implemented for that type alone. A curso
 an iterator, from `into_cursor`, has no `subscribe_batch`: with the check gone from the
 batch, one over such a cursor would subscribe the source that `Iterator::next` returned after
 ending the stream. The alternative was to keep the check for whatever cursor comes; it never
-ran on the paths that exist, and no test could reach it. The type is `pub` and
-`#[doc(hidden)]`, as the slots are, since `SourceSet::CollectedCursor` names it.
+ran on the paths that exist, and no test could reach it. The type is crate-private: the one
+associated type naming it, `InternalSourceSet::CollectedCursor`, is on a crate-private trait.
 
 `SubscribeBatch<F, SL>` has the one impl, for a `CollectedCursor<C>` whose cursor takes the
 batch as its subscriber (`C: for<'a> SubscribeEach<Batch<'a, F, _>, ()>`); the per-source bounds
@@ -616,6 +617,19 @@ operators preparing a cursor (Amb, Merge with a limit, When) bound it on their `
 in, and splitting them by whether a disposal happens to name one put the two return types in two
 traits. `Collected` joined `Cursor` in `SourceSet`, so that the public trait holds every type and
 `SourceOps` every operation.
+
+That split by kind left `CollectedCursor<C>` a `pub`, `#[doc(hidden)]` type with a hidden
+re-export from `observable`: the value of an associated type in a public trait's impl must be as
+visible as the trait (E0446), so `SourceSet::CollectedCursor` kept the newtype public, and with
+it, hidden but in the public API, the guarantee it carries, that advancing the cursor runs no
+user code. `SourceOps` became `InternalSourceSet`, and `CollectedCursor` moved onto it: the two
+traits are now split by visibility, which the compiler enforces, rather than by kind, which only
+the docs did. A type that a public signature names (`Cursor`, `SubscriptionSlots`) must stay on
+`SourceSet`, or the crate does not compile. The cost is the one the earlier move was undone for:
+`Cursor` and `CollectedCursor` sit on two traits, and `Cursor`'s documentation says why. In
+return the newtype is crate-private, the operators that subscribe a batch bound
+`<S as InternalSourceSet>::CollectedCursor` next to the `S: InternalSourceSet` they already
+wrote, and the trait's name says why it is apart, which `Ops` stopped doing once it held a type.
 
 Collection first returned the operator's storage, `CollectSources::collect_into::<St>()` with a
 crate-private `PositionStorage<I>` that `LatestValues` and Zip's model implemented, so that the

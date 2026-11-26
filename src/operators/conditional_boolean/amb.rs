@@ -7,7 +7,7 @@ use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
         IterSources, Observable, ObservableTypes, SameItemSources, SourceSet,
-        sources::{SourceOps, SourceSubscriber, SubscribeEach},
+        sources::{InternalSourceSet, SourceSubscriber, SubscribeEach},
     },
     observer::{Flow, Observer, Termination},
     thread_mode::{
@@ -112,7 +112,7 @@ type RegistrationOf<S, OR> =
 
 impl<S, OR> Observable<OR> for Amb<S>
 where
-    S: SameItemSources + SourceOps,
+    S: SameItemSources + InternalSourceSet,
     <S as SourceSet>::Cursor: SubscribeEach<RegistrationOf<S, OR>, ()>,
     OR: Observer<<S as SameItemSources>::SameItem, <S as SourceSet>::Error>,
 {

@@ -51,9 +51,6 @@ pub use crate::utils::positional::combination::Combination;
 pub use observable_ext::ObservableExt;
 pub use sources::{IterSources, SameItemSources, SourceSet};
 
-#[doc(hidden)]
-pub use sources::CollectedCursor;
-
 /// The thread mode of an operator with the two sources `A` and `B`: their modes
 /// [`Joined`], `Shared` as soon as one of them is.
 pub type JoinedModeOf<A, B> = Joined<<A as ObservableTypes>::Mode, <B as ObservableTypes>::Mode>;

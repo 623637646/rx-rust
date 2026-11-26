@@ -1,7 +1,7 @@
 use super::{ObserverFamily, SubscribeBatch};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::sources::{IterSources, SourceOps, SourceSet, testing::IgnoreObserver},
+    observable::sources::{InternalSourceSet, IterSources, SourceSet, testing::IgnoreObserver},
     operators::creating::just::Just,
     utils::positional::position::Position,
 };
@@ -26,7 +26,7 @@ impl ObserverFamily for CountFamily {
 /// Collects the sources, then subscribes them; returns their position count.
 fn subscribe_collected<S>(sources: S, family: &CountFamily) -> usize
 where
-    S: SourceOps,
+    S: InternalSourceSet,
     S::CollectedCursor: SubscribeBatch<CountFamily, S::SubscriptionSlots>,
 {
     let (cursor, position_count) = sources.into_collected_cursor();

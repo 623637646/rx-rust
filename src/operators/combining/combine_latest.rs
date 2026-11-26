@@ -8,7 +8,7 @@ use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
         IterSources, Observable, ObservableTypes, SourceSet,
-        sources::{ObserverFamily, SourceOps, SubscribeBatch},
+        sources::{InternalSourceSet, ObserverFamily, SubscribeBatch},
     },
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -132,8 +132,8 @@ type ContextOf<S, OR> = Context<
 
 impl<S, OR> Observable<OR> for CombineLatest<S>
 where
-    S: SourceOps,
-    <S as SourceSet>::CollectedCursor:
+    S: InternalSourceSet,
+    <S as InternalSourceSet>::CollectedCursor:
         SubscribeBatch<ContextOf<S, OR>, <S as SourceSet>::SubscriptionSlots>,
     OR: Observer<<S as SourceSet>::Item, <S as SourceSet>::Error>,
     <S as SourceSet>::Item: CloneLatest,

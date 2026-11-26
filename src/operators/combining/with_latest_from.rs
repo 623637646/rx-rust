@@ -8,7 +8,7 @@ use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
         IterSources, Observable, ObservableTypes, SourceSet,
-        sources::{ObserverFamily, SourceOps, SubscribeBatch},
+        sources::{InternalSourceSet, ObserverFamily, SubscribeBatch},
     },
     observer::{Flow, Observer, Termination},
     thread_mode::{Joined, ThreadMode},
@@ -178,8 +178,8 @@ where
             Subscriptions<OE, S>,
         >,
     >,
-    S: SourceSet<Error = <OE as ObservableTypes>::Error> + SourceOps,
-    <S as SourceSet>::CollectedCursor:
+    S: SourceSet<Error = <OE as ObservableTypes>::Error> + InternalSourceSet,
+    <S as InternalSourceSet>::CollectedCursor:
         SubscribeBatch<ContextOf<OE, S, OR>, <S as SourceSet>::SubscriptionSlots>,
     <S as SourceSet>::Item: CloneLatest + PrependOps,
 {

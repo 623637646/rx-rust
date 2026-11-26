@@ -29,12 +29,11 @@ pub(crate) trait ObserverFamily {
 /// A cursor over sources that are all collected: a tuple's, or the enumeration of a `Vec`.
 ///
 /// Advancing it runs no user code, which is what a batch relies on. Only the backends of
-/// [`sources`](super) make one, in `SourceOps::into_collected_cursor`: a cursor still pulling an
-/// iterator ([`SourceSet::Cursor`](super::SourceSet::Cursor)) cannot be passed for it.
-#[doc(hidden)]
+/// [`sources`](super) make one, in `InternalSourceSet::into_collected_cursor`: a cursor still
+/// pulling an iterator ([`SourceSet::Cursor`](super::SourceSet::Cursor)) cannot be passed for it.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct CollectedCursor<C>(pub(super) C);
+pub(crate) struct CollectedCursor<C>(pub(super) C);
 
 /// Subscribes every source a collected cursor has left at once, as a batch, into the slots `SL`.
 ///
@@ -44,9 +43,9 @@ pub struct CollectedCursor<C>(pub(super) C);
 ///
 /// It has one impl, for a [`CollectedCursor`] whose cursor takes the batch as its subscriber:
 /// the bound an operator writes, on its
-/// [`SourceSet::CollectedCursor`](super::SourceSet::CollectedCursor), instead of naming the
-/// batch. A cursor still pulling an iterator does not implement it: its subscriber checks again
-/// after `Iterator::next`, as Merge's and amb's do.
+/// [`InternalSourceSet::CollectedCursor`](super::InternalSourceSet::CollectedCursor), instead
+/// of naming the batch. A cursor still pulling an iterator does not implement it: its subscriber
+/// checks again after `Iterator::next`, as Merge's and amb's do.
 pub(crate) trait SubscribeBatch<F: ObserverFamily, SL: Disposable> {
     fn subscribe_batch(self, family: &F) -> DisposeOnDrop<SL>;
 }

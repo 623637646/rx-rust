@@ -3,7 +3,7 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{
         ObservableTypes,
-        sources::{IterSources, SourceOps, testing::IgnoreObserver},
+        sources::{InternalSourceSet, IterSources, testing::IgnoreObserver},
     },
     operators::creating::just::Just,
     utils::positional::position::Position,

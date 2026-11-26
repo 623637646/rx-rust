@@ -43,7 +43,7 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{
         ObservableTypes, SourceSet,
-        sources::{SourceOps, SourceSubscriber, SubscribeEach},
+        sources::{InternalSourceSet, SourceSubscriber, SubscribeEach},
     },
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -97,7 +97,7 @@ pub(crate) fn subscribe_unlimited<S, T, OR, B>(
     observer_builder: B,
 ) -> DisposeOnDrop<ContextDisposalOf<S, T, Infallible>>
 where
-    S: SourceOps,
+    S: InternalSourceSet,
     <S as SourceSet>::Cursor: for<'a> SubscribeEach<&'a DriverOf<S, T, OR, Infallible>, Pause>,
     OR: Observer<T, <S as SourceSet>::Error>,
     B: FnOnce(StopView<<S as SourceSet>::Mode>) -> OR,
@@ -121,7 +121,7 @@ pub(crate) fn subscribe_limited<S, T, OR, B>(
     observer_builder: B,
 ) -> DisposeOnDrop<ContextDisposalOf<S, T, <S as SourceSet>::Cursor>>
 where
-    S: SourceOps,
+    S: InternalSourceSet,
     <S as SourceSet>::Cursor:
         for<'a> SubscribeEach<&'a DriverOf<S, T, OR, <S as SourceSet>::Cursor>, Pause>,
     OR: Observer<T, <S as SourceSet>::Error>,
