@@ -260,12 +260,14 @@ keeping their own storage and output shapes:
   function pointer where `Merge` is subscribed, as `SubscribeFn` is: an observer that resumes it on
   completion would otherwise bound its own `Observer` impl on itself.
 
-  The limit is a type parameter (`Unlimited` by default) rather than a `NonZeroUsize::MAX` on one
-  path, because the pulling form costs something in its types: its observers and its
+  The limit is a type parameter (`()`, no limit, by default) rather than a `NonZeroUsize::MAX` on
+  one path, because the pulling form costs something in its types: its observers and its
   subscription name the cursor, so in the `Shared` mode the sources not pulled yet must be
   `Send`, and a value the iterator borrows must outlive the subscription. A merge with no limit
   subscribes everything at once and keeps none of that: the same driver, whose model names no
-  cursor (see "One Merge" below).
+  cursor (see "One Merge" below). No limit is `()`, not a marker type of its own: such a marker
+  would belong to the machinery `Merge` and `ConcatEager` share, which has no public path, so both
+  would re-export it, one item under two paths.
 
 `CombineLatest`, `Zip`, `ForkJoin`, `Merge` and `Amb` accept tuples through `new` and iterators
 through `new_from_iter`. `WithLatestFrom::new_from_iter` emits `(primary_item, Vec<Item>)`; an

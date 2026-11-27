@@ -173,7 +173,7 @@ for any `C`.
 ## Rejected
 
 - **One type per pair, with a parameter**: a strategy type (`BufferWithTime<OE, S, K = NoShift>`,
-  as `Merge<S, L = Unlimited>`) or a `const SHIFT: bool`, with `BufferWithTimeAndShift` an alias.
+  as `Merge<S, L = ()>`) or a `const SHIFT: bool`, with `BufferWithTimeAndShift` an alias.
   First weighed when the two forms kept different storage, so that the parameter would have owned
   all of `on_next`, two machines behind a trait. With one `Overlap` for both, it would carry only
   the second length and whether `T: Clone` is asked, and cost more than the thin types it

@@ -19,8 +19,6 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, num::NonZeroUsize};
 
-pub use super::internal::merge::Unlimited;
-
 #[doc(hidden)]
 pub use super::internal::merge::MergeObserver;
 
@@ -38,7 +36,8 @@ pub use super::internal::merge::MergeObserver;
 /// [`Merge::max_concurrency`] makes either form subscribe at most `max_concurrency` sources at a
 /// time, in order: the next one is pulled — from the tuple, or from the iterator, which is user
 /// code — only once one of them has completed, so nothing waits in a queue, and an iterator that
-/// never ends still works. The usual use is to bound work: at most so many requests in flight,
+/// never ends still works. The limit is the type parameter `L`: `()`, none, until
+/// `max_concurrency` makes it a `NonZeroUsize`. The usual use is to bound work: at most so many requests in flight,
 /// however many are asked for. With a `max_concurrency` of one it concatenates the sources, one
 /// after the other, which [`Concat`](super::concat::Concat) does for a tuple without a lock. An
 /// observable of observables, which pushes them rather than being pulled, goes to
@@ -144,7 +143,7 @@ pub use super::internal::merge::MergeObserver;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Merge<S, L = Unlimited> {
+pub struct Merge<S, L = ()> {
     sources: S,
     limit: L,
 }
@@ -157,10 +156,7 @@ impl<S> Merge<S> {
     where
         S: SameItemSources,
     {
-        Self {
-            sources,
-            limit: Unlimited,
-        }
+        Self { sources, limit: () }
     }
 
     /// Subscribes at most `max_concurrency` of the sources at a time: the next one is pulled,
@@ -186,7 +182,7 @@ impl<I> Merge<IterSources<I>> {
     {
         Self {
             sources: IterSources(sources),
-            limit: Unlimited,
+            limit: (),
         }
     }
 }

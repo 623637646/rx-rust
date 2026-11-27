@@ -314,12 +314,13 @@ an issue when they fail.
     `type Disposal = window_with_count_and_skip::Disposal<…>`, `scheduler::StreamAck`;
   - a `#[macro_export]` macro has its path at the crate root, and is imported from there.
 
-  Of the machinery in an `internal/` module, what users name (`Unlimited`) is re-exported by
-  each operator naming it, as none of them is its home. A disposal is not: the machinery names
-  the disposal of its context in a crate-private `ContextDisposal`, and each operator wraps it in a
-  `Disposal` of its own with `delegate_disposal!` (`merge`, `join`), and spells its mode out
-  rather than naming the machinery's `ModeOf`. The rest, observers and
-  their generic arguments, needs only to be `pub`, not to have a path: add a `#[doc(hidden)]`
+  Of the machinery in an `internal/` module, users name nothing, since nothing there would have a
+  home: what a public signature needs is a standard type (`Merge`'s limit, a `NonZeroUsize`, or
+  `()` for none, not a marker of its own) or the operator's own. A disposal is the latter: the
+  machinery names the disposal of its context in a crate-private `ContextDisposal`, and each
+  operator wraps it in a `Disposal` of its own with `delegate_disposal!` (`merge`, `join`), and
+  spells its mode out rather than naming the machinery's `ModeOf`. The rest, observers and their
+  generic arguments, needs only to be `pub`, not to have a path: add a `#[doc(hidden)]`
   re-export only where `unreachable_pub` asks for one (`MergeObserver`). An operator on such
   machinery names the observer it subscribes its source with in a `pub(crate)` alias of its own
   module (`merge_all::MergeAllObserver`, `buffer_with_count::BufferWithCountObserver`), which

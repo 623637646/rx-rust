@@ -20,8 +20,6 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, num::NonZeroUsize};
 
-pub use super::internal::merge::Unlimited;
-
 /// Subscribes all of the observables at once, and emits all of the values of the first, then, once
 /// it completes, all of the values of the next, and so on to the last.
 /// See <https://reactivex.io/documentation/operators/concat.html>
@@ -41,8 +39,8 @@ pub use super::internal::merge::Unlimited;
 ///
 /// [`ConcatEager::max_concurrency`] subscribes at most `max_concurrency` of the sources at a
 /// time, in order, the first included: the next one is pulled — from the tuple, or from the
-/// iterator — only once one of them has completed, as [`Merge::max_concurrency`] does. With no
-/// limit an iterator is pulled to its end as the stream is subscribed, so one that never ends
+/// iterator — only once one of them has completed, as [`Merge::max_concurrency`] does. The limit
+/// is the type parameter `L`: `()`, none, until then a `NonZeroUsize`. With no limit an iterator is pulled to its end as the stream is subscribed, so one that never ends
 /// needs a limit. With a `max_concurrency` of one it is [`Concat`](super::concat::Concat).
 ///
 /// The stream completes once every source has completed. An error of any source that is
@@ -104,7 +102,7 @@ pub use super::internal::merge::Unlimited;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct ConcatEager<S, L = Unlimited> {
+pub struct ConcatEager<S, L = ()> {
     sources: S,
     limit: L,
 }
@@ -117,10 +115,7 @@ impl<S> ConcatEager<S> {
     where
         S: SameItemSources,
     {
-        Self {
-            sources,
-            limit: Unlimited,
-        }
+        Self { sources, limit: () }
     }
 
     /// Subscribes at most `max_concurrency` of the sources at a time, the first included: the
@@ -147,7 +142,7 @@ impl<I> ConcatEager<IterSources<I>> {
     {
         Self {
             sources: IterSources(sources),
-            limit: Unlimited,
+            limit: (),
         }
     }
 }

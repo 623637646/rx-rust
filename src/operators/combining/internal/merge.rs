@@ -33,8 +33,9 @@
 //! with one of them. An observable of observables pushes its sources rather than being pulled,
 //! and goes to [`flatten`](super::flatten) instead.
 //!
-//! The module is private. What a public signature of those operators names, [`Unlimited`], is
-//! re-exported by them. The observer each source is subscribed with, and the tags in its generic
+//! The module is private, and no public signature names anything of it: a limit is a
+//! `NonZeroUsize`, none is `()`, and each operator names its own `Disposal` over
+//! [`ContextDisposal`]. The observer each source is subscribed with, and the tags in its generic
 //! arguments, stay `pub`, since a source built with a non-boxed `Create` hands it to user code,
 //! with no path but the `#[doc(hidden)]` one of [`MergeObserver`], which `unreachable_pub` asks
 //! for.
@@ -59,12 +60,6 @@ use crate::{
 };
 use educe::Educe;
 use std::{convert::Infallible, num::NonZeroUsize, ops::ControlFlow};
-
-/// The limit of a [`Merge`](super::super::merge::Merge) or a
-/// [`ConcatEager`](super::super::concat_eager::ConcatEager) that has none, their default: every
-/// source is subscribed at once. A limit is a `NonZeroUsize`, given by their `max_concurrency`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Unlimited;
 
 /// The [`Driver`] of a merge over `S` sending `T`s to `OR`, whose sources wait for room as a `C`.
 pub(crate) type DriverOf<S, T, OR, C> = Driver<
